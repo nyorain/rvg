@@ -9,6 +9,8 @@ layout(set = 0, binding = 0) uniform Paint {
 	vec4 color;
 } paint;
 
+layout(set = 1, binding = 0) uniform sampler2D tex;
+
 void main() {
-	out_color = paint.color;
+	out_color = paint.color * texture(tex, in_uv);
 }

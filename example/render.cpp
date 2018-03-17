@@ -13,10 +13,10 @@
 
 #include <dlg/dlg.hpp> // dlg
 
-vpp::RenderPass createRenderPass(const vpp::Device&, vk::Format, 
+vpp::RenderPass createRenderPass(const vpp::Device&, vk::Format,
 	vk::SampleCountBits);
 
-Renderer::Renderer(const RendererCreateInfo& info) : 
+Renderer::Renderer(const RendererCreateInfo& info) :
 	sampleCount_(info.samples), clearColor_(info.clearColor)
 {
 	vpp::SwapchainPreferences prefs {};
@@ -24,8 +24,9 @@ Renderer::Renderer(const RendererCreateInfo& info) :
 		prefs.presentMode = vk::PresentModeKHR::fifo; // vsync
 	}
 
-	scInfo_ = vpp::swapchainCreateInfo(info.dev, info.surface, 
+	scInfo_ = vpp::swapchainCreateInfo(info.dev, info.surface,
 		{info.size[0], info.size[1]}, prefs);
+	renderPass_ = createRenderPass(info.dev, scInfo_.imageFormat, samples());
 	vpp::DefaultRenderer::init(renderPass_, scInfo_, info.present);
 }
 
@@ -114,12 +115,12 @@ void Renderer::samples(vk::SampleCountBits samples)
 	invalidate();
 }
 
-void Renderer::initBuffers(const vk::Extent2D& size, 
+void Renderer::initBuffers(const vk::Extent2D& size,
 	nytl::Span<RenderBuffer> bufs)
 {
 	if(sampleCount_ != vk::SampleCountBits::e1) {
 		createMultisampleTarget(scInfo_.imageExtent);
-		vpp::DefaultRenderer::initBuffers(size, bufs, 
+		vpp::DefaultRenderer::initBuffers(size, bufs,
 			{multisampleTarget_.vkImageView()});
 	} else {
 		vpp::DefaultRenderer::initBuffers(size, bufs, {});

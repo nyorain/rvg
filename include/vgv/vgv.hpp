@@ -16,8 +16,12 @@ struct Vec2f { float x, y; };
 
 class Paint {
 public:
+	Color color;
+
+public:
 	Paint(Context& ctx, const Color& color);
 	void bind(Context&, vk::CommandBuffer);
+	void updateDevice();
 
 protected:
 	vpp::BufferRange ubo_;
@@ -28,18 +32,26 @@ class Context {
 public:
 	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
 
-	const vpp::Device& device() const;
+	const vpp::Device& device() const { return device_; };
 	vk::Pipeline fanPipe() const { return fanPipe_; }
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
-	const auto& dsLayout() const { return dsLayout_; }
+	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
+	const auto& dsLayoutTex() const { return dsLayoutTex_; }
 	const auto& dsPool() const { return dsPool_; }
 
+	const auto& dummyTex() const { return dummyTex_; };
+
 private:
+	const vpp::Device& device_;
 	vpp::Pipeline fanPipe_;
 	vpp::PipelineLayout pipeLayout_;
-	vpp::DescriptorSetLayout dsLayout_;
+	vpp::DescriptorSetLayout dsLayoutPaint_;
+	vpp::DescriptorSetLayout dsLayoutTex_;
 	vpp::DescriptorPool dsPool_;
-	// vpp::Sampler sampler_;
+	vpp::Sampler sampler_;
+
+	vpp::ViewableImage emptyImage_;
+	vpp::DescriptorSet dummyTex_;
 };
 
 enum class DrawMode {
@@ -89,36 +101,27 @@ protected:
 	Vec2f size_ {};
 };
 
-/*
 class FontAtlas {
+protected:
+	vpp::ViewableImage viewImg_;
 };
 
-class Font {
-	FontAtlas* atlas;
+struct Font {
 };
 
 class Text {
 public:
-	Text(Context&, const char* text, Font& font);
+	Font* font;
+	const char* text;
 
-	Font& font(Font& newFont);
-	const char* text(const char* newText);
+public:
+	Text(Context&, const char* text, Font& font);
 
 	bool updateDevice();
 	void draw(Context&, vk::CommandBuffer);
 
 protected:
 	vpp::BufferRange buffer_;
-	const char* text_;
-	Font* font_;
 };
-*/
 
 } // namespace vgv
-
-
-
-
-
-
-
