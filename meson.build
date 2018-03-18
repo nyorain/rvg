@@ -25,7 +25,10 @@ warnings = [
 	'-Wlogical-op',
 
 	# disable some
-	'-Wno-non-virtual-dtor'
+	'-Wno-non-virtual-dtor',
+
+	# TODO
+	'-Wno-unused-function',
 ]
 
 # default arrguments
@@ -50,7 +53,7 @@ subdir('src/vgv')
 
 dep_vgv = declare_dependency(
 	link_with: vgv_lib,
-	include_directories: vgv_inc,
+	include_directories: [vgv_inc, src_inc], # TODO: remove src inc
 	dependencies: dep_vpp)
 
 if build_example

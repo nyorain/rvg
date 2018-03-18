@@ -2,8 +2,11 @@
 #include <vpp/vk.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/imageOps.hpp>
+#include <vpp/queue.hpp>
 #include <dlg/dlg.hpp>
 #include <cstring>
+
+#include <vgv/nk_font/font.h>
 
 #include <shaders/fill.vert.h>
 #include <shaders/fill.frag.h>
@@ -12,8 +15,7 @@ namespace vgv {
 namespace {
 
 template<typename T>
-void write(std::byte*& ptr, T&& data)
-{
+void write(std::byte*& ptr, T&& data) {
 	std::memcpy(ptr, &data, sizeof(data));
 	ptr += sizeof(data);
 }
@@ -46,19 +48,19 @@ void Paint::updateDevice() {
 Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	device_(dev)
 {
-	// TODO
 	constexpr auto sampleCount = vk::SampleCountBits::e1;
 
 	// sampler
 	vk::SamplerCreateInfo samplerInfo;
-	samplerInfo.magFilter = vk::Filter::linear;
-	samplerInfo.minFilter = vk::Filter::linear;
-	samplerInfo.mipmapMode = vk::SamplerMipmapMode::linear;
+	samplerInfo.magFilter = vk::Filter::nearest;
+	samplerInfo.minFilter = vk::Filter::nearest;
+	samplerInfo.minLod = 0.f;
+	samplerInfo.maxLod = 0.25f;
+	samplerInfo.mipmapMode = vk::SamplerMipmapMode::nearest;
 	samplerInfo.addressModeU = vk::SamplerAddressMode::clampToEdge;
 	samplerInfo.addressModeV = vk::SamplerAddressMode::clampToEdge;
 	samplerInfo.addressModeW = vk::SamplerAddressMode::clampToEdge;
-	samplerInfo.borderColor = vk::BorderColor::floatTransparentBlack;
-	samplerInfo.unnormalizedCoordinates = false;
+	samplerInfo.borderColor = vk::BorderColor::floatOpaqueWhite;
 	sampler_ = {dev, samplerInfo};
 
 	// layouts
@@ -91,18 +93,10 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	dsPool_ = {dev, poolInfo};
 
 	// dummies
-	auto eii = vpp::ViewableImageCreateInfo::color(dev, {1, 1, 1}).value();
-	eii.img.imageType = vk::ImageType::e2d;
-	eii.view.viewType = vk::ImageViewType::e2d;
-	emptyImage_ = {dev, eii};
-	
-	// TODO: fill the pixel (solid white!)
-	vpp::changeLayout(emptyImage_.vkImage(),
-		vk::ImageLayout::undefined, vk::PipelineStageBits::topOfPipe, {},
-		vk::ImageLayout::general, vk::PipelineStageBits::fragmentShader,
-		vk::AccessBits::shaderRead, 
-		{vk::ImageAspectBits::color, 0, 1, 0, 1},
-		dev.queueSubmitter());
+	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
+	emptyImage_ = createTexture(dev, 1, 1,
+		reinterpret_cast<const std::byte*>(bytes),
+		TextureType::rgba32);
 
 	dummyTex_ = {dsLayoutTex_, dsPool_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
@@ -118,13 +112,14 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 		{fillFragment, vk::ShaderStageBits::fragment}
 	});
 
-	vk::GraphicsPipelineCreateInfo fillPipeInfo;
+	vk::GraphicsPipelineCreateInfo fanPipeInfo;
 
-	fillPipeInfo.renderPass = rp;
-	fillPipeInfo.subpass = subpass;
-	fillPipeInfo.layout = pipeLayout_;
-	fillPipeInfo.stageCount = fillStages.vkStageInfos().size();
-	fillPipeInfo.pStages = fillStages.vkStageInfos().data();
+	fanPipeInfo.renderPass = rp;
+	fanPipeInfo.subpass = subpass;
+	fanPipeInfo.layout = pipeLayout_;
+	fanPipeInfo.stageCount = fillStages.vkStageInfos().size();
+	fanPipeInfo.pStages = fillStages.vkStageInfos().data();
+	fanPipeInfo.flags = vk::PipelineCreateBits::allowDerivatives;
 
 	// vertex attribs: vec2 pos, vec2 uv
 	vk::VertexInputAttributeDescription vertexAttribs[2] = {};
@@ -146,11 +141,11 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	// vertexInfo.vertexAttributeDescriptionCount = 1;
 	vertexInfo.pVertexBindingDescriptions = vertexBindings;
 	vertexInfo.vertexBindingDescriptionCount = 1;
-	fillPipeInfo.pVertexInputState = &vertexInfo;
+	fanPipeInfo.pVertexInputState = &vertexInfo;
 
 	vk::PipelineInputAssemblyStateCreateInfo assemblyInfo;
 	assemblyInfo.topology = vk::PrimitiveTopology::triangleFan;
-	fillPipeInfo.pInputAssemblyState = &assemblyInfo;
+	fanPipeInfo.pInputAssemblyState = &assemblyInfo;
 
 	vk::PipelineRasterizationStateCreateInfo rasterizationInfo;
 	rasterizationInfo.polygonMode = vk::PolygonMode::fill;
@@ -160,13 +155,13 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	rasterizationInfo.rasterizerDiscardEnable = false;
 	rasterizationInfo.depthBiasEnable = false;
 	rasterizationInfo.lineWidth = 1.f;
-	fillPipeInfo.pRasterizationState = &rasterizationInfo;
+	fanPipeInfo.pRasterizationState = &rasterizationInfo;
 
 	vk::PipelineMultisampleStateCreateInfo multisampleInfo;
 	multisampleInfo.rasterizationSamples = sampleCount;
 	multisampleInfo.sampleShadingEnable = false;
 	multisampleInfo.alphaToCoverageEnable = false;
-	fillPipeInfo.pMultisampleState = &multisampleInfo;
+	fanPipeInfo.pMultisampleState = &multisampleInfo;
 
 	vk::PipelineColorBlendAttachmentState blendAttachment;
 	blendAttachment.blendEnable = true;
@@ -184,12 +179,12 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	vk::PipelineColorBlendStateCreateInfo blendInfo;
 	blendInfo.attachmentCount = 1;
 	blendInfo.pAttachments = &blendAttachment;
-	fillPipeInfo.pColorBlendState = &blendInfo;
+	fanPipeInfo.pColorBlendState = &blendInfo;
 
 	vk::PipelineViewportStateCreateInfo viewportInfo;
 	viewportInfo.scissorCount = 1;
 	viewportInfo.viewportCount = 1;
-	fillPipeInfo.pViewportState = &viewportInfo;
+	fanPipeInfo.pViewportState = &viewportInfo;
 
 	const auto dynStates = {
 		vk::DynamicState::viewport,
@@ -198,10 +193,21 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	vk::PipelineDynamicStateCreateInfo dynamicInfo;
 	dynamicInfo.dynamicStateCount = dynStates.size();
 	dynamicInfo.pDynamicStates = dynStates.begin();
-	fillPipeInfo.pDynamicState = &dynamicInfo;
+	fanPipeInfo.pDynamicState = &dynamicInfo;
 
-	auto pipes = vk::createGraphicsPipelines(dev, {}, {fillPipeInfo});
+	// listPipe
+	auto listPipeInfo = fanPipeInfo;
+	listPipeInfo.flags = vk::PipelineCreateBits::derivative;
+	listPipeInfo.basePipelineIndex = 0;
+
+	auto listAssemblyInfo = assemblyInfo;
+	listAssemblyInfo.topology = vk::PrimitiveTopology::triangleList;
+	listPipeInfo.pInputAssemblyState = &listAssemblyInfo;
+
+	auto pipes = vk::createGraphicsPipelines(dev, {},
+		{fanPipeInfo, listPipeInfo});
 	fanPipe_ = {dev, pipes[0]};
+	listPipe_ = {dev, pipes[1]};
 }
 
 // Polygon
@@ -256,6 +262,162 @@ void Polygon::fill(Context& ctx, vk::CommandBuffer cmdb) {
 		vk::cmdBindVertexBuffers(cmdb, 0, {fill_.buffer()}, {fill_.offset()});
 		vk::cmdDraw(cmdb, points_.size() / 2, 1, 0, 0);
 	}
+}
+
+// FontAtlas
+FontAtlas::FontAtlas(Context& ctx) {
+	atlas_ = std::make_unique<nk_font_atlas>();
+	nk_font_atlas_init_default(&nkAtlas());
+	ds_ = {ctx.dsLayoutTex(), ctx.dsPool()};
+}
+
+FontAtlas::~FontAtlas() {
+	nk_font_atlas_cleanup(&nkAtlas());
+}
+
+bool FontAtlas::bake(Context& ctx) {
+	// TODO: use r8 format. Figure out why i did not work
+	constexpr auto format = vk::Format::r8g8b8a8Uint;
+	bool rerecord = false;
+
+	int w, h;
+	auto data = reinterpret_cast<const std::byte*>(
+		nk_font_atlas_bake(&nkAtlas(), &w, &h, NK_FONT_ATLAS_RGBA32));
+
+	if(w == 0 || h == 0) {
+		dlg_info("FontAtlas::bake on empty atlas");
+		return false;
+	}
+
+	dlg_assert(w > 0 && h > 0);
+	auto uw = unsigned(w), uh = unsigned(h);
+	if(uw > width_ || uh > height_) {
+		// TODO: allocate more than needed? 2d problem here though,
+		//   the rectpack algorithm does not only produce squares
+		texture_ = vgv::createTexture(ctx.device(), w, h,
+			reinterpret_cast<const std::byte*>(data),
+			vgv::TextureType::rgba32);
+		rerecord = true;
+
+		vpp::DescriptorSetUpdate update(ds_);
+		update.imageSampler({{{}, texture_.vkImageView(),
+			vk::ImageLayout::general}});
+	} else {
+		auto& qs = ctx.device().queueSubmitter();
+		auto cmdBuf = ctx.device().commandAllocator().get(qs.queue().family());
+		vk::beginCommandBuffer(cmdBuf, {});
+		auto buf = vpp::fillStaging(cmdBuf, texture_.image(), format,
+			vk::ImageLayout::general, {uw, uh, 1}, {data, w * h * 4u},
+			{vk::ImageAspectBits::color});
+		vk::endCommandBuffer(cmdBuf);
+
+		// TODO: performance! Return the work/wait for submission
+		qs.wait(qs.add({{}, {}, {}, 1, &cmdBuf.vkHandle(), {}, {}}));
+	}
+
+	return rerecord;
+}
+
+// Font
+Font::Font(FontAtlas& atlas, const char* file, unsigned height) : atlas_(&atlas)
+{
+	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), file, height, nullptr);
+	if(!font_) {
+		std::string err = "Could not load font ";
+		err.append(file);
+		throw std::runtime_error(err);
+	}
+}
+
+Font::Font(FontAtlas& atlas, struct nk_font* font) :
+	atlas_(&atlas), font_(font)
+{
+}
+
+unsigned Font::width(const char* text)
+{
+	dlg_assert(font_);
+	auto& handle = font_->handle;
+	return handle.width(handle.userdata, handle.height, text,
+		std::strlen(text));
+}
+
+// Text
+Text::Text(Context&, const char* xtext, Font& xfont, Vec2f xpos) :
+	text(xtext), font(&xfont), pos(xpos)
+{
+}
+
+bool Text::updateDevice(Context& ctx) {
+	dlg_assert(font && font->nkFont());
+
+	bool rerecord = false;
+	auto neededSize = sizeof(float) * 16 * std::strlen(text);
+	if(verts_.size() < neededSize) {
+		neededSize *= 2;
+		verts_ = ctx.device().bufferAllocator().alloc(true, neededSize,
+			vk::BufferUsageBits::vertexBuffer);
+		rerecord = true;
+	}
+
+	auto map = verts_.memoryMap();
+	auto ptr = map.ptr();
+
+	auto x = pos.x;
+	auto gen_point = [&](const nk_font_glyph& glyph, unsigned i) {
+		float wx, wy, wu, wv;
+
+		if(i == 0 || i == 3) {
+			wu = glyph.u0;
+			wx = (x + glyph.x0) / ctx.viewSize.x;
+		} else {
+			wu = glyph.u1;
+			wx = (x + glyph.x0 + glyph.w) / ctx.viewSize.x;
+		}
+
+		if(i == 2 || i == 3) {
+			wv = glyph.v0;
+			wy = (pos.y + glyph.y0) / ctx.viewSize.y;
+		} else {
+			wv = glyph.v1;
+			wy = (pos.y + glyph.y0 + glyph.h) / ctx.viewSize.y;
+		}
+
+		write(ptr, wx);
+		write(ptr, wy);
+		write(ptr, wu);
+		write(ptr, wv);
+	};
+
+	for(auto it = text; *it; ++it) {
+		auto pglyph = nk_font_find_glyph(font->nkFont(), *it);
+		if(!pglyph) {
+			dlg_warn("glyph '{}' not found in font", *it);
+			break;
+		}
+
+		auto& glyph = *pglyph;
+
+		gen_point(glyph, 0);
+		gen_point(glyph, 1);
+		gen_point(glyph, 2);
+
+		gen_point(glyph, 0);
+		gen_point(glyph, 2);
+		gen_point(glyph, 3);
+		x += glyph.xadvance;
+	}
+
+	return rerecord;
+}
+
+void Text::draw(Context& ctx, vk::CommandBuffer cmdb) {
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.listPipe());
+	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+		ctx.pipeLayout(), 1, {font->atlas().ds()}, {});
+
+	vk::cmdBindVertexBuffers(cmdb, 0, {verts_.buffer()}, {verts_.offset()});
+	vk::cmdDraw(cmdb, std::strlen(text) * 6, 1, 0, 0);
 }
 
 } // namespace vgv

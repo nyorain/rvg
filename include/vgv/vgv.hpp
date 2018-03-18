@@ -7,12 +7,48 @@
 #include <vpp/image.hpp>
 #include <vector>
 
+// fwd decls from nk_font
+struct nk_font;
+struct nk_font_atlas;
+
 namespace vgv {
 
-class Context;
+struct Vec2f { float x, y; };
+
+/// Drawing context. Manages all pipelines and layouts needed to
+/// draw any shapes.
+class Context {
+public:
+	Vec2f viewSize {0, 0};
+
+public:
+	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
+
+	const vpp::Device& device() const { return device_; };
+	vk::Pipeline fanPipe() const { return fanPipe_; }
+	vk::Pipeline listPipe() const { return listPipe_; }
+	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
+	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
+	const auto& dsLayoutTex() const { return dsLayoutTex_; }
+	const auto& dsPool() const { return dsPool_; }
+
+	const auto& dummyTex() const { return dummyTex_; };
+
+private:
+	const vpp::Device& device_;
+	vpp::Pipeline fanPipe_;
+	vpp::Pipeline listPipe_;
+	vpp::PipelineLayout pipeLayout_;
+	vpp::DescriptorSetLayout dsLayoutPaint_;
+	vpp::DescriptorSetLayout dsLayoutTex_;
+	vpp::DescriptorPool dsPool_;
+	vpp::Sampler sampler_;
+
+	vpp::ViewableImage emptyImage_;
+	vpp::DescriptorSet dummyTex_;
+};
 
 struct Color { float r, g, b, a; };
-struct Vec2f { float x, y; };
 
 class Paint {
 public:
@@ -28,31 +64,20 @@ protected:
 	vpp::DescriptorSet ds_;
 };
 
-class Context {
-public:
-	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
-
-	const vpp::Device& device() const { return device_; };
-	vk::Pipeline fanPipe() const { return fanPipe_; }
-	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
-	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
-	const auto& dsLayoutTex() const { return dsLayoutTex_; }
-	const auto& dsPool() const { return dsPool_; }
-
-	const auto& dummyTex() const { return dummyTex_; };
-
-private:
-	const vpp::Device& device_;
-	vpp::Pipeline fanPipe_;
-	vpp::PipelineLayout pipeLayout_;
-	vpp::DescriptorSetLayout dsLayoutPaint_;
-	vpp::DescriptorSetLayout dsLayoutTex_;
-	vpp::DescriptorPool dsPool_;
-	vpp::Sampler sampler_;
-
-	vpp::ViewableImage emptyImage_;
-	vpp::DescriptorSet dummyTex_;
+enum class TextureType {
+	rgba32,
+	a8
 };
+
+/// Creates a vulkan texture that loads its contents from the given
+/// file. Stores the viewable image in the returned image variable.
+/// The image be allocated on device local memory.
+/// It will start with general image layout.
+/// Throws std::runtime_error if something goes wrong.
+vpp::ViewableImage createTexture(const vpp::Device&,
+	const char* filename, TextureType);
+vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
+	unsigned int height, const std::byte* data, TextureType);
 
 enum class DrawMode {
 	fill,
@@ -79,49 +104,52 @@ protected:
 	bool indirect_ {};
 };
 
-class Rect {
-public:
-	Rect(Context&);
-	~Rect() = default;
-
-	Vec2f position(Vec2f&);
-	Vec2f size(Vec2f&);
-
-	Vec2f position() const;
-	Vec2f size() const;
-
-	bool updateDevice(DrawMode);
-	void stroke(Context&, vk::CommandBuffer);
-	void fill(Context&, vk::CommandBuffer);
-
-protected:
-	vpp::BufferRange fill_ {};
-	vpp::BufferRange stroke_ {};
-	Vec2f pos_ {};
-	Vec2f size_ {};
-};
-
 class FontAtlas {
+public:
+	FontAtlas(Context&);
+	~FontAtlas();
+
+	bool bake(Context&);
+
+	auto& nkAtlas() const { return *atlas_; }
+	auto& ds() const { return ds_; }
+	auto& texture() const { return texture_; }
+
 protected:
-	vpp::ViewableImage viewImg_;
+	std::unique_ptr<nk_font_atlas> atlas_;
+	vpp::DescriptorSet ds_;
+	vpp::ViewableImage texture_;
+	unsigned width_ = 0, height_ = 0;
 };
 
-struct Font {
+class Font {
+public:
+	Font(FontAtlas&, const char* file, unsigned height);
+	Font(FontAtlas&, struct nk_font* font);
+
+	unsigned width(const char* text);
+	auto* nkFont() const { return font_; }
+	auto& atlas() const { return *atlas_; }
+
+protected:
+	FontAtlas* atlas_;
+	struct nk_font* font_;
 };
 
 class Text {
 public:
-	Font* font;
 	const char* text;
+	Font* font;
+	Vec2f pos;
 
 public:
-	Text(Context&, const char* text, Font& font);
+	Text(Context&, const char* text, Font& font, Vec2f pos);
 
-	bool updateDevice();
+	bool updateDevice(Context&);
 	void draw(Context&, vk::CommandBuffer);
 
 protected:
-	vpp::BufferRange buffer_;
+	vpp::BufferRange verts_;
 };
 
 } // namespace vgv

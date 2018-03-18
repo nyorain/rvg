@@ -6,6 +6,7 @@
 #include <string.h>
 #include <math.h>
 
+#define NK_ABS(a) (((a) < 0) ? -(a) : (a))
 #define NK_ASSERT(expr) assert(expr)
 
 struct nk_vec2 {

@@ -14,6 +14,7 @@
 #include <ny/event.hpp>
 #include <vpp/instance.hpp>
 #include <vpp/debug.hpp>
+#include <vpp/formats.hpp>
 #include <nytl/vecOps.hpp>
 #include <dlg/dlg.hpp>
 
@@ -28,7 +29,8 @@ constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
 constexpr auto vsync = true;
-constexpr auto clearColor = std::array<float, 4>{{1.0f, 1.0f, 1.0f, 1.f}};
+// constexpr auto clearColor = std::array<float, 4>{{0.6f, 0.8f, 0.9f, 1.f}};
+constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
 int main() {
 	// - initialization -
@@ -87,18 +89,38 @@ int main() {
 	};
 	auto renderer = Renderer(renderInfo);
 
+
 	// vgv
 	vgv::Context ctx(device, renderer.renderPass(), 0);
+	ctx.viewSize = {
+		static_cast<float>(window.size()[0]),
+		static_cast<float>(window.size()[1])};
+
 	vgv::Polygon polygon(ctx, true);
-	polygon.updateDevice(ctx, vgv::DrawMode::fill);
 
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
+
+	auto fontHeight = 14;
+	vgv::FontAtlas atlas(ctx);
+	vgv::Font font(atlas, "OpenSans-Light.ttf", fontHeight);
+	atlas.bake(ctx);
+
+	auto string = "yo, whaddup";
+	vgv::Text text(ctx, string, font, {0, 0});
+	auto textWidth = font.width(string);
+
+	text.updateDevice(ctx);
 
 	renderer.onRender += [&](vk::CommandBuffer buf){
 		vk::cmdBindDescriptorSets(buf, vk::PipelineBindPoint::graphics,
 			ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
 		paint.bind(ctx, buf);
-		polygon.fill(ctx, buf);
+
+		if(polygon.points().size() > 0) {
+			polygon.fill(ctx, buf);
+		}
+
+		text.draw(ctx, buf);
 	};
 
 	renderer.invalidate();
@@ -123,10 +145,24 @@ int main() {
 		} else if(ev.keycode == ny::Keycode::r) {
 			paint.color = {0.8, 0.2, 0.3, 1.f};
 			paint.updateDevice();
+		} else if(ev.keycode == ny::Keycode::d) {
+			paint.color = {0.1, 0.1, 0.1, 1.f};
+			paint.updateDevice();
+		} else if(ev.keycode == ny::Keycode::w) {
+			paint.color = {1, 1, 1, 1.f};
+			paint.updateDevice();
 		}
 	};
 	window.onResize = [&](const auto& ev) {
 		renderer.resize(ev.size);
+		ctx.viewSize = {
+			static_cast<float>(ev.size[0]),
+			static_cast<float>(ev.size[1])};
+
+		text.pos.x = (ev.size[0] - textWidth) / 2;
+		text.pos.y = ev.size[1] - fontHeight - 20;
+
+		text.updateDevice(ctx);
 	};
 	window.onMouseButton = [&](const auto& ev) {
 		if(!ev.pressed) {
@@ -135,8 +171,9 @@ int main() {
 
 		float x = ev.position[0] / float(window.size()[0]);
 		float y = ev.position[1] / float(window.size()[1]);
+
 		polygon.points().push_back({x, y}); // pos
-		polygon.points().push_back({0, 0}); // (unused) uv
+		polygon.points().push_back({0.5, 0.5}); // (unused) uv
 		if(polygon.updateDevice(ctx, vgv::DrawMode::fill)) {
 			dlg_info("rerecord");
 			renderer.invalidate();

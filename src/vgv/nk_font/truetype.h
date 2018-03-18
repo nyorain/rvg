@@ -1026,7 +1026,7 @@ nk_tt__rasterize_sorted_edges(struct nk_tt__bitmap *result, struct nk_tt__edge *
                 int m;
                 sum += scanline2[i];
                 k = scanline[i] + sum;
-                k = (float) abs(k) * 255.0f + 0.5f;
+                k = (float) NK_ABS(k) * 255.0f + 0.5f;
                 m = (int) k;
                 if (m > 255) m = 255;
                 result->pixels[j*result->stride + i] = (unsigned char) m;

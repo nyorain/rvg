@@ -75,8 +75,8 @@ nk_round_up_pow2(uint32_t v)
 
 static void* nk_malloc(nk_handle unused, void *old, size_t size)
 {
-	((void)(unused)); 
-	((void)(old)); 
+	((void)(unused));
+	((void)(old));
 	return malloc(size);
 }
 

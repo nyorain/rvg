@@ -1,8 +1,31 @@
+// Ripped the font atlas from the excellent nuklear library.
+// See https://github.com/vurtun/nuklear.
+// Licensed under public domain.
+
 #pragma once
 
 #include <stdint.h>
 #include <stddef.h>
 #include "internal.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
+struct nk_image {nk_handle handle;unsigned short w,h;unsigned short region[4];};
+struct nk_cursor {struct nk_image img; struct nk_vec2 size, offset;};
+enum nk_style_cursor {
+    NK_CURSOR_ARROW,
+    NK_CURSOR_TEXT,
+    NK_CURSOR_MOVE,
+    NK_CURSOR_RESIZE_VERTICAL,
+    NK_CURSOR_RESIZE_HORIZONTAL,
+    NK_CURSOR_RESIZE_TOP_LEFT_DOWN_RIGHT,
+    NK_CURSOR_RESIZE_TOP_RIGHT_DOWN_LEFT,
+    NK_CURSOR_COUNT
+};
+
 
 struct nk_draw_null_texture {
     nk_handle texture; /* texture handle to a texture with a white pixel */
@@ -127,6 +150,7 @@ struct nk_font_atlas {
 
 	// TODO: remove?
     struct nk_recti custom;
+    struct nk_cursor cursors[NK_CURSOR_COUNT];
 
     int glyph_count;
     struct nk_font_glyph *glyphs;
@@ -157,3 +181,7 @@ void nk_font_atlas_end(struct nk_font_atlas*, nk_handle tex, struct nk_draw_null
 const struct nk_font_glyph* nk_font_find_glyph(struct nk_font*, uint32_t unicode);
 void nk_font_atlas_cleanup(struct nk_font_atlas *atlas);
 void nk_font_atlas_clear(struct nk_font_atlas*);
+
+#ifdef __cplusplus
+}
+#endif
