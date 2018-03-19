@@ -13,10 +13,14 @@
 #include <ny/key.hpp>
 #include <ny/mouseButton.hpp>
 #include <ny/event.hpp>
+
 #include <vpp/instance.hpp>
 #include <vpp/debug.hpp>
 #include <vpp/formats.hpp>
+
 #include <nytl/vecOps.hpp>
+#include <nytl/matOps.hpp>
+
 #include <dlg/dlg.hpp>
 
 #include <chrono>
@@ -35,6 +39,21 @@ constexpr auto printFrames = true;
 constexpr auto vsync = true;
 // constexpr auto clearColor = std::array<float, 4>{{0.6f, 0.8f, 0.9f, 1.f}};
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
+
+// TODO: move to nytl
+template<typename T>
+void scale(nytl::Mat4<T>& mat, nytl::Vec3<T> fac) {
+	for(auto i = 0; i < 3; ++i) {
+		mat[i][i] *= fac[i];
+	}
+}
+
+template<typename T>
+void translate(nytl::Mat4<T>& mat, nytl::Vec3<T> move) {
+	for(auto i = 0; i < 3; ++i) {
+		mat[i][3] += move[i];
+	}
+}
 
 int main() {
 	// - initialization -
@@ -96,9 +115,11 @@ int main() {
 
 	// vgv
 	vgv::Context ctx(device, renderer.renderPass(), 0);
-	ctx.viewSize = {
-		static_cast<float>(window.size()[0]),
-		static_cast<float>(window.size()[1])};
+
+	vgv::Transform transform(ctx);
+	scale(transform.matrix, {2.f / window.size().x, 2.f / window.size().y, 1});
+	translate(transform.matrix, {-1.f, -1.f, 0.f});
+	transform.updateDevice();
 
 	vgv::Polygon polygon(ctx, true);
 
@@ -122,8 +143,6 @@ int main() {
 	auto points = vgv::bake(svgSubpath);
 	svgPolygon.points().clear();
 	for(auto& p : points) {
-		dlg_info("{}", p);
-		p /= ctx.viewSize;
 		svgPolygon.points().push_back(p);
 		svgPolygon.points().push_back({}); // unused uv
 	}
@@ -131,8 +150,11 @@ int main() {
 	svgPolygon.updateDevice(ctx, vgv::DrawMode::fill);
 
 	renderer.onRender += [&](vk::CommandBuffer buf){
+		// TODO
 		vk::cmdBindDescriptorSets(buf, vk::PipelineBindPoint::graphics,
 			ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
+
+		transform.bind(ctx, buf);
 		paint.bind(ctx, buf);
 
 		if(polygon.points().size() > 0) {
@@ -175,19 +197,21 @@ int main() {
 	};
 	window.onResize = [&](const auto& ev) {
 		renderer.resize(ev.size);
-		ctx.viewSize = {
-			static_cast<float>(ev.size[0]),
-			static_cast<float>(ev.size[1])};
 
 		text.pos.x = (ev.size[0] - textWidth) / 2;
 		text.pos.y = ev.size[1] - fontHeight - 20;
 
 		text.updateDevice(ctx);
 
+		transform.matrix = nytl::identity<4, float>();
+		auto s = nytl::Vec {2.f / window.size().x, 2.f / window.size().y, 1};
+		scale(transform.matrix, s);
+		translate(transform.matrix, {-1, -1, 0});
+		transform.updateDevice();
+
 		auto points = vgv::bake(svgSubpath);
 		svgPolygon.points().clear();
 		for(auto& p : points) {
-			p /= ctx.viewSize;
 			svgPolygon.points().push_back(p);
 			svgPolygon.points().push_back({}); // unused uv
 		}
@@ -203,20 +227,14 @@ int main() {
 			return;
 		}
 
-		float x = ev.position[0] / float(window.size()[0]);
-		float y = ev.position[1] / float(window.size()[1]);
-
+		auto p = static_cast<nytl::Vec2f>(ev.position);
 		if(first) {
 			first = false;
-			subpath.start = {x, y};
+			subpath.start = p;
 		} else {
-			subpath.commands.push_back({
-				{x, y},
-				vgv::SQBezierParams {}});
-
+			subpath.commands.push_back({p, vgv::SQBezierParams {}});
 			auto points = vgv::bake(subpath);
 			polygon.points().clear();
-			dlg_info("{}", points.size());
 			for(auto p : points) {
 				polygon.points().push_back(p); // pos
 				polygon.points().push_back({0.0, 0.0}); // (unused) uv

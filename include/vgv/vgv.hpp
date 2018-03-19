@@ -6,6 +6,7 @@
 #include <vpp/pipeline.hpp>
 #include <vpp/image.hpp>
 #include <nytl/vec.hpp>
+#include <nytl/mat.hpp>
 #include <vector>
 
 // fwd decls from nk_font
@@ -15,13 +16,29 @@ struct nk_font_atlas;
 namespace vgv {
 
 using namespace nytl;
+class Context;
+
+class Transform {
+public:
+	Mat4f matrix;
+
+public:
+	Transform() = default;
+	Transform(Context& ctx);
+	Transform(Context& ctx, const Mat4f&);
+
+	auto& ubo() const { return ubo_; }
+	void updateDevice();
+	void bind(Context&, vk::CommandBuffer);
+
+protected:
+	vpp::BufferRange ubo_;
+	vpp::DescriptorSet ds_;
+};
 
 /// Drawing context. Manages all pipelines and layouts needed to
 /// draw any shapes.
 class Context {
-public:
-	Vec2f viewSize {0, 0};
-
 public:
 	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
 
@@ -29,9 +46,11 @@ public:
 	vk::Pipeline fanPipe() const { return fanPipe_; }
 	vk::Pipeline listPipe() const { return listPipe_; }
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
+	const auto& dsPool() const { return dsPool_; }
+
 	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
 	const auto& dsLayoutTex() const { return dsLayoutTex_; }
-	const auto& dsPool() const { return dsPool_; }
+	const auto& dsLayoutTransform() const { return dsLayoutTransform_; }
 
 	const auto& dummyTex() const { return dummyTex_; };
 
@@ -42,6 +61,7 @@ private:
 	vpp::PipelineLayout pipeLayout_;
 	vpp::DescriptorSetLayout dsLayoutPaint_;
 	vpp::DescriptorSetLayout dsLayoutTex_;
+	vpp::DescriptorSetLayout dsLayoutTransform_;
 	vpp::DescriptorPool dsPool_;
 	vpp::Sampler sampler_;
 
@@ -49,14 +69,16 @@ private:
 	vpp::DescriptorSet dummyTex_;
 };
 
-struct Color { float r, g, b, a; };
+struct Color { float r {}, g {}, b {}, a {}; };
 
 class Paint {
 public:
 	Color color;
 
 public:
+	Paint() = default;
 	Paint(Context& ctx, const Color& color);
+
 	void bind(Context&, vk::CommandBuffer);
 	void updateDevice();
 

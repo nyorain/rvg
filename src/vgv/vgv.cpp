@@ -4,6 +4,8 @@
 #include <vpp/imageOps.hpp>
 #include <vpp/queue.hpp>
 #include <dlg/dlg.hpp>
+#include <nytl/matOps.hpp>
+#include <nytl/vecOps.hpp>
 #include <cstring>
 
 #include <vgv/nk_font/font.h>
@@ -21,28 +23,6 @@ void write(std::byte*& ptr, T&& data) {
 }
 
 } // anon namespace
-
-// Paint
-constexpr auto paintUboSize = sizeof(float) * 4;
-Paint::Paint(Context& ctx, const Color& xcolor) : color(xcolor) {
-	ubo_ = ctx.device().bufferAllocator().alloc(true, paintUboSize,
-		vk::BufferUsageBits::uniformBuffer);
-	updateDevice();
-
-	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
-	vpp::DescriptorSetUpdate update(ds_);
-	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
-}
-
-void Paint::bind(Context& ctx, vk::CommandBuffer cmdBuf) {
-	vk::cmdBindDescriptorSets(cmdBuf, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 0, {ds_}, {});
-}
-
-void Paint::updateDevice() {
-	auto map = ubo_.memoryMap();
-	std::memcpy(map.ptr(), &color, sizeof(float) * 4);
-}
 
 // Context
 Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
@@ -74,9 +54,16 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 			vk::ShaderStageBits::fragment, -1, 1, &sampler_.vkHandle()),
 	};
 
+	auto transformDSB = {
+		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
+			vk::ShaderStageBits::vertex),
+	};
+
 	dsLayoutPaint_ = {dev, paintDSB};
 	dsLayoutTex_ = {dev, texDSB};
-	pipeLayout_ = {dev, {dsLayoutPaint_, dsLayoutTex_}, {}};
+	dsLayoutTransform_ = {dev, transformDSB};
+
+	pipeLayout_ = {dev, {dsLayoutPaint_, dsLayoutTex_, dsLayoutTransform_}, {}};
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
@@ -327,9 +314,9 @@ bool FontAtlas::bake(Context& ctx) {
 }
 
 // Font
-Font::Font(FontAtlas& atlas, const char* file, unsigned height) : atlas_(&atlas)
+Font::Font(FontAtlas& atlas, const char* file, unsigned h) : atlas_(&atlas)
 {
-	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), file, height, nullptr);
+	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), file, h, nullptr);
 	if(!font_) {
 		std::string err = "Could not load font ";
 		err.append(file);
@@ -342,8 +329,7 @@ Font::Font(FontAtlas& atlas, struct nk_font* font) :
 {
 }
 
-unsigned Font::width(const char* text)
-{
+unsigned Font::width(const char* text) {
 	dlg_assert(font_);
 	auto& handle = font_->handle;
 	return handle.width(handle.userdata, handle.height, text,
@@ -377,18 +363,18 @@ bool Text::updateDevice(Context& ctx) {
 
 		if(i == 0 || i == 3) {
 			wu = glyph.u0;
-			wx = (x + glyph.x0) / ctx.viewSize.x;
+			wx = x + glyph.x0;
 		} else {
 			wu = glyph.u1;
-			wx = (x + glyph.x0 + glyph.w) / ctx.viewSize.x;
+			wx = x + glyph.x0 + glyph.w;
 		}
 
 		if(i == 2 || i == 3) {
 			wv = glyph.v0;
-			wy = (pos.y + glyph.y0) / ctx.viewSize.y;
+			wy = pos.y + glyph.y0;
 		} else {
 			wv = glyph.v1;
-			wy = (pos.y + glyph.y0 + glyph.h) / ctx.viewSize.y;
+			wy = pos.y + glyph.y0 + glyph.h;
 		}
 
 		write(ptr, wx);
@@ -426,6 +412,58 @@ void Text::draw(Context& ctx, vk::CommandBuffer cmdb) {
 
 	vk::cmdBindVertexBuffers(cmdb, 0, {verts_.buffer()}, {verts_.offset()});
 	vk::cmdDraw(cmdb, std::strlen(text) * 6, 1, 0, 0);
+}
+
+// Paint
+constexpr auto paintUboSize = sizeof(float) * 4;
+Paint::Paint(Context& ctx, const Color& xcolor) : color(xcolor) {
+	ubo_ = ctx.device().bufferAllocator().alloc(true, paintUboSize,
+		vk::BufferUsageBits::uniformBuffer);
+	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
+
+	updateDevice();
+	vpp::DescriptorSetUpdate update(ds_);
+	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
+}
+
+void Paint::bind(Context& ctx, vk::CommandBuffer cmdBuf) {
+	dlg_assert(ubo_.size() && ds_);
+	vk::cmdBindDescriptorSets(cmdBuf, vk::PipelineBindPoint::graphics,
+		ctx.pipeLayout(), 0, {ds_}, {});
+}
+
+void Paint::updateDevice() {
+	dlg_assert(ubo_.size() && ds_);
+	auto map = ubo_.memoryMap();
+	std::memcpy(map.ptr(), &color, sizeof(float) * 4);
+}
+
+// Transform
+constexpr auto transformUboSize = sizeof(Mat4f);
+Transform::Transform(Context& ctx) : Transform(ctx, identity<4, float>())
+{
+}
+
+Transform::Transform(Context& ctx, const Mat4f& m) : matrix(m) {
+	ubo_ = ctx.device().bufferAllocator().alloc(true, transformUboSize,
+		vk::BufferUsageBits::uniformBuffer);
+	ds_ = {ctx.dsLayoutTransform(), ctx.dsPool()};
+
+	updateDevice();
+	vpp::DescriptorSetUpdate update(ds_);
+	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
+}
+
+void Transform::updateDevice() {
+	dlg_assert(ubo_.size() && ds_);
+	auto map = ubo_.memoryMap();
+	std::memcpy(map.ptr(), &matrix, sizeof(Mat4f));
+}
+
+void Transform::bind(Context& ctx, vk::CommandBuffer cmdBuf) {
+	dlg_assert(ubo_.size() && ds_);
+	vk::cmdBindDescriptorSets(cmdBuf, vk::PipelineBindPoint::graphics,
+		ctx.pipeLayout(), 2, {ds_}, {});
 }
 
 } // namespace vgv

@@ -165,8 +165,6 @@ std::vector<Vec2f> bake(const Subpath& sub) {
 			lastControlC = params.control2;
 		} else if constexpr(std::is_same_v<T, ArcParams>) {
 			auto arc = parseArc(current, params, to);
-			dlg_info("{} {} {} {}", arc.center, arc.radius, arc.start, arc.end);
-
 			auto fac = std::abs(arc.end - arc.start) / (2 * nytl::constants::pi);
 			auto steps = arcCircleSteps * fac;
 			bake(arc, points, steps);
