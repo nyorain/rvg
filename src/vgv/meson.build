@@ -1,11 +1,10 @@
 vgv_src = [
 	'vgv.cpp',
 	'texture.cpp',
+	'path.cpp',
 	'nk_font/font.c',
 	shaders
 ]
-
-vgv_deps = [dep_vpp, meson.get_compiler('c').find_library('m')]
 
 vgv_lib = library('vgv',
 	sources: vgv_src,

@@ -6,6 +6,7 @@
 #include "window.hpp"
 
 #include <vgv/vgv.hpp>
+#include <vgv/path.hpp>
 
 #include <ny/backend.hpp>
 #include <ny/appContext.hpp>
@@ -20,6 +21,9 @@
 
 #include <chrono>
 #include <array>
+
+using namespace nytl::vec::operators;
+using namespace nytl::vec::cw::operators;
 
 // settings
 constexpr auto appName = "vgv-example";
@@ -100,7 +104,7 @@ int main() {
 
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
-	auto fontHeight = 14;
+	auto fontHeight = 12;
 	vgv::FontAtlas atlas(ctx);
 	vgv::Font font(atlas, "OpenSans-Light.ttf", fontHeight);
 	atlas.bake(ctx);
@@ -111,6 +115,21 @@ int main() {
 
 	text.updateDevice(ctx);
 
+	// svg path
+	auto svgSubpath = vgv::parseSvgSubpath({300, 200},
+		"h -150 a150 150 0 1 0 150 -150 z");
+	vgv::Polygon svgPolygon(ctx, false);
+	auto points = vgv::bake(svgSubpath);
+	svgPolygon.points().clear();
+	for(auto& p : points) {
+		dlg_info("{}", p);
+		p /= ctx.viewSize;
+		svgPolygon.points().push_back(p);
+		svgPolygon.points().push_back({}); // unused uv
+	}
+
+	svgPolygon.updateDevice(ctx, vgv::DrawMode::fill);
+
 	renderer.onRender += [&](vk::CommandBuffer buf){
 		vk::cmdBindDescriptorSets(buf, vk::PipelineBindPoint::graphics,
 			ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
@@ -120,6 +139,7 @@ int main() {
 			polygon.fill(ctx, buf);
 		}
 
+		svgPolygon.fill(ctx, buf);
 		text.draw(ctx, buf);
 	};
 
@@ -163,7 +183,21 @@ int main() {
 		text.pos.y = ev.size[1] - fontHeight - 20;
 
 		text.updateDevice(ctx);
+
+		auto points = vgv::bake(svgSubpath);
+		svgPolygon.points().clear();
+		for(auto& p : points) {
+			p /= ctx.viewSize;
+			svgPolygon.points().push_back(p);
+			svgPolygon.points().push_back({}); // unused uv
+		}
+
+		svgPolygon.updateDevice(ctx, vgv::DrawMode::fill);
 	};
+
+	vgv::Subpath subpath;
+	bool first = true;
+
 	window.onMouseButton = [&](const auto& ev) {
 		if(!ev.pressed) {
 			return;
@@ -172,11 +206,26 @@ int main() {
 		float x = ev.position[0] / float(window.size()[0]);
 		float y = ev.position[1] / float(window.size()[1]);
 
-		polygon.points().push_back({x, y}); // pos
-		polygon.points().push_back({0.5, 0.5}); // (unused) uv
-		if(polygon.updateDevice(ctx, vgv::DrawMode::fill)) {
-			dlg_info("rerecord");
-			renderer.invalidate();
+		if(first) {
+			first = false;
+			subpath.start = {x, y};
+		} else {
+			subpath.commands.push_back({
+				{x, y},
+				vgv::SQBezierParams {}});
+
+			auto points = vgv::bake(subpath);
+			polygon.points().clear();
+			dlg_info("{}", points.size());
+			for(auto p : points) {
+				polygon.points().push_back(p); // pos
+				polygon.points().push_back({0.0, 0.0}); // (unused) uv
+			}
+
+			if(polygon.updateDevice(ctx, vgv::DrawMode::fill)) {
+				dlg_info("rerecord");
+				renderer.invalidate();
+			}
 		}
 	};
 

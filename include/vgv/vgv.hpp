@@ -5,6 +5,7 @@
 #include <vpp/descriptor.hpp>
 #include <vpp/pipeline.hpp>
 #include <vpp/image.hpp>
+#include <nytl/vec.hpp>
 #include <vector>
 
 // fwd decls from nk_font
@@ -13,7 +14,7 @@ struct nk_font_atlas;
 
 namespace vgv {
 
-struct Vec2f { float x, y; };
+using namespace nytl;
 
 /// Drawing context. Manages all pipelines and layouts needed to
 /// draw any shapes.

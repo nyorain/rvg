@@ -39,22 +39,31 @@ add_project_arguments(
 	language: 'cpp')
 
 # project-specific stuff
-# source_root = meson.source_root().split('\\')
-# add_project_arguments('-DDLG_BASE_PATH="' + '/'.join(source_root) + '/"', language: 'cpp')
+source_root = meson.source_root().split('\\')
+add_project_arguments('-DDLG_BASE_PATH="' + '/'.join(source_root) + '/"', language: 'cpp')
 
 dep_vpp = dependency('vpp', fallback: ['vpp', 'vpp_dep'])
+dep_nytl = dependency('nytl', fallback: ['nytl', 'nytl_dep'])
+dep_dlg = dependency('dlg', fallback: ['dlg', 'dlg_dep'])
 dep_vulkan = dependency('vulkan')
 
 src_inc = include_directories('src') # for shaders, internal headers
 vgv_inc = include_directories('include')
 
+vgv_deps = [
+  dep_vpp,
+  dep_nytl,
+  dep_dlg,
+  dep_vulkan
+]
+
 subdir('src/shaders')
 subdir('src/vgv')
 
-dep_vgv = declare_dependency(
+vgv_dep = declare_dependency(
 	link_with: vgv_lib,
-	include_directories: [vgv_inc, src_inc], # TODO: remove src inc
-	dependencies: dep_vpp)
+	dependencies: vgv_deps,
+	include_directories: vgv_inc)
 
 if build_example
   subdir('example')

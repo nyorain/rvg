@@ -854,9 +854,14 @@ nk_font_config(float pixel_height)
     cfg.ttf_size = 0;
     cfg.ttf_data_owned_by_atlas = 0;
     cfg.size = pixel_height;
+
     cfg.oversample_h = 3;
     cfg.oversample_v = 1;
     cfg.pixel_snap = 0;
+    // cfg.oversample_h = 1;
+    // cfg.oversample_v = 1;
+    // cfg.pixel_snap = 1;
+
     cfg.coord_type = NK_COORD_UV;
     cfg.spacing = nk_vec2(0,0);
     cfg.range = nk_font_default_glyph_ranges();

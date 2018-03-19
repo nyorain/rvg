@@ -6,10 +6,8 @@ example_src = [
 	'window.cpp']
 
 example_deps = [
-	dep_vgv,
-	dep_ny,
-	dep_vpp,
-	dep_vulkan]
+	vgv_dep,
+	dep_ny]
 
-executable('example', example_src, 
+executable('example', example_src,
 	dependencies: example_deps)

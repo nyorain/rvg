@@ -216,6 +216,10 @@ Polygon::Polygon(Context&, bool indirect) : indirect_(indirect) {
 
 bool Polygon::updateDevice(Context& ctx, DrawMode mode) {
 	bool rerecord = false;
+	if(points_.empty()) {
+		return false;
+	}
+
 	if(mode == DrawMode::fill || mode == DrawMode::both) {
 		auto neededSize = sizeof(Vec2f) * points_.size();
 		if(indirect_) {
@@ -253,6 +257,10 @@ void Polygon::stroke(Context&, vk::CommandBuffer) {
 }
 
 void Polygon::fill(Context& ctx, vk::CommandBuffer cmdb) {
+	if(points_.empty()) {
+		return;
+	}
+
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
 	if(indirect_) {
 		auto offset = fill_.offset() + sizeof(vk::DrawIndirectCommand);
