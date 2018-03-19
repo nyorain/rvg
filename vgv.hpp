@@ -110,3 +110,82 @@ private:
     //              |         +-------------------------+----------------- ymin
     //              |                                   |
     //              |------------- advanceX ----------->|<Paste>
+
+
+
+
+
+// path api for stroking
+enum class LineCap {
+	butt = 0,
+	round
+	square,
+};
+
+enum class LineJoin {
+	miter = 0,
+	round,
+	bevel
+};
+
+/// Returns the points in triangle-strip form
+std::vector<nytl::Vec2f> bakeStroke(nytl::Span<const nytl::Vec2f> points,
+	float width, LineCap cap = LineCap::butt,
+	LineJoin join = LineJoin::miter);
+
+std::vector<nytl::Vec2f> bakeStroke(const Subpath& sub,
+	float width, LineCap cap = LineCap::butt,
+	LineJoin join = LineJoin::miter);
+
+
+
+
+
+
+// alternative path storing (takes less space, no constant time RA)
+/*
+enum class CommandType {
+	line,
+	qBezier,
+	sqBezier,
+	cBezier,
+	scBezier,
+	endArc,
+	centerArc,
+};
+
+template<CommandType Type>
+struct CommandBase {
+	const CommandType type = Type;
+};
+
+struct LineCommand : public CommandBase<CommandType::line> {
+	nytl::Vec2f to;
+};
+
+struct QBezierCommand : public CommandBase<CommandType::qBezier> {
+	nytl::Vec2f to;
+	nytl::Vec2f control;
+};
+
+struct SQBezierCommand : public CommandBase<CommandType::sqBezier> {
+	nytl::Vec2f to;
+};
+
+struct CBezierCommand : public CommandBase<CommandType::cBezier> {
+	nytl::Vec2f to;
+	nytl::Vec2f control1;
+	nytl::Vec2f control2;
+};
+
+struct SCBezierCommand : public CommandBase<CommandType::scBezier> {
+	nytl::Vec2f to;
+	nytl::Vec2f control2;
+};
+
+struct Subpath {
+	nytl::Vec2f start;
+	std::vector<std::byte> commands;
+	bool closed;
+};
+*/
