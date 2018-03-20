@@ -14,3 +14,4 @@
 -Wpedantic
 -Wno-missing-braces
 -Wno-unused-const-variable
+-stdlib=libc++

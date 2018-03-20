@@ -1,4 +1,6 @@
-#include "vgv/vgv.hpp"
+#include <vgv/vgv.hpp>
+#include <vgv/path.hpp>
+
 #include <vpp/vk.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/imageOps.hpp>
@@ -191,10 +193,17 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	listAssemblyInfo.topology = vk::PrimitiveTopology::triangleList;
 	listPipeInfo.pInputAssemblyState = &listAssemblyInfo;
 
+	// stripPipe
+	auto stripPipeInfo = listPipeInfo;
+	auto stripAssemblyInfo = assemblyInfo;
+	stripAssemblyInfo.topology = vk::PrimitiveTopology::triangleStrip;
+	stripPipeInfo.pInputAssemblyState = &stripAssemblyInfo;
+
 	auto pipes = vk::createGraphicsPipelines(dev, {},
-		{fanPipeInfo, listPipeInfo});
+		{fanPipeInfo, listPipeInfo, stripPipeInfo});
 	fanPipe_ = {dev, pipes[0]};
 	listPipe_ = {dev, pipes[1]};
+	stripPipe_ = {dev, pipes[2]};
 }
 
 // Polygon
@@ -233,14 +242,52 @@ bool Polygon::updateDevice(Context& ctx, DrawMode mode) {
 	}
 
 	if(mode == DrawMode::stroke || mode == DrawMode::both) {
-		// TODO
+		// TODO: what about join/cap modes? width?
+		constexpr auto width = 10.f;
+		auto baked = bakeStroke(points_, width);
+		strokeCount_ = baked.size();
+		auto neededSize = sizeof(Vec2f) * points_.size() * 4;
+
+		if(stroke_.size() < neededSize) {
+			neededSize *= 2;
+			stroke_ = ctx.device().bufferAllocator().alloc(true, neededSize,
+				vk::BufferUsageBits::vertexBuffer);
+			rerecord = true;
+		}
+
+		auto map = stroke_.memoryMap();
+		auto ptr = map.ptr();
+		if(indirect_) {
+			vk::DrawIndirectCommand cmd {};
+			cmd.instanceCount = 1;
+			cmd.vertexCount = baked.size();
+			write(ptr, cmd);
+		}
+
+		for(auto& p : baked) {
+			write(ptr, p);
+			write(ptr, Vec {0.f, 0.f}); // (unused) uv
+		}
 	}
 
 	return rerecord;
 }
 
-void Polygon::stroke(Context&, vk::CommandBuffer) {
-	// TODO
+void Polygon::stroke(Context& ctx, vk::CommandBuffer cmdb) {
+	if(points_.empty()) {
+		return;
+	}
+
+	dlg_assert(stroke_.size());
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
+	if(indirect_) {
+		auto offset = stroke_.offset() + sizeof(vk::DrawIndirectCommand);
+		vk::cmdBindVertexBuffers(cmdb, 0, {stroke_.buffer()}, {offset});
+		vk::cmdDrawIndirect(cmdb, stroke_.buffer(), stroke_.offset(), 1, 0);
+	} else {
+		vk::cmdBindVertexBuffers(cmdb, 0, {stroke_.buffer()}, {stroke_.offset()});
+		vk::cmdDraw(cmdb, strokeCount_, 1, 0, 0);
+	}
 }
 
 void Polygon::fill(Context& ctx, vk::CommandBuffer cmdb) {
@@ -248,6 +295,7 @@ void Polygon::fill(Context& ctx, vk::CommandBuffer cmdb) {
 		return;
 	}
 
+	dlg_assert(fill_.size());
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
 	if(indirect_) {
 		auto offset = fill_.offset() + sizeof(vk::DrawIndirectCommand);

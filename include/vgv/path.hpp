@@ -2,6 +2,7 @@
 
 #include <nytl/vec.hpp>
 #include <nytl/stringParam.hpp>
+#include <nytl/span.hpp>
 
 #include <variant>
 #include <vector>
@@ -81,5 +82,27 @@ void bake(const CenterArc&, std::vector<Vec2f>&, unsigned steps);
 
 CubicBezier quadToCubic(const QuadBezier&);
 CenterArc parseArc(Vec2f from, const ArcParams&, Vec2f to);
+
+/// Stroke api
+enum class LineCap {
+	butt = 0,
+	round,
+	square,
+};
+
+enum class LineJoin {
+	miter = 0,
+	round,
+	bevel
+};
+
+/// Returns the points in triangle-strip form
+std::vector<Vec2f> bakeStroke(Span<const Vec2f> points,
+	float width, LineCap cap = LineCap::butt,
+	LineJoin join = LineJoin::miter);
+
+std::vector<Vec2f> bakeStroke(const Subpath& sub,
+	float width, LineCap cap = LineCap::butt,
+	LineJoin join = LineJoin::miter);
 
 } // namespace vgv

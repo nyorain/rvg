@@ -43,10 +43,12 @@ public:
 	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
 
 	const vpp::Device& device() const { return device_; };
-	vk::Pipeline fanPipe() const { return fanPipe_; }
-	vk::Pipeline listPipe() const { return listPipe_; }
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
 	const auto& dsPool() const { return dsPool_; }
+
+	vk::Pipeline fanPipe() const { return fanPipe_; }
+	vk::Pipeline listPipe() const { return listPipe_; }
+	vk::Pipeline stripPipe() const { return stripPipe_; }
 
 	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
 	const auto& dsLayoutTex() const { return dsLayoutTex_; }
@@ -58,6 +60,7 @@ private:
 	const vpp::Device& device_;
 	vpp::Pipeline fanPipe_;
 	vpp::Pipeline listPipe_;
+	vpp::Pipeline stripPipe_;
 	vpp::PipelineLayout pipeLayout_;
 	vpp::DescriptorSetLayout dsLayoutPaint_;
 	vpp::DescriptorSetLayout dsLayoutTex_;
@@ -125,6 +128,7 @@ protected:
 	vpp::BufferRange stroke_ {};
 	std::vector<Vec2f> points_ {};
 	bool indirect_ {};
+	unsigned strokeCount_ {};
 };
 
 class FontAtlas {

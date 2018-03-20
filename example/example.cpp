@@ -157,9 +157,7 @@ int main() {
 		transform.bind(ctx, buf);
 		paint.bind(ctx, buf);
 
-		if(polygon.points().size() > 0) {
-			polygon.fill(ctx, buf);
-		}
+		polygon.stroke(ctx, buf);
 
 		svgPolygon.fill(ctx, buf);
 		text.draw(ctx, buf);
@@ -200,7 +198,6 @@ int main() {
 
 		text.pos.x = (ev.size[0] - textWidth) / 2;
 		text.pos.y = ev.size[1] - fontHeight - 20;
-
 		text.updateDevice(ctx);
 
 		transform.matrix = nytl::identity<4, float>();
@@ -237,10 +234,10 @@ int main() {
 			polygon.points().clear();
 			for(auto p : points) {
 				polygon.points().push_back(p); // pos
-				polygon.points().push_back({0.0, 0.0}); // (unused) uv
+				// polygon.points().push_back({0.0, 0.0}); // (unused) uv
 			}
 
-			if(polygon.updateDevice(ctx, vgv::DrawMode::fill)) {
+			if(polygon.updateDevice(ctx, vgv::DrawMode::stroke)) {
 				dlg_info("rerecord");
 				renderer.invalidate();
 			}

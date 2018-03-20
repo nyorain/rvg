@@ -1,5 +1,6 @@
 #include <vgv/path.hpp>
 #include <nytl/vecOps.hpp>
+#include <nytl/approxVec.hpp>
 #include <dlg/dlg.hpp>
 #include <cmath>
 
@@ -21,6 +22,10 @@ template<std::size_t D, typename T>
 constexpr Vec<D, T> mirror(const Vec<D, T>& mirror, const Vec<D, T>& point) {
 	return mirror + (mirror - point);
 }
+
+/// Returns the left/right normal of a 2d vector
+inline nytl::Vec2f lnormal(nytl::Vec2f vec) { return {-vec[1], vec[0]}; }
+inline nytl::Vec2f rnormal(nytl::Vec2f vec) { return {vec[1], -vec[0]}; }
 
 /// Simple Paul de Casteljau implementation.
 /// See antigrain.com/research/adaptive_bezier/
@@ -228,17 +233,10 @@ Subpath parseSvgSubpath(nytl::Vec2f start, nytl::StringParam svg) {
 		auto c = *it;
 		++it;
 		switch(c) {
-			/*
 			case 'M': case 'm': {
-				auto x = std::strtof(it, end);
-				auto y = std::strtof(it, end);
-
-				nytl::Vec2i pos{x, y}
-				if(cmd == 'm') pos += lastPos;
-				path.move(pos);
-
-				break;
-			}*/ case 'L': case 'l': {
+				dlg_error("Moving not allowed for subpath");
+				return {};
+			} case 'L': case 'l': {
 				auto& cmd = pushCmd(readCoords(), LineParams {});
 				if(c == 'l') {
 					cmd.to += last;
@@ -318,13 +316,68 @@ Subpath parseSvgSubpath(nytl::Vec2f start, nytl::StringParam svg) {
 				ret.closed = true;
 				break;
 			} default: {
-				dlg_error("Invalid path command {}", *it);
+				dlg_error("Invalid subpath command {}", *it);
 				return {};
 			}
 		}
 	}
 
 	return ret;
+}
+
+// stroke api
+std::vector<Vec2f> bakeStroke(Span<const Vec2f> points,
+		float width, LineCap cap, LineJoin join) {
+	((void) cap);
+	((void) join);
+	width *= 0.5f;
+
+	if(points.size() < 2) {
+		return {};
+	}
+
+	auto loop = points.front() == points.back();
+	std::vector<Vec2f> ret;
+	auto p0 = points.back();
+	auto p1 = points.front();
+	auto p2 = points[1];
+
+	for(auto i = 0u; i < points.size(); ++i) {
+		auto d0 = lnormal(p1 - p0);
+		auto d1 = lnormal(p2 - p1);
+
+		if(i == 0 && !loop) {
+			d0 = d1;
+		} else if(i == points.size() - 1 && !loop) {
+			d1 = d0;
+		}
+
+		// skip point if same to next or previous one
+		// this assures normalized below will not throw (for nullvector)
+		if(d0 == approx(Vec {0.f, 0.f}) || d1 == approx(Vec {0.f, 0.f})) {
+			p1 = p2;
+			p2 = points[i + 2 % points.size()];
+			continue;
+		}
+
+		auto extrusion = 0.5f * (normalized(d0) + normalized(d1));
+
+		ret.push_back(p1 + width * extrusion);
+		ret.push_back(p1 - width * extrusion);
+
+		p0 = points[i];
+		p1 = points[i + 1 % points.size()];
+		p2 = points[i + 2 % points.size()];
+	}
+
+	return ret;
+}
+
+std::vector<Vec2f> bakeStroke(const Subpath& sub,
+		float width, LineCap cap, LineJoin join) {
+
+	auto points = bake(sub);
+	return bakeStroke(points, width, cap, join);
 }
 
 } // namespace vgv
