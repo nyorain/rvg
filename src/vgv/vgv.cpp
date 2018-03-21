@@ -1,5 +1,4 @@
 #include <vgv/vgv.hpp>
-#include <vgv/path.hpp>
 
 #include <vpp/vk.hpp>
 #include <vpp/formats.hpp>
@@ -14,6 +13,8 @@
 
 #include <shaders/fill.vert.h>
 #include <shaders/fill.frag.h>
+
+// TODO(performance): optionally create (static) Polygons in deviceLocal memory.
 
 namespace vgv {
 namespace {
@@ -115,21 +116,27 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	vertexAttribs[0].format = vk::Format::r32g32Sfloat;
 
 	vertexAttribs[1].format = vk::Format::r32g32Sfloat;
-	vertexAttribs[1].offset = sizeof(float) * 2;
 	vertexAttribs[1].location = 1;
+	vertexAttribs[1].binding = 1;
 
-	// both in the same buffer
-	vk::VertexInputBindingDescription vertexBindings[1] = {};
+	// position and uv are in different buffers
+	// this allows polygons that don't use any uv-coords to simply
+	// reuse the position buffer which will result in better performance
+	// (due to caching) and waste less memory
+	vk::VertexInputBindingDescription vertexBindings[2] = {};
 	vertexBindings[0].inputRate = vk::VertexInputRate::vertex;
-	vertexBindings[0].stride = sizeof(float) * 4;
-	// vertexBindings[0].stride = sizeof(float) * 2;
+	vertexBindings[0].stride = sizeof(float) * 2; // position
+	vertexBindings[0].binding = 0;
+
+	vertexBindings[1].inputRate = vk::VertexInputRate::vertex;
+	vertexBindings[1].stride = sizeof(float) * 2; // uv
+	vertexBindings[1].binding = 1;
 
 	vk::PipelineVertexInputStateCreateInfo vertexInfo {};
 	vertexInfo.pVertexAttributeDescriptions = vertexAttribs;
 	vertexInfo.vertexAttributeDescriptionCount = 2;
-	// vertexInfo.vertexAttributeDescriptionCount = 1;
 	vertexInfo.pVertexBindingDescriptions = vertexBindings;
-	vertexInfo.vertexBindingDescriptionCount = 1;
+	vertexInfo.vertexBindingDescriptionCount = 2;
 	fanPipeInfo.pVertexInputState = &vertexInfo;
 
 	vk::PipelineInputAssemblyStateCreateInfo assemblyInfo;
@@ -207,103 +214,69 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 }
 
 // Polygon
-Polygon::Polygon(Context&, bool indirect) : indirect_(indirect) {
+Polygon::Polygon(Context&, PolygonMode xmode, bool indirect) :
+	mode(xmode), indirect_(indirect) {
 }
 
-bool Polygon::updateDevice(Context& ctx, DrawMode mode) {
+bool Polygon::updateDevice(Context& ctx) {
 	bool rerecord = false;
-	if(points_.empty()) {
+	if(points.empty()) {
 		return false;
 	}
 
-	if(mode == DrawMode::fill || mode == DrawMode::both) {
-		auto neededSize = sizeof(Vec2f) * points_.size();
-		if(indirect_) {
-			neededSize += sizeof(vk::DrawIndirectCommand);
-		}
-
-		if(fill_.size() < neededSize) {
-			neededSize *= 2;
-			fill_ = ctx.device().bufferAllocator().alloc(true, neededSize,
-				vk::BufferUsageBits::vertexBuffer);
-			rerecord = true;
-		}
-
-		auto map = fill_.memoryMap();
-		auto ptr = map.ptr();
-		if(indirect_) {
-			vk::DrawIndirectCommand cmd {};
-			cmd.instanceCount = 1;
-			cmd.vertexCount = points_.size() / 2;
-			write(ptr, cmd);
-		}
-
-		std::memcpy(ptr, points_.data(), points_.size() * sizeof(float) * 2);
+	auto neededSize = sizeof(Vec2f) * points.size();
+	if(indirect_) {
+		neededSize += sizeof(vk::DrawIndirectCommand);
 	}
 
-	if(mode == DrawMode::stroke || mode == DrawMode::both) {
-		// TODO: what about join/cap modes? width?
-		constexpr auto width = 10.f;
-		auto baked = bakeStroke(points_, width);
-		strokeCount_ = baked.size();
-		auto neededSize = sizeof(Vec2f) * points_.size() * 4;
-
-		if(stroke_.size() < neededSize) {
-			neededSize *= 2;
-			stroke_ = ctx.device().bufferAllocator().alloc(true, neededSize,
-				vk::BufferUsageBits::vertexBuffer);
-			rerecord = true;
-		}
-
-		auto map = stroke_.memoryMap();
-		auto ptr = map.ptr();
-		if(indirect_) {
-			vk::DrawIndirectCommand cmd {};
-			cmd.instanceCount = 1;
-			cmd.vertexCount = baked.size();
-			write(ptr, cmd);
-		}
-
-		for(auto& p : baked) {
-			write(ptr, p);
-			write(ptr, Vec {0.f, 0.f}); // (unused) uv
-		}
+	if(verts_.size() < neededSize) {
+		neededSize *= 2;
+		verts_ = ctx.device().bufferAllocator().alloc(true, neededSize,
+			vk::BufferUsageBits::vertexBuffer);
+		rerecord = true;
 	}
+
+	auto map = verts_.memoryMap();
+	auto ptr = map.ptr();
+	if(indirect_) {
+		vk::DrawIndirectCommand cmd {};
+		cmd.vertexCount = points.size();
+		cmd.instanceCount = 1;
+		write(ptr, cmd);
+	}
+
+	std::memcpy(ptr, points.data(), points.size() * sizeof(points[0]));
 
 	return rerecord;
 }
 
-void Polygon::stroke(Context& ctx, vk::CommandBuffer cmdb) {
-	if(points_.empty()) {
+void Polygon::draw(Context& ctx, vk::CommandBuffer cmdb) {
+	if(points.empty()) {
 		return;
 	}
 
-	dlg_assert(stroke_.size());
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
-	if(indirect_) {
-		auto offset = stroke_.offset() + sizeof(vk::DrawIndirectCommand);
-		vk::cmdBindVertexBuffers(cmdb, 0, {stroke_.buffer()}, {offset});
-		vk::cmdDrawIndirect(cmdb, stroke_.buffer(), stroke_.offset(), 1, 0);
-	} else {
-		vk::cmdBindVertexBuffers(cmdb, 0, {stroke_.buffer()}, {stroke_.offset()});
-		vk::cmdDraw(cmdb, strokeCount_, 1, 0, 0);
-	}
-}
+	dlg_assert(verts_.size());
 
-void Polygon::fill(Context& ctx, vk::CommandBuffer cmdb) {
-	if(points_.empty()) {
-		return;
+	vk::Pipeline pipe;
+	switch(mode) {
+		case PolygonMode::fan: pipe = ctx.fanPipe(); break;
+		case PolygonMode::list: pipe = ctx.listPipe(); break;
+		case PolygonMode::strip: pipe = ctx.stripPipe(); break;
 	}
 
-	dlg_assert(fill_.size());
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, pipe);
+	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
+
+	// bind the vertex buffer 2 times since we use it as (dummy) uv buffer
+	// as well.
+	auto offset = verts_.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
+	vk::cmdBindVertexBuffers(cmdb, 0, {verts_.buffer(), verts_.buffer()},
+		{offset, offset});
 	if(indirect_) {
-		auto offset = fill_.offset() + sizeof(vk::DrawIndirectCommand);
-		vk::cmdBindVertexBuffers(cmdb, 0, {fill_.buffer()}, {offset});
-		vk::cmdDrawIndirect(cmdb, fill_.buffer(), fill_.offset(), 1, 0);
+		vk::cmdDrawIndirect(cmdb, verts_.buffer(), verts_.offset(), 1, 0);
 	} else {
-		vk::cmdBindVertexBuffers(cmdb, 0, {fill_.buffer()}, {fill_.offset()});
-		vk::cmdDraw(cmdb, points_.size() / 2, 1, 0, 0);
+		vk::cmdDraw(cmdb, points.size(), 1, 0, 0);
 	}
 }
 
@@ -319,7 +292,7 @@ FontAtlas::~FontAtlas() {
 }
 
 bool FontAtlas::bake(Context& ctx) {
-	// TODO: use r8 format. Figure out why i did not work
+	// TODO: use r8 format. Figure out why it did not work
 	constexpr auto format = vk::Format::r8g8b8a8Uint;
 	bool rerecord = false;
 
@@ -385,70 +358,95 @@ unsigned Font::width(const char* text) {
 }
 
 // Text
-Text::Text(Context&, const char* xtext, Font& xfont, Vec2f xpos) :
-	text(xtext), font(&xfont), pos(xpos)
+Text::Text(Context&, std::string xtext, Font& xfont, Vec2f xpos, bool indirect)
+	: text(std::move(xtext)), font(&xfont), pos(xpos), indirect_(indirect)
 {
 }
 
+// TODO(performance): put the vertex baking outside of this function in an
+// extra update function that just stores the results in the object.
+// Or call it automatically everytime text is changed.
+// Since those function could then be called while the gpu is still rendering.
+// That also caches the vertices vector for fewer allocations.
 bool Text::updateDevice(Context& ctx) {
 	dlg_assert(font && font->nkFont());
-
 	bool rerecord = false;
-	auto neededSize = sizeof(float) * 16 * std::strlen(text);
-	if(verts_.size() < neededSize) {
-		neededSize *= 2;
-		verts_ = ctx.device().bufferAllocator().alloc(true, neededSize,
-			vk::BufferUsageBits::vertexBuffer);
-		rerecord = true;
-	}
 
-	auto map = verts_.memoryMap();
-	auto ptr = map.ptr();
+	// we first calculate all vertices since we cannot know the needed
+	// size up front (because of utf-8 encoding).
+	std::vector<Vec2f> positions;
+	std::vector<Vec2f> uvs;
+
+	// good approximcation for usually-ascii
+	positions.reserve(text.size());
+	uvs.reserve(text.size());
 
 	auto x = pos.x;
-	auto gen_point = [&](const nk_font_glyph& glyph, unsigned i) {
-		float wx, wy, wu, wv;
+	auto addVert = [&](const nk_font_glyph& glyph, unsigned i) {
+		auto left = i == 0 || i == 3;
+		auto top = i == 0 || i == 1;
 
-		if(i == 0 || i == 3) {
-			wu = glyph.u0;
-			wx = x + glyph.x0;
-		} else {
-			wu = glyph.u1;
-			wx = x + glyph.x0 + glyph.w;
-		}
-
-		if(i == 2 || i == 3) {
-			wv = glyph.v0;
-			wy = pos.y + glyph.y0;
-		} else {
-			wv = glyph.v1;
-			wy = pos.y + glyph.y0 + glyph.h;
-		}
-
-		write(ptr, wx);
-		write(ptr, wy);
-		write(ptr, wu);
-		write(ptr, wv);
+		positions.push_back({
+			x + (left ? glyph.x0 : glyph.x1),
+			pos.y + (top ? glyph.y0 : glyph.y1)});
+		uvs.push_back({
+			left ? glyph.u0 : glyph.u1,
+			top ? glyph.v0 : glyph.v1});
 	};
 
-	for(auto it = text; *it; ++it) {
-		auto pglyph = nk_font_find_glyph(font->nkFont(), *it);
+	for(auto c : text) {
+		auto pglyph = nk_font_find_glyph(font->nkFont(), c);
 		if(!pglyph) {
-			dlg_warn("glyph '{}' not found in font", *it);
+			dlg_error("nk_font_find_glyph return null for {}", c);
 			break;
 		}
 
 		auto& glyph = *pglyph;
+		for(auto i : {0, 1, 2, 0, 2, 3}) {
+			addVert(glyph, i);
+		}
 
-		gen_point(glyph, 0);
-		gen_point(glyph, 1);
-		gen_point(glyph, 2);
-
-		gen_point(glyph, 0);
-		gen_point(glyph, 2);
-		gen_point(glyph, 3);
 		x += glyph.xadvance;
 	}
+
+	// now upload data to gpu
+	dlg_assert(positions.size() == uvs.size());
+	auto byteSize = sizeof(Vec2f) * positions.size();
+	auto neededSize = byteSize;
+	if(indirect_) {
+		neededSize += sizeof(vk::DrawIndirectCommand);
+	}
+
+	if(positionBuf_.size() < neededSize) {
+		positionBuf_ = {};
+		uvBuf_ = {};
+		ctx.device().bufferAllocator().reserve(true,
+			(neededSize + byteSize) * 2, vk::BufferUsageBits::vertexBuffer);
+		positionBuf_ = ctx.device().bufferAllocator().alloc(true,
+			neededSize * 2, vk::BufferUsageBits::vertexBuffer);
+		uvBuf_ = ctx.device().bufferAllocator().alloc(true,
+			byteSize * 2, vk::BufferUsageBits::vertexBuffer);
+		rerecord = true;
+	}
+
+	auto map = positionBuf_.memoryMap();
+	auto ptr = map.ptr();
+
+	// the positionBuf contains the indirect draw command, if there is any
+	if(indirect_) {
+		vk::DrawIndirectCommand cmd {};
+		cmd.vertexCount = positions.size();
+		cmd.instanceCount = 1;
+		write(ptr, cmd);
+	} else {
+		drawCount_ = positions.size();
+	}
+
+	std::memcpy(ptr, positions.data(), byteSize);
+
+	map = uvBuf_.memoryMap();
+	ptr = map.ptr();
+	std::memcpy(ptr, uvs.data(), byteSize);
 
 	return rerecord;
 }
@@ -458,8 +456,15 @@ void Text::draw(Context& ctx, vk::CommandBuffer cmdb) {
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), 1, {font->atlas().ds()}, {});
 
-	vk::cmdBindVertexBuffers(cmdb, 0, {verts_.buffer()}, {verts_.offset()});
-	vk::cmdDraw(cmdb, std::strlen(text) * 6, 1, 0, 0);
+	auto ioffset = indirect_ ? sizeof(vk::DrawIndirectCommand) : 0u;
+	vk::cmdBindVertexBuffers(cmdb, 0, {positionBuf_.buffer(), uvBuf_.buffer()},
+		{positionBuf_.offset() + ioffset, uvBuf_.offset()});
+	if(indirect_) {
+		vk::cmdDrawIndirect(cmdb, positionBuf_.buffer(),
+			positionBuf_.offset(), 1, 0);
+	} else {
+		vk::cmdDraw(cmdb, drawCount_, 1, 0, 0);
+	}
 }
 
 // Paint

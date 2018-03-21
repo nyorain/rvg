@@ -4,11 +4,11 @@
 -I./subprojects/nytl
 -I./subprojects/dlg/include
 -I./subprojects/vkpp/include
--I./build/subprojects/vkpp/include
--I./build/subprojects/ny/include
--I./build/subprojects/vpp/include
--I./build/assets
--I./build/src/
+-I./build/linux/subprojects/vkpp/include
+-I./build/linux/subprojects/ny/include
+-I./build/linux/subprojects/vpp/include
+-I./build/linux/assets
+-I./build/linux/src/
 -Wextra
 -Wall
 -Wpedantic

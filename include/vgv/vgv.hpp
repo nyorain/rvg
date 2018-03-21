@@ -5,9 +5,12 @@
 #include <vpp/descriptor.hpp>
 #include <vpp/pipeline.hpp>
 #include <vpp/image.hpp>
+
 #include <nytl/vec.hpp>
 #include <nytl/mat.hpp>
+
 #include <vector>
+#include <string>
 
 // fwd decls from nk_font
 struct nk_font;
@@ -74,6 +77,59 @@ private:
 
 struct Color { float r {}, g {}, b {}, a {}; };
 
+/// A buffer holding paint data on the device.
+/// Useful for more fine-grained control than Paint.
+/// Used with PaintBinding to bind it for drawing.
+class PaintBuffer {
+public:
+	/// The color used to draw.
+	/// Can be freely changed, but changes will only be applied
+	/// to the device when updateDevice is called.
+	Color color;
+
+public:
+	PaintBuffer() = default;
+	PaintBuffer(Context&, const Color& color);
+
+	/// Uploads changes to the device.
+	/// Will never invalidate/recreate any resources.
+	/// Must not be called while this a CommandBuffer that uses
+	/// this PaintBuffer in any way has not completed.
+	void updateDevice();
+
+protected:
+	vpp::BufferRange ubo_;
+};
+
+/// Used to bind a PaintBuffer for drawing.
+/// Useful for more fine-grained control than Paint.
+class PaintBinding {
+public:
+	PaintBinding() = default;
+	PaintBinding(Context&, const PaintBuffer& buffer);
+
+	/// Binds the associated PaintBuffer for drawing in the given
+	/// CommandBuffer.
+	void bind(Context&, vk::CommandBuffer);
+
+	/// Changes the associated PaintBuffer. Can be called at any
+	/// time but will only be updated to the device when updateDevice
+	/// is called. Returns the old buffer (if any).
+	const PaintBuffer* buffer(const PaintBuffer& newbuf);
+
+	/// Uploads a changed PaintBuffer to the device.
+	/// Will never invalidate/recreate any resources.
+	/// Must not be called while this a CommandBuffer that uses
+	/// this PaintBinding in any way has not completed.
+	void updateDevice();
+
+protected:
+	const PaintBuffer* buffer_;
+	vpp::DescriptorSet ds_;
+};
+
+/// Defines how shapes are drawn.
+/// For a more fine-grained control see PaintBinding and PaintBuffer.
 class Paint {
 public:
 	Color color;
@@ -105,30 +161,28 @@ vpp::ViewableImage createTexture(const vpp::Device&,
 vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
 	unsigned int height, const std::byte* data, TextureType);
 
-enum class DrawMode {
-	fill,
-	stroke,
-	both
+enum class PolygonMode {
+	fan = 0,
+	list,
+	strip,
 };
 
 class Polygon {
 public:
-	Polygon(Context&, bool indirect = false);
-	~Polygon() = default;
+	std::vector<Vec2f> points {};
+	PolygonMode mode {};
 
-	const auto& points() const { return points_; }
-	auto& points() { return points_; }
+public:
+	Polygon() = default;
+	Polygon(Context&, PolygonMode = PolygonMode::fan,
+		bool indirect = false);
 
-	bool updateDevice(Context&, DrawMode mode);
-	void stroke(Context&, vk::CommandBuffer);
-	void fill(Context&, vk::CommandBuffer);
+	bool updateDevice(Context&);
+	void draw(Context&, vk::CommandBuffer);
 
 protected:
-	vpp::BufferRange fill_ {};
-	vpp::BufferRange stroke_ {};
-	std::vector<Vec2f> points_ {};
+	vpp::BufferRange verts_ {};
 	bool indirect_ {};
-	unsigned strokeCount_ {};
 };
 
 class FontAtlas {
@@ -163,20 +217,26 @@ protected:
 	struct nk_font* font_;
 };
 
+/// Represents text to be drawn.
 class Text {
 public:
-	const char* text;
-	Font* font;
-	Vec2f pos;
+	std::string text {};
+	Font* font {};
+	Vec2f pos {};
 
 public:
-	Text(Context&, const char* text, Font& font, Vec2f pos);
+	Text() = default;
+	Text(Context&, std::string text, Font& font, Vec2f pos,
+		bool indirect = false);
 
 	bool updateDevice(Context&);
 	void draw(Context&, vk::CommandBuffer);
 
 protected:
-	vpp::BufferRange verts_;
+	vpp::BufferRange positionBuf_;
+	vpp::BufferRange uvBuf_;
+	bool indirect_ {};
+	unsigned drawCount_ {};
 };
 
 } // namespace vgv

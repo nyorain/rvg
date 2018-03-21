@@ -43,7 +43,7 @@ source_root = meson.source_root().split('\\')
 add_project_arguments('-DDLG_BASE_PATH="' + '/'.join(source_root) + '/"', language: 'cpp')
 
 dep_vpp = dependency('vpp', fallback: ['vpp', 'vpp_dep'])
-dep_nytl = dependency('nytl', fallback: ['nytl', 'nytl_dep'])
+dep_nytl = dependency('nytl MASTER', fallback: ['nytl', 'nytl_dep'])
 dep_dlg = dependency('dlg', fallback: ['dlg', 'dlg_dep'])
 dep_vulkan = dependency('vulkan')
 

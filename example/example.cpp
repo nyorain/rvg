@@ -121,13 +121,13 @@ int main() {
 	translate(transform.matrix, {-1.f, -1.f, 0.f});
 	transform.updateDevice();
 
-	vgv::Polygon polygon(ctx, true);
+	vgv::Polygon polygon(ctx, vgv::PolygonMode::strip, true);
 
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
 	auto fontHeight = 12;
 	vgv::FontAtlas atlas(ctx);
-	vgv::Font font(atlas, "OpenSans-Light.ttf", fontHeight);
+	vgv::Font font(atlas, "../../example/OpenSans-Light.ttf", fontHeight);
 	atlas.bake(ctx);
 
 	auto string = "yo, whaddup";
@@ -139,27 +139,16 @@ int main() {
 	// svg path
 	auto svgSubpath = vgv::parseSvgSubpath({300, 200},
 		"h -150 a150 150 0 1 0 150 -150 z");
-	vgv::Polygon svgPolygon(ctx, false);
-	auto points = vgv::bake(svgSubpath);
-	svgPolygon.points().clear();
-	for(auto& p : points) {
-		svgPolygon.points().push_back(p);
-		svgPolygon.points().push_back({}); // unused uv
-	}
 
-	svgPolygon.updateDevice(ctx, vgv::DrawMode::fill);
+	vgv::Polygon svgPolygon(ctx);
+	svgPolygon.points = vgv::bake(svgSubpath);
+	svgPolygon.updateDevice(ctx);
 
 	renderer.onRender += [&](vk::CommandBuffer buf){
-		// TODO
-		vk::cmdBindDescriptorSets(buf, vk::PipelineBindPoint::graphics,
-			ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
-
 		transform.bind(ctx, buf);
 		paint.bind(ctx, buf);
-
-		polygon.stroke(ctx, buf);
-
-		svgPolygon.fill(ctx, buf);
+		polygon.draw(ctx, buf);
+		svgPolygon.draw(ctx, buf);
 		text.draw(ctx, buf);
 	};
 
@@ -205,15 +194,6 @@ int main() {
 		scale(transform.matrix, s);
 		translate(transform.matrix, {-1, -1, 0});
 		transform.updateDevice();
-
-		auto points = vgv::bake(svgSubpath);
-		svgPolygon.points().clear();
-		for(auto& p : points) {
-			svgPolygon.points().push_back(p);
-			svgPolygon.points().push_back({}); // unused uv
-		}
-
-		svgPolygon.updateDevice(ctx, vgv::DrawMode::fill);
 	};
 
 	vgv::Subpath subpath;
@@ -230,14 +210,8 @@ int main() {
 			subpath.start = p;
 		} else {
 			subpath.commands.push_back({p, vgv::SQBezierParams {}});
-			auto points = vgv::bake(subpath);
-			polygon.points().clear();
-			for(auto p : points) {
-				polygon.points().push_back(p); // pos
-				// polygon.points().push_back({0.0, 0.0}); // (unused) uv
-			}
-
-			if(polygon.updateDevice(ctx, vgv::DrawMode::stroke)) {
+			polygon.points = vgv::bakeStroke(subpath, 10.f);
+			if(polygon.updateDevice(ctx)) {
 				dlg_info("rerecord");
 				renderer.invalidate();
 			}
