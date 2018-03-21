@@ -8,6 +8,7 @@
 
 #include <nytl/vec.hpp>
 #include <nytl/mat.hpp>
+#include <nytl/stringParam.hpp>
 
 #include <vector>
 #include <string>
@@ -21,6 +22,8 @@ namespace vgv {
 using namespace nytl;
 class Context;
 
+/// Matrix-based transform used to specify how shape coordinates
+/// are mapped to the output.
 class Transform {
 public:
 	Mat4f matrix;
@@ -174,8 +177,7 @@ public:
 
 public:
 	Polygon() = default;
-	Polygon(Context&, PolygonMode = PolygonMode::fan,
-		bool indirect = false);
+	Polygon(Context&, PolygonMode = PolygonMode::fan, bool indirect = false);
 
 	bool updateDevice(Context&);
 	void draw(Context&, vk::CommandBuffer);
@@ -208,7 +210,9 @@ public:
 	Font(FontAtlas&, const char* file, unsigned height);
 	Font(FontAtlas&, struct nk_font* font);
 
-	unsigned width(const char* text);
+	float width(StringParam text) const;
+	float height() const;
+
 	auto* nkFont() const { return font_; }
 	auto& atlas() const { return *atlas_; }
 
@@ -221,12 +225,12 @@ protected:
 class Text {
 public:
 	std::string text {};
-	Font* font {};
+	const Font* font {};
 	Vec2f pos {};
 
 public:
 	Text() = default;
-	Text(Context&, std::string text, Font& font, Vec2f pos,
+	Text(Context&, std::string text, const Font& font, Vec2f pos,
 		bool indirect = false);
 
 	bool updateDevice(Context&);

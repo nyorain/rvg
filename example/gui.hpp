@@ -11,6 +11,8 @@ namespace vui {
 using namespace nytl;
 using namespace vgv;
 
+// TODO!
+/*
 enum class MouseButton {
 	left,
 	right,
@@ -25,6 +27,7 @@ enum class Key {
 	right,
 	escape
 };
+*/
 
 // events
 struct MouseMoveEvent {
@@ -69,8 +72,8 @@ public:
 class Gui {
 public:
 	struct ButtonDraw {
-		Paint buttonLabel;
-		Paint buttonBackground;
+		Paint label;
+		Paint bg;
 	};
 
 	struct ButtonStyle {
@@ -87,7 +90,8 @@ public:
 	} styles;
 
 public:
-	Gui(Context& context, GuiListener& listener = GuiListener::nop());
+	Gui(Context& context, const Font& font,
+		GuiListener& listener = GuiListener::nop());
 
 	void mouseMove(const MouseMoveEvent&);
 	void mouseButton(const MouseButtonEvent&);
@@ -106,6 +110,7 @@ public:
 	Context& context() const { return context_; }
 
 	Widget& add(std::unique_ptr<Widget>);
+	const Font& font() const { return font_; }
 
 	template<typename W, typename... Args>
 	W& create(Args&&... args) {
@@ -120,14 +125,19 @@ public:
 	void addUpdate(Widget&);
 	void addUpdateDevice(Widget&);
 
+	GuiListener& listener() { return listener_.get(); }
+	void rerecord() { rerecord_ = true; }
+
 protected:
 	Context& context_;
+	const Font& font_;
 	std::reference_wrapper<GuiListener> listener_;
 	std::vector<std::unique_ptr<Widget>> widgets_;
 	std::vector<Widget*> update_;
 	std::vector<Widget*> updateDevice_;
 	Widget* mouseOver_ {};
 	Widget* focus_ {};
+	bool rerecord_ {};
 };
 
 class Widget : public nytl::NonMovable {
@@ -137,6 +147,7 @@ public:
 
 public:
 	Widget(Gui& xgui) : gui(xgui) {}
+	virtual ~Widget() = default;
 
 	virtual void mouseMove(const MouseMoveEvent&) {}
 	virtual void mouseButton(const MouseButtonEvent&) {}
@@ -161,7 +172,7 @@ public:
 	std::string label;
 
 public:
-	Button(Gui&, std::string xlabel = {});
+	Button(Gui&, Vec2f pos, std::string xlabel);
 
 	void mouseButton(const MouseButtonEvent&) override;
 	void mouseOver(bool gained) override;
@@ -171,11 +182,11 @@ public:
 
 protected:
 	struct {
-		Polygon background;
+		Polygon bg;
 		Text label;
 	} draw_;
 
-	bool mouseOver_ {};
+	bool hovered_ {};
 	bool pressed_ {};
 };
 

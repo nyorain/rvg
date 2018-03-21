@@ -321,3 +321,184 @@ paintBinding.buffer(otherPaint);
 
 paintBinding.bind(ctx, cmdb);
 polygon.fill(ctx, cmdb);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// dumping some vgv concept here
+
+/// The lowest shape abstraction. Simply draws a set of points as triangles.
+/// Does only hold its device state, isn't doubled buffered (host -> host).
+/// Can use an indirect drawing command, allowing the number of points to
+/// change without a need for rerecording.
+class PointBuffer {
+public:
+	PointBuffer() = default;
+	PointBuffer(Context&, bool indirect = false);
+
+	/// Updates the device with the given set of points.
+	/// Drawing will use undefined uv coordinates.
+	/// Returns whether if a resource was recreated and a command buffer
+	/// rerecord is needed.
+	bool updateDevice(Context&, Span<Vec2f> points);
+
+	/// Updates the device with the given set of points and its uv coords.
+	/// Returns whether if a resource was recreated and a command buffer
+	/// rerecord is needed.
+	bool updateDevice(Context&, Span<Vec2f> points, Span<Vec2f> uvs);
+
+	/// Records a draw command for the stored point into the given command
+	/// buffer. Has No effect if no points were stored yet.
+	/// Stencil specifies whether a stencil buffer should be used.
+	void draw(Context&, vk::CommandBuffer, PolygonMode mode,
+		bool stencil = false);
+
+protected:
+	vpp::BufferRange verts_ {};
+	bool indirect_ {};
+	size_t drawCount_ {};
+};
+
+/// A simple polygon.
+class Polygon {
+public:
+	std::vector<Vec2f> points;
+	bool useStencil {};
+
+public:
+	void bakeStroke(float width, LineCap, LineJoin);
+	bool updateDevice(DrawMode);
+
+	void fill(Context&, vk::CommandBuffer, bool useStencil = true);
+	void stroke(Context&, vk::CommandBuffer, bool useStencil = true);
+
+protected:
+	PointBuffer fill_;
+	PointBuffer fillAntilias_;
+
+	std::vector<Vec2f> strokeCache_;
+	PointBuffer stroke_;
+};
+
+class Rect {
+public:
+	Vec2f pos;
+	Vec2f size;
+
+public:
+	void bakeStroke(float width, LineCap, LineJoin);
+	bool updateDevice(DrawMode);
+};
+
+
+
+
+
+
+
+
+
+
+
+
+
+class FillPolygon {
+public:
+	Polygon() = default;
+	Polygon(Context&, bool indirect = false);
+
+	bool updateDevice(Context&, Span<Vec2f> points, bool antialias);
+	void draw(Context&, vk::CommandBuffer, bool stencil = true);
+
+protected:
+	vpp::BufferRange verts_ {};
+	bool indirect_ {};
+	bool antialias_ {};
+	unsigned drawCount_ {};
+};
+
+
+class StrokePolygon {
+public:
+	void bake(Context&, Span<Vec2f> points, float width, LineCap, LineJoin),
+
+	bool updateDevice(Context&);
+	bool updateDeviceBake(Context&, Span<Vec2f> points,
+		float width, LineCap, LineJoin, bool antilias);
+
+protected:
+	vpp::BufferRange verts_ {};
+	bool indirect_ {};
+	unsigned drawCount_ {};
+};
+
+
+
+
+class Polygon {
+public:
+	struct StrokeSettings {
+		LineCap lineCap;
+		LineJoin lineJoin;
+		float width;
+	};
+
+	struct Baker {
+		bool fill;
+		std::optional<StrokeSettings> stroke;
+	};
+
+public:
+	bool updateDevice(Context&, Span<Vec2f> points, const Baker&);
+
+protected:
+	struct {
+		vpp::BufferRange buf_;
+		size_t count_;
+	} fill, stroke;
+};
+
+
+class DrawInstance {
+public:
+	void mask(const Polygon&);
+
+	void stroke(const Paint&);
+	void fill(const Paint&);
+
+protected:
+	vk::CommandBuffer cmdb_;
+	std::vector<Polygon*> current_;
+};
+
+
+
+
+
+
+Shape someShape1;
+Shape someShape2;
+
+draw.mask(someShape1);
+draw.mask(someShape2);
+draw.stroke(somePaint);
+
+draw.mask(someShape2);
+draw.fill(somePaint);

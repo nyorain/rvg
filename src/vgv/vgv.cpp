@@ -350,17 +350,22 @@ Font::Font(FontAtlas& atlas, struct nk_font* font) :
 {
 }
 
-unsigned Font::width(const char* text) {
+float Font::width(StringParam text) const {
 	dlg_assert(font_);
 	auto& handle = font_->handle;
-	return handle.width(handle.userdata, handle.height, text,
-		std::strlen(text));
+	return handle.width(handle.userdata, handle.height, text.c_str(),
+		text.size());
+}
+
+float Font::height() const {
+	dlg_assert(font_);
+	return font_->handle.height;
 }
 
 // Text
-Text::Text(Context&, std::string xtext, Font& xfont, Vec2f xpos, bool indirect)
-	: text(std::move(xtext)), font(&xfont), pos(xpos), indirect_(indirect)
-{
+Text::Text(Context&, std::string xtext, const Font& xfont, Vec2f xpos,
+	bool indirect) : text(std::move(xtext)), font(&xfont), pos(xpos),
+		indirect_(indirect) {
 }
 
 // TODO(performance): put the vertex baking outside of this function in an
@@ -452,6 +457,10 @@ bool Text::updateDevice(Context& ctx) {
 }
 
 void Text::draw(Context& ctx, vk::CommandBuffer cmdb) {
+	if(!positionBuf_.size()) {
+		return;
+	}
+
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.listPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), 1, {font->atlas().ds()}, {});
