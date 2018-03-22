@@ -502,3 +502,36 @@ draw.stroke(somePaint);
 
 draw.mask(someShape2);
 draw.fill(somePaint);
+
+
+
+
+
+class Rect {
+public:
+	Vec2f pos;
+	Vec2f size;
+	std::array<float, 4> rounding;
+
+	struct {
+		struct {
+			float width;
+			LineCap cap;
+			LineCap join;
+		} stroke;
+
+		bool fill;
+	} draw;
+
+public:
+	void update();
+	bool updateDevice();
+
+	void fill();
+	void stroke();
+
+protected:
+	Context* ctx_;
+	Polygon polygon_;
+};
+

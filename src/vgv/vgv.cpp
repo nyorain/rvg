@@ -66,7 +66,8 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	dsLayoutTex_ = {dev, texDSB};
 	dsLayoutTransform_ = {dev, transformDSB};
 
-	pipeLayout_ = {dev, {dsLayoutPaint_, dsLayoutTex_, dsLayoutTransform_}, {}};
+	pipeLayout_ = {dev, {dsLayoutPaint_, dsLayoutTex_, dsLayoutTransform_},
+		{{vk::ShaderStageBits::fragment, 0, sizeof(float)}}};
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
@@ -211,73 +212,6 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	fanPipe_ = {dev, pipes[0]};
 	listPipe_ = {dev, pipes[1]};
 	stripPipe_ = {dev, pipes[2]};
-}
-
-// Polygon
-Polygon::Polygon(Context&, PolygonMode xmode, bool indirect) :
-	mode(xmode), indirect_(indirect) {
-}
-
-bool Polygon::updateDevice(Context& ctx) {
-	bool rerecord = false;
-	if(points.empty()) {
-		return false;
-	}
-
-	auto neededSize = sizeof(Vec2f) * points.size();
-	if(indirect_) {
-		neededSize += sizeof(vk::DrawIndirectCommand);
-	}
-
-	if(verts_.size() < neededSize) {
-		neededSize *= 2;
-		verts_ = ctx.device().bufferAllocator().alloc(true, neededSize,
-			vk::BufferUsageBits::vertexBuffer);
-		rerecord = true;
-	}
-
-	auto map = verts_.memoryMap();
-	auto ptr = map.ptr();
-	if(indirect_) {
-		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = points.size();
-		cmd.instanceCount = 1;
-		write(ptr, cmd);
-	}
-
-	std::memcpy(ptr, points.data(), points.size() * sizeof(points[0]));
-
-	return rerecord;
-}
-
-void Polygon::draw(Context& ctx, vk::CommandBuffer cmdb) {
-	if(points.empty()) {
-		return;
-	}
-
-	dlg_assert(verts_.size());
-
-	vk::Pipeline pipe;
-	switch(mode) {
-		case PolygonMode::fan: pipe = ctx.fanPipe(); break;
-		case PolygonMode::list: pipe = ctx.listPipe(); break;
-		case PolygonMode::strip: pipe = ctx.stripPipe(); break;
-	}
-
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, pipe);
-	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
-
-	// bind the vertex buffer 2 times since we use it as (dummy) uv buffer
-	// as well.
-	auto offset = verts_.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {verts_.buffer(), verts_.buffer()},
-		{offset, offset});
-	if(indirect_) {
-		vk::cmdDrawIndirect(cmdb, verts_.buffer(), verts_.offset(), 1, 0);
-	} else {
-		vk::cmdDraw(cmdb, points.size(), 1, 0, 0);
-	}
 }
 
 // FontAtlas
@@ -526,6 +460,90 @@ void Transform::bind(Context& ctx, vk::CommandBuffer cmdBuf) {
 	dlg_assert(ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(cmdBuf, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), 2, {ds_}, {});
+}
+
+// Polygon
+void Polygon::bakeStroke(const StrokeSettings& settings) {
+	strokeWidth_ = settings.width;
+	if(aaStroke_) {
+		std::tie(strokeCache_, uvStrokeCache_) = bakeStrokeUv(points,
+			settings.width, settings.cap, settings.join);
+	} else {
+		strokeCache_ = ::vgv::bakeStroke(points, settings.width,
+			settings.cap, settings.join);
+	}
+}
+
+bool Polygon::updateDevice(const Context& ctx, DrawMode mode) {
+	bool rerecord = false;
+
+	if(mode == DrawMode::fill || mode == DrawMode::fillStroke) {
+		// TODO!
+	}
+
+	if(mode == DrawMode::stroke || mode == DrawMode::fillStroke) {
+		auto ioff = indirect_ * sizeof(vk::DrawIndirectCommand);
+		auto bsize = sizeof(Vec2f) * strokeCache_.size();
+		auto neededSize = ioff + (1 + aaStroke_) * bsize;
+
+		if(strokeBuf_.size() < neededSize) {
+			neededSize *= 2;
+			strokeBuf_ = ctx.device().bufferAllocator().alloc(true, neededSize,
+				vk::BufferUsageBits::vertexBuffer);
+			rerecord = true;
+		}
+
+		auto map = strokeBuf_.memoryMap();
+		auto ptr = map.ptr();
+		if(indirect_) {
+			vk::DrawIndirectCommand cmd {};
+			cmd.vertexCount = strokeCache_.size();
+			cmd.instanceCount = 1;
+			write(ptr, cmd);
+		}
+
+		std::memcpy(ptr, strokeCache_.data(),
+			uvStrokeCache_.size() * sizeof(Vec2f));
+
+		if(aaStroke_) {
+			ptr += (strokeBuf_.size() - ioff) / 2;
+			std::memcpy(ptr, uvStrokeCache_.data(),
+				uvStrokeCache_.size() * sizeof(Vec2f));
+		}
+	}
+
+	return rerecord;
+}
+
+void Polygon::stroke(const Context& ctx, vk::CommandBuffer cmdb) {
+	if(points.empty()) {
+		return;
+	}
+
+	dlg_assert(strokeBuf_.size());
+
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
+	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
+
+	auto ioff = indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto offset = strokeBuf_.offset() + ioff;
+	auto offset2 = offset + aaStroke_ * (strokeBuf_.size() - ioff) / 2;
+
+	auto sb = strokeBuf_.buffer().vkHandle();
+	vk::cmdBindVertexBuffers(cmdb, 0, {sb, sb}, {offset, offset2});
+
+	constexpr auto fringe = 5.f;
+	float aa = aaStroke_ * (0.5 * strokeWidth_ + 0.5 * fringe) / fringe;
+	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
+		0, sizeof(float), &aa);
+
+	if(indirect_) {
+		vk::cmdDrawIndirect(cmdb, strokeBuf_.buffer(),
+			strokeBuf_.offset(), 1, 0);
+	} else {
+		vk::cmdDraw(cmdb, strokeCache_.size(), 1, 0, 0);
+	}
 }
 
 } // namespace vgv

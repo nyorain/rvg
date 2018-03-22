@@ -105,4 +105,12 @@ std::vector<Vec2f> bakeStroke(const Subpath& sub,
 	float width, LineCap cap = LineCap::butt,
 	LineJoin join = LineJoin::miter);
 
+std::pair<std::vector<Vec2f>, std::vector<Vec2f>> bakeStrokeUv(
+	Span<const Vec2f> points, float width, LineCap cap = LineCap::butt,
+	LineJoin join = LineJoin::miter);
+
+void bakeFillAA(Span<const Vec2f> points, float fringe,
+	std::vector<Vec2f>& fillpos, std::vector<Vec2f>& strokepos,
+	std::vector<Vec2f>& strokeuv);
+
 } // namespace vgv

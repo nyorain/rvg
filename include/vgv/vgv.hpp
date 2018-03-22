@@ -1,5 +1,7 @@
 #pragma once
 
+#include "path.hpp"
+
 #include <vpp/fwd.hpp>
 #include <vpp/sharedBuffer.hpp>
 #include <vpp/descriptor.hpp>
@@ -164,29 +166,6 @@ vpp::ViewableImage createTexture(const vpp::Device&,
 vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
 	unsigned int height, const std::byte* data, TextureType);
 
-enum class PolygonMode {
-	fan = 0,
-	list,
-	strip,
-};
-
-class Polygon {
-public:
-	std::vector<Vec2f> points {};
-	PolygonMode mode {};
-
-public:
-	Polygon() = default;
-	Polygon(Context&, PolygonMode = PolygonMode::fan, bool indirect = false);
-
-	bool updateDevice(Context&);
-	void draw(Context&, vk::CommandBuffer);
-
-protected:
-	vpp::BufferRange verts_ {};
-	bool indirect_ {};
-};
-
 class FontAtlas {
 public:
 	FontAtlas(Context&);
@@ -241,6 +220,48 @@ protected:
 	vpp::BufferRange uvBuf_;
 	bool indirect_ {};
 	unsigned drawCount_ {};
+};
+
+
+
+struct StrokeSettings {
+	float width;
+	LineCap cap;
+	LineJoin join;
+};
+
+enum class DrawMode {
+	fill,
+	stroke,
+	fillStroke
+};
+
+/// A simple polygon than can be drawn as stroked or filled shape.
+class Polygon {
+public:
+	std::vector<Vec2f> points;
+
+public:
+	void bakeStroke(const StrokeSettings&);
+	bool updateDevice(const Context&, DrawMode);
+
+	void fill(const Context&, vk::CommandBuffer);
+	void stroke(const Context&, vk::CommandBuffer);
+
+protected:
+	bool indirect_ {true};
+
+	std::vector<Vec2f> fillCache_;
+	std::vector<Vec2f> aaFillCache_;
+	std::vector<Vec2f> aaFillCacheUv_;
+	vpp::BufferRange fillBuf_;
+	bool aaFill_ {true};
+
+	std::vector<Vec2f> strokeCache_;
+	std::vector<Vec2f> uvStrokeCache_;
+	vpp::BufferRange strokeBuf_;
+	bool aaStroke_ {true};
+	float strokeWidth_ {};
 };
 
 } // namespace vgv

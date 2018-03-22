@@ -4,7 +4,7 @@
 
 #include "render.hpp"
 #include "window.hpp"
-#include "gui.hpp"
+// #include "gui.hpp"
 
 #include <vgv/vgv.hpp>
 #include <vgv/path.hpp>
@@ -27,7 +27,7 @@
 #include <chrono>
 #include <array>
 
-using namespace vui;
+// using namespace vui;
 using namespace nytl::vec::operators;
 using namespace nytl::vec::cw::operators;
 
@@ -123,7 +123,7 @@ int main() {
 	translate(transform.matrix, {-1.f, -1.f, 0.f});
 	transform.updateDevice();
 
-	vgv::Polygon polygon(ctx, vgv::PolygonMode::strip, true);
+	// vgv::Polygon polygon(ctx, vgv::PolygonMode::strip, true);
 
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
@@ -142,11 +142,15 @@ int main() {
 	auto svgSubpath = vgv::parseSvgSubpath({300, 200},
 		"h -150 a150 150 0 1 0 150 -150 z");
 
-	vgv::Polygon svgPolygon(ctx);
-	svgPolygon.points = vgv::bake(svgSubpath);
-	svgPolygon.updateDevice(ctx);
+	// vgv::Polygon svgPolygon(ctx);
+	// svgPolygon.points = vgv::bake(svgSubpath);
+	// svgPolygon.updateDevice(ctx);
+
+	// shape
+	vgv::Polygon aaPolygon;
 
 	// gui
+	/*
 	Gui gui(ctx, font);
 	gui.styles.button.normal.label = vgv::Paint(ctx, {1.f, 1.f, 1.f, 1.f});
 	gui.styles.button.normal.bg = vgv::Paint(ctx, {0.05f, 0.05f, 0.05f, 1.f});
@@ -160,16 +164,17 @@ int main() {
 	auto& button = gui.create<Button>(Vec {500.f, 100.f}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
 	gui.updateDevice();
+	*/
 
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer buf){
 		transform.bind(ctx, buf);
 		paint.bind(ctx, buf);
-		polygon.draw(ctx, buf);
-		svgPolygon.draw(ctx, buf);
-		text.draw(ctx, buf);
-
-		gui.draw(buf);
+		aaPolygon.stroke(ctx, buf);
+		// polygon.draw(ctx, buf);
+		// svgPolygon.draw(ctx, buf);
+		// text.draw(ctx, buf);
+		// gui.draw(buf);
 	};
 
 	renderer.invalidate();
@@ -220,9 +225,11 @@ int main() {
 	bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
+		/*
 		gui.mouseButton({ev.pressed,
 			static_cast<unsigned>(ev.button),
 			static_cast<Vec2f>(ev.position)});
+		*/
 		if(!ev.pressed) {
 			return;
 		}
@@ -233,17 +240,20 @@ int main() {
 			subpath.start = p;
 		} else {
 			subpath.commands.push_back({p, vgv::SQBezierParams {}});
-			polygon.points = vgv::bakeStroke(subpath, 10.f);
-			if(polygon.updateDevice(ctx)) {
+			aaPolygon.points = vgv::bake(subpath);
+			aaPolygon.bakeStroke({10.f, vgv::LineCap::butt, vgv::LineJoin::miter});
+			if(aaPolygon.updateDevice(ctx, vgv::DrawMode::stroke)) {
 				dlg_info("rerecord");
 				renderer.invalidate();
 			}
 		}
 	};
 
+	/*
 	window.onMouseMove = [&](const auto& ev) {
 		gui.mouseMove({static_cast<nytl::Vec2f>(ev.position)});
 	};
+	*/
 
 	// - main loop -
 	using Clock = std::chrono::high_resolution_clock;
@@ -264,11 +274,13 @@ int main() {
 			return 0;
 		}
 
+		/*
 		gui.update(deltaCount);
 
 		if(gui.updateDevice()) {
 			renderer.invalidate();
 		}
+		*/
 
 		renderer.renderBlock();
 

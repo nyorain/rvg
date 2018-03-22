@@ -380,4 +380,57 @@ std::vector<Vec2f> bakeStroke(const Subpath& sub,
 	return bakeStroke(points, width, cap, join);
 }
 
+std::pair<std::vector<Vec2f>, std::vector<Vec2f>> bakeStrokeUv(
+		Span<const Vec2f> points, float width, LineCap cap, LineJoin join) {
+	((void) cap);
+	((void) join);
+	width *= 0.5f;
+
+	if(points.size() < 2) {
+		return {};
+	}
+
+	auto mask = 1 + 1 / width;
+	auto loop = points.front() == points.back();
+	std::vector<Vec2f> pos;
+	std::vector<Vec2f> uv;
+
+	auto p0 = points.back();
+	auto p1 = points.front();
+	auto p2 = points[1];
+
+	for(auto i = 0u; i < points.size(); ++i) {
+		auto d0 = lnormal(p1 - p0);
+		auto d1 = lnormal(p2 - p1);
+
+		if(i == 0 && !loop) {
+			d0 = d1;
+		} else if(i == points.size() - 1 && !loop) {
+			d1 = d0;
+		}
+
+		// skip point if same to next or previous one
+		// this assures normalized below will not throw (for nullvector)
+		if(d0 == approx(Vec {0.f, 0.f}) || d1 == approx(Vec {0.f, 0.f})) {
+			p1 = p2;
+			p2 = points[i + 2 % points.size()];
+			continue;
+		}
+
+		auto extrusion = 0.5f * (normalized(d0) + normalized(d1));
+
+		pos.push_back(p1 + width * extrusion);
+		pos.push_back(p1 - width * extrusion);
+
+		uv.push_back({1.f, -mask});
+		uv.push_back({1.f, mask});
+
+		p0 = points[i];
+		p1 = points[i + 1 % points.size()];
+		p2 = points[i + 2 % points.size()];
+	}
+
+	return {pos, uv};
+}
+
 } // namespace vgv
