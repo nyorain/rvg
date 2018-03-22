@@ -20,7 +20,23 @@ struct nk_font_atlas;
 namespace vgv {
 
 using namespace nytl;
+
 class Context;
+class Polygon;
+class Paint;
+class Text;
+class Font;
+class FontAtlas;
+
+enum class LineCap;
+enum class LineJoin;
+
+/// Indicates in which way points form triangles.
+enum class TriangleMode {
+	fan = 0,
+	list,
+	strip,
+};
 
 /// Matrix-based transform used to specify how shape coordinates
 /// are mapped to the output.
@@ -42,6 +58,31 @@ protected:
 	vpp::DescriptorSet ds_;
 };
 
+class DrawInstance {
+public:
+	struct Mask {
+		std::pair<vk::Buffer, vk::DeviceSize> posBuf;
+		std::pair<vk::Buffer, vk::DeviceSize> uvBuf;
+		TriangleMode mode;
+		size_t count;
+	};
+
+public:
+	DrawInstance(Context&, vk::CommandBuffer);
+	~DrawInstance();
+
+	void bind(const Font&);
+	void bind(const Transform&);
+
+	void mask(const Mask& mask);
+	void draw(const Paint&);
+
+protected:
+	Context& context_;
+	vk::CommandBuffer cmdb_;
+	std::vector<Mask> mask_;
+};
+
 /// Drawing context. Manages all pipelines and layouts needed to
 /// draw any shapes.
 class Context {
@@ -51,6 +92,8 @@ public:
 	const vpp::Device& device() const { return device_; };
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
 	const auto& dsPool() const { return dsPool_; }
+
+	DrawInstance record(vk::CommandBuffer);
 
 	vk::Pipeline fanPipe() const { return fanPipe_; }
 	vk::Pipeline listPipe() const { return listPipe_; }
@@ -76,9 +119,45 @@ private:
 
 	vpp::ViewableImage emptyImage_;
 	vpp::DescriptorSet dummyTex_;
+	Transform identityTransform_;
+
+	bool shapeAntiAlias_ {true};
+	bool edgeAntiAlias_ {true};
+	bool stencil_ {true};
 };
 
 struct Color { float r {}, g {}, b {}, a {}; };
+
+struct StrokeSettings {
+	LineCap lineCap;
+	LineJoin lineJoin;
+	float width;
+};
+
+enum class DrawMode {
+	fill,
+	stroke,
+	fillStroke
+};
+
+/// A simple polygon than can be drawn as stroked or filled shape.
+class Polygon {
+public:
+	std::vector<Vec2f> points;
+
+public:
+	void bakeStroke(const StrokeSettings&);
+	bool updateDevice(const Context&, DrawMode);
+
+	void maskFill(DrawInstance&);
+	void maskStroke(DrawInstance&);
+
+protected:
+	std::vector<Vec2f> strokeCache_;
+	vpp::BufferRange fill_;
+	vpp::BufferRange fillAntilias_;
+	vpp::BufferRange stroke_;
+};
 
 /// A buffer holding paint data on the device.
 /// Useful for more fine-grained control than Paint.
@@ -168,23 +247,6 @@ enum class PolygonMode {
 	fan = 0,
 	list,
 	strip,
-};
-
-class Polygon {
-public:
-	std::vector<Vec2f> points {};
-	PolygonMode mode {};
-
-public:
-	Polygon() = default;
-	Polygon(Context&, PolygonMode = PolygonMode::fan, bool indirect = false);
-
-	bool updateDevice(Context&);
-	void draw(Context&, vk::CommandBuffer);
-
-protected:
-	vpp::BufferRange verts_ {};
-	bool indirect_ {};
 };
 
 class FontAtlas {

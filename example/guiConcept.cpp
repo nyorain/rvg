@@ -376,24 +376,27 @@ protected:
 	size_t drawCount_ {};
 };
 
-/// A simple polygon.
+struct StrokeSettings {
+	LineCap lineCap;
+	LineJoin lineJoin;
+	float width;
+};
+
+/// A simple polygon than can be drawn as stroked or filled shape.
 class Polygon {
 public:
 	std::vector<Vec2f> points;
-	bool useStencil {};
 
 public:
-	void bakeStroke(float width, LineCap, LineJoin);
-	bool updateDevice(DrawMode);
-
-	void fill(Context&, vk::CommandBuffer, bool useStencil = true);
-	void stroke(Context&, vk::CommandBuffer, bool useStencil = true);
+	void bakeStroke(const StrokeSettings&);
+	bool updateDevice(const Context&, DrawMode);
+	void maskFill(DrawInstance&);
+	void maskStroke(DrawInstance&);
 
 protected:
+	std::vector<Vec2f> strokeCache_;
 	PointBuffer fill_;
 	PointBuffer fillAntilias_;
-
-	std::vector<Vec2f> strokeCache_;
 	PointBuffer stroke_;
 };
 
@@ -502,3 +505,7 @@ draw.stroke(somePaint);
 
 draw.mask(someShape2);
 draw.fill(somePaint);
+
+
+
+
