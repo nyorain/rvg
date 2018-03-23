@@ -220,7 +220,7 @@ public:
 
 public:
 	Shape() = default;
-	Shape(std::vector<Vec2f>&&, const DrawMode&);
+	Shape(std::vector<Vec2f>, const DrawMode&);
 
 	bool update();
 	bool updateDevice(const Context&);
@@ -236,15 +236,15 @@ protected:
 };
 
 /// Rectangle shape that can be filled to stroked.
-class Rect {
+class RectShape {
 public:
 	Vec2f pos;
 	Vec2f size;
 	DrawMode draw;
 
 public:
-	Rect() = default;
-	Rect(Vec2f p, Vec2f s, const DrawMode& mode);
+	RectShape() = default;
+	RectShape(Vec2f p, Vec2f s, const DrawMode& mode);
 
 	bool update();
 	bool updateDevice(const Context&);
@@ -297,18 +297,44 @@ protected:
 /// Represents text to be drawn.
 class Text {
 public:
-	std::string text {};
+	std::u32string text {};
 	const Font* font {};
 	Vec2f pos {};
 
 public:
 	Text() = default;
-	Text(std::string&& text, const Font&, Vec2f pos, bool indirect = false);
+	Text(std::u32string text, const Font&, Vec2f pos, bool indirect = false);
+	Text(std::string text, const Font&, Vec2f pos, bool indirect = false);
 
 	bool update();
 	bool updateDevice(Context&);
 	bool updateDevice(Context&, bool newIndirect);
-	void draw(const DrawInstance&);
+	void draw(const DrawInstance&) const;
+
+
+	/// Computes which char index lies at the given relative x.
+	/// For this to work, update() has to have been called.
+	/// Returns the index + 1 of the last char before the given x value,
+	/// and how far it lies into that char (from 0.f to 1.f).
+	/// If the x value lies after the char in its following space, this
+	/// is set to -1.f.
+	/// Also returns the start of the nearest space char boundary.
+	/// Example: Given there are two chars, the first from x=1 to x=11 and
+	/// the second from x=15 to x=35:
+	///  - charAt(0) returns {0, -1.f, 1.f}
+	///  - charAt(1) returns {1, 0.f, 1.f}
+	///  - charAt(6) returns {1, 0.5f, 1.f}
+	///  - charAt(7) returns {1, 0.6f, 11.f}
+	///  - charAt(13) returns {1, -1.f, 11.f}
+	///  - charAt(30) returns {2, 2 / 3.f, 35.f}
+	///  - charAt(36) returns {2, -1.f, 35.f}
+	struct CharAt {
+		unsigned last; // index of the last char before x
+		float inside; // how far it lies into the given char, or -1.f if not
+		float nearestBoundary; // next char boundary
+	};
+
+	CharAt charAt(float x) const;
 
 protected:
 	std::vector<Vec2f> posCache_;

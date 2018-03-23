@@ -326,31 +326,35 @@ Subpath parseSvgSubpath(nytl::Vec2f start, nytl::StringParam svg) {
 }
 
 // stroke api
-std::vector<Vec2f> bakeStroke(Span<const Vec2f> points, float width) {
+std::vector<Vec2f> bakeStroke(Span<const Vec2f> p, const StrokeSettings& s) {
 	std::vector<Vec2f> ret;
-	bakeStroke(points, width, ret);
+	bakeStroke(p, s, ret);
 	return ret;
 }
 
-std::vector<Vec2f> bakeStroke(const Subpath& sub, float width) {
+std::vector<Vec2f> bakeStroke(const Subpath& sub, const StrokeSettings& s) {
 	auto points = bake(sub);
-	return bakeStroke(points, width);
+	return bakeStroke(points, s);
 }
 
-void bakeStroke(Span<const Vec2f> points, float width,
+void bakeStroke(Span<const Vec2f> points, const StrokeSettings& settings,
 		std::vector<Vec2f>& ret) {
 
-	width *= 0.5f;
+	auto width = settings.width * 0.5f;
 	if(points.size() < 2) {
 		return;
 	}
 
 	auto loop = points.front() == points.back();
+	if(loop) {
+		points = points.slice(0, points.size() - 1);
+	}
+
 	auto p0 = points.back();
 	auto p1 = points.front();
 	auto p2 = points[1];
 
-	for(auto i = 0u; i < points.size(); ++i) {
+	for(auto i = 0u; i < points.size() + loop; ++i) {
 		auto d0 = lnormal(p1 - p0);
 		auto d1 = lnormal(p2 - p1);
 

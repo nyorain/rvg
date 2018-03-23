@@ -11,8 +11,8 @@ GuiListener& GuiListener::nop() {
 }
 
 // Gui
-Gui::Gui(Context& context, const Font& font, GuiListener& listener)
-	: context_(context), font_(font), listener_(listener) {
+Gui::Gui(Context& ctx, const Font& font, Styles&& s, GuiListener& listener)
+	: styles(std::move(s)), context_(ctx), font_(font), listener_(listener) {
 }
 
 void Gui::mouseMove(const MouseMoveEvent& ev) {
@@ -40,7 +40,14 @@ void Gui::mouseMove(const MouseMoveEvent& ev) {
 	}
 }
 void Gui::mouseButton(const MouseButtonEvent& ev) {
-	if(mouseOver_) {
+	if(!ev.pressed && buttonGrab_.first && ev.button == buttonGrab_.second) {
+		buttonGrab_.first->mouseButton(ev);
+		buttonGrab_ = {};
+	} else if(mouseOver_) {
+		if(ev.pressed) {
+			buttonGrab_ = {mouseOver_, ev.button};
+		}
+
 		mouseOver_->mouseButton(ev);
 	}
 }
@@ -78,10 +85,10 @@ bool Gui::updateDevice() {
 
 	return rerecord || rerecord_;
 }
-void Gui::draw(vk::CommandBuffer cmdb) {
+void Gui::draw(const DrawInstance& di) {
 	for(auto& widget : widgets_) {
 		dlg_assert(widget);
-		widget->draw(cmdb);
+		widget->draw(di);
 	}
 }
 
@@ -107,25 +114,20 @@ void Widget::registerUpdateDevice() {
 }
 
 // Button
-Button::Button(Gui& gui, Vec2f pos, std::string xlabel) :
-		Widget(gui), label(std::move(xlabel)) {
+Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 
 	auto& ctx = gui.context();
 	auto& font = gui.font();
 	auto padding = Vec {40, 15};
-	draw_.label = {ctx, label, font, pos + padding};
+	draw_.label.text = {label, font, pos + padding};
+	draw_.label.paint = {ctx, gui.styles.button.normal.label.get()};
 	auto size = 2 * padding + Vec {font.width(label), font.height()};
-
-	draw_.bg = {gui.context()};
-	draw_.bg.points = {
-		pos,
-		pos + Vec {size.x, 0},
-		pos + size,
-		pos + Vec {0, size.y}
-	};
+	draw_.bg.shape = {pos, size, DrawMode {true, 2.f}};
+	draw_.bg.paint = {ctx, gui.styles.button.normal.bg.get()};
 
 	bounds = {pos, size};
-	registerUpdateDevice();
+	draw_.label.text.updateDevice(ctx);
+	draw_.bg.shape.updateDevice(ctx);
 }
 
 void Button::mouseButton(const MouseButtonEvent& event) {
@@ -137,11 +139,12 @@ void Button::mouseButton(const MouseButtonEvent& event) {
 		pressed_ = true;
 	} else if(pressed_) {
 		pressed_ = false;
-		onClicked(*this);
+		if(hovered_) {
+			onClicked(*this);
+		}
 	}
 
 	registerUpdateDevice();
-	gui.rerecord();
 }
 void Button::mouseOver(bool gained) {
 	if(gained != hovered_) {
@@ -151,19 +154,47 @@ void Button::mouseOver(bool gained) {
 	hovered_ = gained;
 }
 
-void Button::draw(vk::CommandBuffer cmdb) {
-	auto& ctx = gui.context();
+void Button::draw(const DrawInstance& di) const {
+	draw_.bg.paint.bind(di);
+	draw_.bg.shape.fill(di);
+
+	draw_.label.paint.bind(di);
+	draw_.label.text.draw(di);
+
+	draw_.bg.shape.stroke(di);
+}
+
+bool Button::updateDevice() const {
 	auto& bs = gui.styles.button;
 	auto& draw = pressed_ ? bs.pressed : hovered_ ? bs.hovered : bs.normal;
-	draw.bg.bind(ctx, cmdb);
-	draw_.bg.draw(ctx, cmdb);
 
-	draw.label.bind(ctx, cmdb);
-	draw_.label.draw(ctx, cmdb);
+	draw_.bg.paint.updateDevice(draw.bg.get());
+	draw_.label.paint.updateDevice(draw.label.get());
+
+	return false;
 }
-bool Button::updateDevice() {
-	auto& ctx = gui.context();
-	return draw_.bg.updateDevice(ctx) | draw_.label.updateDevice(ctx);
+
+// Textfield
+Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
+	auto& font = gui.font();
+	auto height = font.height() + 10.f;
+	draw_.bg.shape = {pos, {width, height}, {true, 2.f}};
+	draw_.cursor.shape = {};
+}
+
+void Textfield::mouseButton(const MouseButtonEvent&) {
+}
+void Textfield::focus(bool gained) {
+}
+void Textfield::textInput(const TextInputEvent&) {
+}
+void Textfield::key(const KeyEvent&) {
+}
+
+void Textfield::draw(const DrawInstance&) const {
+}
+
+bool Textfield::updateDevice() const {
 }
 
 } // namespace vui

@@ -72,8 +72,8 @@ public:
 class Gui {
 public:
 	struct ButtonDraw {
-		Paint label;
-		Paint bg;
+		std::reference_wrapper<const PaintBuffer> label;
+		std::reference_wrapper<const PaintBuffer> bg;
 	};
 
 	struct ButtonStyle {
@@ -82,15 +82,17 @@ public:
 		ButtonDraw pressed;
 	};
 
-	struct {
-		ButtonStyle button;
+	struct TextfieldStyle {
+		std::reference_wrapper<const PaintBuffer> label;
+		std::reference_wrapper<const PaintBuffer> background;
+	};
 
-		Paint textfieldBackground;
-		Paint textfieldText;
+	struct Styles {
+		ButtonStyle button;
 	} styles;
 
 public:
-	Gui(Context& context, const Font& font,
+	Gui(Context& context, const Font& font, Styles&& s,
 		GuiListener& listener = GuiListener::nop());
 
 	void mouseMove(const MouseMoveEvent&);
@@ -103,7 +105,7 @@ public:
 
 	void update(double delta);
 	bool updateDevice();
-	void draw(vk::CommandBuffer);
+	void draw(const DrawInstance&);
 
 	Widget* mouseOver() const { return mouseOver_; }
 	Widget* focus() const { return focus_; }
@@ -136,6 +138,7 @@ protected:
 	std::vector<Widget*> update_;
 	std::vector<Widget*> updateDevice_;
 	Widget* mouseOver_ {};
+	std::pair<Widget*, unsigned> buttonGrab_ {};
 	Widget* focus_ {};
 	bool rerecord_ {};
 };
@@ -158,9 +161,9 @@ public:
 	virtual void focus(bool) {}
 	virtual void mouseOver(bool) {}
 
-	virtual void draw(vk::CommandBuffer) {}
 	virtual void update(double) {}
-	virtual bool updateDevice() { return false; }
+	virtual bool updateDevice() const { return false; }
+	virtual void draw(const DrawInstance&) const {}
 
 	void registerUpdate();
 	void registerUpdateDevice();
@@ -169,7 +172,6 @@ public:
 class Button : public Widget {
 public:
 	Callback<void(Button&)> onClicked;
-	std::string label;
 
 public:
 	Button(Gui&, Vec2f pos, std::string xlabel);
@@ -177,17 +179,57 @@ public:
 	void mouseButton(const MouseButtonEvent&) override;
 	void mouseOver(bool gained) override;
 
-	void draw(vk::CommandBuffer) override;
-	bool updateDevice() override;
+	void draw(const DrawInstance&) const override;
+	bool updateDevice() const override;
 
 protected:
 	struct {
-		Polygon bg;
-		Text label;
+		struct {
+			RectShape shape;
+			PaintBinding paint;
+		} bg;
+
+		struct {
+			Text text;
+			PaintBinding paint;
+		} label;
 	} draw_;
 
 	bool hovered_ {};
 	bool pressed_ {};
+};
+
+class Textfield : public Widget {
+public:
+	Textfield(Gui&, Vec2f pos, float width);
+
+	void mouseButton(const MouseButtonEvent&) override;
+	void focus(bool gained) override;
+	void textInput(const TextInputEvent&) override;
+	void key(const KeyEvent&) override;
+
+	void draw(const DrawInstance&) const override;
+	bool updateDevice() const override;
+
+protected:
+	struct {
+		struct {
+			RectShape shape;
+			PaintBinding paint;
+		} bg;
+
+		struct {
+			RectShape shape;
+			PaintBinding paint;
+		} cursor;
+
+		struct {
+			Text text;
+			PaintBinding paint;
+		} label;
+	} draw_;
+
+	unsigned cursor_;
 };
 
 } // namespace oui

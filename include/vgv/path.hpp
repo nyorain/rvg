@@ -85,9 +85,13 @@ CenterArc parseArc(Vec2f from, const ArcParams&, Vec2f to);
 
 /// Stroke api
 /// Returns the points in triangle-strip form
-std::vector<Vec2f> bakeStroke(Span<const Vec2f> points, float width);
-std::vector<Vec2f> bakeStroke(const Subpath& sub, float width);
-void bakeStroke(Span<const Vec2f> points, float width,
+struct StrokeSettings {
+	float width;
+};
+
+std::vector<Vec2f> bakeStroke(Span<const Vec2f> points, const StrokeSettings&);
+std::vector<Vec2f> bakeStroke(const Subpath& sub, const StrokeSettings&);
+void bakeStroke(Span<const Vec2f> points, const StrokeSettings&,
 	std::vector<Vec2f>& baked);
 
 } // namespace vgv

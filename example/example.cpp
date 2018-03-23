@@ -4,7 +4,7 @@
 
 #include "render.hpp"
 #include "window.hpp"
-// #include "gui.hpp"
+#include "gui.hpp"
 
 #include <vgv/vgv.hpp>
 #include <vgv/path.hpp>
@@ -27,7 +27,7 @@
 #include <chrono>
 #include <array>
 
-// using namespace vui;
+using namespace vui;
 using namespace nytl::vec::operators;
 using namespace nytl::vec::cw::operators;
 
@@ -126,7 +126,7 @@ int main() {
 	vgv::Shape shape({}, {false, 10.f});
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
-	auto fontHeight = 20;
+	auto fontHeight = 14;
 	vgv::FontAtlas atlas(ctx);
 	vgv::Font font(atlas, "../../example/OpenSans-Light.ttf", fontHeight);
 	atlas.bake(ctx);
@@ -145,21 +145,32 @@ int main() {
 	svgShape.updateDevice(ctx);
 
 	// gui
-	/*
-	Gui gui(ctx, font);
-	gui.styles.button.normal.label = vgv::Paint(ctx, {1.f, 1.f, 1.f, 1.f});
-	gui.styles.button.normal.bg = vgv::Paint(ctx, {0.05f, 0.05f, 0.05f, 1.f});
+	// auto label = vgv::PaintBuffer(ctx, {1.f, 1.f, 1.f, 1.f});
+	auto& label = paint.buffer();
+	auto normal = vgv::PaintBuffer(ctx, {0.05f, 0.05f, 0.05f, 1.f});
+	auto hovered = vgv::PaintBuffer(ctx, {0.07f, 0.07f, 0.07f, 1.f});
+	auto pressed = vgv::PaintBuffer(ctx, {0.09f, 0.09f, 0.09f, 1.f});
+	Gui::Styles styles {
+		{ // button
+			{ // normal
+				label,
+				normal,
+			}, { // hovered
+				label,
+				hovered,
+			}, { // pressed
+				label,
+				pressed
+			}
+		}
+	};
 
-	gui.styles.button.hovered.label = vgv::Paint(ctx, {1.f, 1.f, 1.f, 1.f});
-	gui.styles.button.hovered.bg = vgv::Paint(ctx, {0.1f, 0.1f, 0.1f, 1.f});
-
-	gui.styles.button.pressed.label = vgv::Paint(ctx, {1.f, 1.f, 1.f, 1.f});
-	gui.styles.button.pressed.bg = vgv::Paint(ctx, {0.2, 0.2, 0.2, 1.f});
+	Gui gui(ctx, font, std::move(styles));
 
 	auto& button = gui.create<Button>(Vec {500.f, 100.f}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
+	gui.create<Button>(Vec {500.f, 300.f}, "Button Number Two");
 	gui.updateDevice();
-	*/
 
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer buf){
@@ -171,7 +182,7 @@ int main() {
 		shape.stroke(di);
 		svgShape.fill(di);
 		text.draw(di);
-		// gui.draw(buf);
+		gui.draw(di);
 	};
 
 	renderer.invalidate();
@@ -224,11 +235,9 @@ int main() {
 	bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
-		/*
 		gui.mouseButton({ev.pressed,
 			static_cast<unsigned>(ev.button),
 			static_cast<Vec2f>(ev.position)});
-			*/
 		if(!ev.pressed) {
 			return;
 		}
@@ -247,11 +256,9 @@ int main() {
 		}
 	};
 
-	/*
 	window.onMouseMove = [&](const auto& ev) {
 		gui.mouseMove({static_cast<nytl::Vec2f>(ev.position)});
 	};
-	*/
 
 	// - main loop -
 	using Clock = std::chrono::high_resolution_clock;
@@ -272,13 +279,11 @@ int main() {
 			return 0;
 		}
 
-		/*
 		gui.update(deltaCount);
 
 		if(gui.updateDevice()) {
 			renderer.invalidate();
 		}
-		*/
 
 		renderer.renderBlock();
 

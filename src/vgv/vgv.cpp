@@ -8,6 +8,7 @@
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
 #include <nytl/vecOps.hpp>
+#include <nytl/utf.hpp>
 #include <cstring>
 
 #include <vgv/nk_font/font.h>
@@ -235,7 +236,7 @@ bool Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 	if(mode.stroke > 0.f) {
 		auto size = strokeCache_.size();
 		strokeCache_.clear();
-		bakeStroke(points, mode.stroke, strokeCache_);
+		bakeStroke(points, {mode.stroke}, strokeCache_);
 		rerecord |= !indirect_ && strokeCache_.size() != size;
 	}
 
@@ -335,7 +336,7 @@ void Polygon::stroke(const DrawInstance& ini) const {
 }
 
 // Shape
-Shape::Shape(std::vector<Vec2f>&& p, const DrawMode& xdraw) :
+Shape::Shape(std::vector<Vec2f> p, const DrawMode& xdraw) :
 		points(std::move(p)), draw(xdraw) {
 	update();
 }
@@ -361,29 +362,31 @@ void Shape::stroke(const DrawInstance& di) const {
 }
 
 // Rect
-Rect::Rect(Vec2f p, Vec2f s, const DrawMode& xdraw) :
+RectShape::RectShape(Vec2f p, Vec2f s, const DrawMode& xdraw) :
 		pos(p), size(s), draw(xdraw) {
 	update();
 }
 
-bool Rect::update() {
+bool RectShape::update() {
 	auto points = {
 		pos,
 		pos + Vec {size.x, 0.f},
 		pos + size,
-		pos + Vec {0.f, size.y}};
+		pos + Vec {0.f, size.y},
+		pos
+	};
 	return polygon_.update(points, draw);
 }
 
-bool Rect::updateDevice(const Context& ctx) {
+bool RectShape::updateDevice(const Context& ctx) {
 	return polygon_.updateDevice(ctx);
 }
 
-void Rect::fill(const DrawInstance& di) const {
+void RectShape::fill(const DrawInstance& di) const {
 	return polygon_.fill(di);
 }
 
-void Rect::stroke(const DrawInstance& di) const {
+void RectShape::stroke(const DrawInstance& di) const {
 	return polygon_.stroke(di);
 }
 
@@ -442,8 +445,7 @@ bool FontAtlas::bake(Context& ctx) {
 }
 
 // Font
-Font::Font(FontAtlas& atlas, const char* file, unsigned h) : atlas_(&atlas)
-{
+Font::Font(FontAtlas& atlas, const char* file, unsigned h) : atlas_(&atlas) {
 	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), file, h, nullptr);
 	if(!font_) {
 		std::string err = "Could not load font ";
@@ -453,8 +455,7 @@ Font::Font(FontAtlas& atlas, const char* file, unsigned h) : atlas_(&atlas)
 }
 
 Font::Font(FontAtlas& atlas, struct nk_font* font) :
-	atlas_(&atlas), font_(font)
-{
+	atlas_(&atlas), font_(font) {
 }
 
 float Font::width(StringParam text) const {
@@ -470,11 +471,14 @@ float Font::height() const {
 }
 
 // Text
-Text::Text(std::string&& xtext, const Font& xfont, Vec2f xpos, bool indirect) :
-		text(std::move(xtext)), font(&xfont), pos(xpos), indirect_(indirect) {
-	update();
+Text::Text(std::string xtext, const Font& xfont, Vec2f xpos, bool indirect) :
+	Text(toUtf32(xtext), xfont, xpos, indirect) {
 }
 
+Text::Text(std::u32string txt, const Font& xfont, Vec2f xpos, bool indirect) :
+		text(std::move(txt)), font(&xfont), pos(xpos), indirect_(indirect) {
+	update();
+}
 bool Text::update() {
 	// TODO: should return true when font was changed to a font
 	// in a different atlas. Rework font (atlas) binding.
@@ -564,7 +568,7 @@ bool Text::updateDevice(Context& ctx, bool newIndirect) {
 	return ret || updateDevice(ctx);
 }
 
-void Text::draw(const DrawInstance& ini) {
+void Text::draw(const DrawInstance& ini) const {
 	if(posCache_.empty()) {
 		return;
 	}
@@ -585,6 +589,30 @@ void Text::draw(const DrawInstance& ini) {
 	} else {
 		vk::cmdDraw(cmdb, posCache_.size(), 1, 0, 0);
 	}
+}
+
+Text::CharAt Text::charAt(float x) const {
+	auto last = 0u;
+	x += pos.x;
+	for(auto i = 0u; i < posCache_.size(); i += 6) {
+		auto start = posCache_[i].x;
+		auto end = posCache_[i + 1].x;
+		dlg_assert(end > start);
+
+		if(start < x) {
+			return {i / 6, -1.f, posCache_[last + 1].x};
+		}
+
+		if(end < x) {
+			auto fac = (end - start) / (x - start);
+			return {i / 6 + 1, fac, fac > 0.5f ? end : posCache_[last].x};
+		}
+
+		last = i;
+	}
+
+	auto nearest = posCache_.empty() ? -1.f : posCache_[last].x;
+	return {unsigned(posCache_.size() / 6), -1.f, nearest};
 }
 
 // PaintBuffer
