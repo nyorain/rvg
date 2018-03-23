@@ -176,22 +176,16 @@ struct DrawMode {
 /// A shape defined by points that can be stroked or filled.
 class Polygon {
 public:
-	Polygon(bool indirect = false) : indirect_(indirect) {}
-
 	/// Returns whether a rerecord is needed.
 	/// Can be called at any time, computes the polygon from the given
 	/// points and draw mode. The DrawMode specifies whether this polygon
 	/// can be used for filling or stroking and their properties.
-	bool update(Span<const Vec2f> points, const DrawMode&);
+	void update(Span<const Vec2f> points, const DrawMode&);
 
 	/// Uploads data to the device. Must not be called while a command
 	/// buffer drawing the Polygon is executing.
 	/// Returns whether a command buffer rerecord is needed.
-	bool updateDevice(const Context&);
-
-	/// Like the other updateDevice overload but updates whether the
-	/// polygon should be drawn indirect.
-	bool updateDevice(const Context&, bool newIndirect);
+	bool updateDevice(const Context&, bool disable = false);
 
 	/// Records commands to fill this polygon into the given DrawInstance.
 	/// Undefined behaviour if it was updates without fill support.
@@ -202,8 +196,6 @@ public:
 	void stroke(const DrawInstance&) const;
 
 protected:
-	bool indirect_;
-
 	std::vector<Vec2f> fillCache_;
 	vpp::BufferRange fillBuf_;
 
@@ -217,15 +209,14 @@ class Shape {
 public:
 	std::vector<Vec2f> points;
 	DrawMode draw;
+	bool hide {false};
 
 public:
 	Shape() = default;
-	Shape(std::vector<Vec2f>, const DrawMode&);
+	Shape(const Context&, std::vector<Vec2f> points, const DrawMode&);
 
-	bool update();
+	void update();
 	bool updateDevice(const Context&);
-	bool updateDevice(const Context&, bool newIndirect);
-
 	void fill(const DrawInstance&) const;
 	void stroke(const DrawInstance&) const;
 
@@ -241,12 +232,13 @@ public:
 	Vec2f pos;
 	Vec2f size;
 	DrawMode draw;
+	bool hide {false};
 
 public:
 	RectShape() = default;
-	RectShape(Vec2f p, Vec2f s, const DrawMode& mode);
+	RectShape(const Context&, Vec2f pos, Vec2f size, const DrawMode&);
 
-	bool update();
+	void update();
 	bool updateDevice(const Context&);
 
 	void fill(const DrawInstance&) const;
@@ -303,14 +295,12 @@ public:
 
 public:
 	Text() = default;
-	Text(std::u32string text, const Font&, Vec2f pos, bool indirect = false);
-	Text(std::string text, const Font&, Vec2f pos, bool indirect = false);
+	Text(const Context&, std::u32string text, const Font&, Vec2f pos);
+	Text(const Context&, std::string text, const Font&, Vec2f pos);
 
-	bool update();
-	bool updateDevice(Context&);
-	bool updateDevice(Context&, bool newIndirect);
+	void update();
+	bool updateDevice(const Context&);
 	void draw(const DrawInstance&) const;
-
 
 	/// Computes which char index lies at the given relative x.
 	/// For this to work, update() has to have been called.
@@ -340,7 +330,6 @@ protected:
 	std::vector<Vec2f> posCache_;
 	std::vector<Vec2f> uvCache_;
 	vpp::BufferRange buf_;
-	bool indirect_ {};
 };
 
 } // namespace vgv

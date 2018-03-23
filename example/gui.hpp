@@ -84,11 +84,12 @@ public:
 
 	struct TextfieldStyle {
 		std::reference_wrapper<const PaintBuffer> label;
-		std::reference_wrapper<const PaintBuffer> background;
+		std::reference_wrapper<const PaintBuffer> bg;
 	};
 
 	struct Styles {
 		ButtonStyle button;
+		TextfieldStyle textfield;
 	} styles;
 
 public:
@@ -220,7 +221,7 @@ protected:
 
 		struct {
 			RectShape shape;
-			PaintBinding paint;
+			// PaintBinding paint;
 		} cursor;
 
 		struct {
@@ -230,6 +231,7 @@ protected:
 	} draw_;
 
 	unsigned cursor_;
+	bool focus_;
 };
 
 } // namespace oui

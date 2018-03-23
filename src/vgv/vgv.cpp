@@ -224,26 +224,19 @@ DrawInstance Context::record(vk::CommandBuffer cmdb) {
 }
 
 // Polygon
-bool Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
-	auto rerecord = false;
+void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 	if(mode.fill) {
-		auto size = fillCache_.size();
 		fillCache_.clear();
 		fillCache_.insert(fillCache_.end(), points.begin(), points.end());
-		rerecord |= !indirect_ && fillCache_.size() != size;
 	}
 
 	if(mode.stroke > 0.f) {
-		auto size = strokeCache_.size();
 		strokeCache_.clear();
 		bakeStroke(points, {mode.stroke}, strokeCache_);
-		rerecord |= !indirect_ && strokeCache_.size() != size;
 	}
-
-	return rerecord;
 }
 
-bool Polygon::updateDevice(const Context& ctx) {
+bool Polygon::updateDevice(const Context& ctx, bool hide) {
 	bool rerecord = false;
 	auto upload = [&](auto& cache, auto& buf) {
 		if(cache.empty()) {
@@ -251,9 +244,7 @@ bool Polygon::updateDevice(const Context& ctx) {
 		}
 
 		auto neededSize = sizeof(cache[0]) * cache.size();
-		if(indirect_) {
-			neededSize += sizeof(vk::DrawIndirectCommand);
-		}
+		neededSize += sizeof(vk::DrawIndirectCommand);
 
 		if(buf.size() < neededSize) {
 			neededSize *= 2;
@@ -264,12 +255,11 @@ bool Polygon::updateDevice(const Context& ctx) {
 
 		auto map = buf.memoryMap();
 		auto ptr = map.ptr();
-		if(indirect_) {
-			vk::DrawIndirectCommand cmd {};
-			cmd.vertexCount = cache.size();
-			cmd.instanceCount = 1;
-			write(ptr, cmd);
-		}
+
+		vk::DrawIndirectCommand cmd {};
+		cmd.vertexCount = !hide * cache.size();
+		cmd.instanceCount = 1;
+		write(ptr, cmd);
 
 		std::memcpy(ptr, cache.data(), cache.size() * sizeof(cache[0]));
 	};
@@ -279,17 +269,7 @@ bool Polygon::updateDevice(const Context& ctx) {
 	return rerecord;
 }
 
-bool Polygon::updateDevice(const Context& ctx, bool newIndirect) {
-	auto ret = indirect_ != newIndirect;
-	indirect_ = newIndirect;
-	return ret || updateDevice(ctx);
-}
-
 void Polygon::fill(const DrawInstance& ini) const {
-	if(!indirect_ && fillCache_.empty()) {
-		return;
-	}
-
 	dlg_assert(fillBuf_.size() > 0);
 
 	auto& ctx = ini.context;
@@ -301,20 +281,12 @@ void Polygon::fill(const DrawInstance& ini) const {
 
 	// we use the position buffer as (dummy) uv buffer.
 	auto& b = fillBuf_;
-	auto off = b.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
-	if(indirect_) {
-		vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
-	} else {
-		vk::cmdDraw(cmdb, fillCache_.size(), 1, 0, 0);
-	}
+	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
 void Polygon::stroke(const DrawInstance& ini) const {
-	if(!indirect_ && strokeCache_.empty()) {
-		return;
-	}
-
 	dlg_assert(strokeBuf_.size() > 0);
 
 	auto& ctx = ini.context;
@@ -326,31 +298,24 @@ void Polygon::stroke(const DrawInstance& ini) const {
 
 	// we use the position buffer as (dummy) uv buffer.
 	auto& b = strokeBuf_;
-	auto off = b.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
-	if(indirect_) {
-		vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
-	} else {
-		vk::cmdDraw(cmdb, strokeCache_.size(), 1, 0, 0);
-	}
+	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
 // Shape
-Shape::Shape(std::vector<Vec2f> p, const DrawMode& xdraw) :
+Shape::Shape(const Context& ctx, std::vector<Vec2f> p, const DrawMode& xdraw) :
 		points(std::move(p)), draw(xdraw) {
 	update();
+	updateDevice(ctx);
 }
 
-bool Shape::update() {
-	return polygon_.update(points, draw);
+void Shape::update() {
+	polygon_.update(points, draw);
 }
 
 bool Shape::updateDevice(const Context& ctx) {
-	return polygon_.updateDevice(ctx);
-}
-
-bool Shape::updateDevice(const Context& ctx, bool newIndirect) {
-	return polygon_.updateDevice(ctx, newIndirect);
+	return polygon_.updateDevice(ctx, hide);
 }
 
 void Shape::fill(const DrawInstance& di) const {
@@ -362,12 +327,13 @@ void Shape::stroke(const DrawInstance& di) const {
 }
 
 // Rect
-RectShape::RectShape(Vec2f p, Vec2f s, const DrawMode& xdraw) :
-		pos(p), size(s), draw(xdraw) {
+RectShape::RectShape(const Context& ctx, Vec2f p, Vec2f s,
+		const DrawMode& xdraw) : pos(p), size(s), draw(xdraw) {
 	update();
+	updateDevice(ctx);
 }
 
-bool RectShape::update() {
+void RectShape::update() {
 	auto points = {
 		pos,
 		pos + Vec {size.x, 0.f},
@@ -375,11 +341,11 @@ bool RectShape::update() {
 		pos + Vec {0.f, size.y},
 		pos
 	};
-	return polygon_.update(points, draw);
+	polygon_.update(points, draw);
 }
 
 bool RectShape::updateDevice(const Context& ctx) {
-	return polygon_.updateDevice(ctx);
+	return polygon_.updateDevice(ctx, hide);
 }
 
 void RectShape::fill(const DrawInstance& di) const {
@@ -471,16 +437,17 @@ float Font::height() const {
 }
 
 // Text
-Text::Text(std::string xtext, const Font& xfont, Vec2f xpos, bool indirect) :
-	Text(toUtf32(xtext), xfont, xpos, indirect) {
+Text::Text(const Context& ctx, std::string xtext, const Font& f, Vec2f xpos) :
+	Text(ctx, toUtf32(xtext), f, xpos) {
 }
 
-Text::Text(std::u32string txt, const Font& xfont, Vec2f xpos, bool indirect) :
-		text(std::move(txt)), font(&xfont), pos(xpos), indirect_(indirect) {
+Text::Text(const Context& ctx, std::u32string txt, const Font& f, Vec2f xpos) :
+		text(std::move(txt)), font(&f), pos(xpos) {
 	update();
+	updateDevice(ctx);
 }
-bool Text::update() {
-	// TODO: should return true when font was changed to a font
+void Text::update() {
+	// TODO: should signal rerecord when font was changed to a font
 	// in a different atlas. Rework font (atlas) binding.
 	// Or (alternatively) make Font private and proviate an update overload
 	// taking a Font&
@@ -488,7 +455,6 @@ bool Text::update() {
 	dlg_assert(font && font->nkFont());
 	dlg_assert(posCache_.size() == uvCache_.size());
 
-	auto prevSize = posCache_.size();
 	posCache_.clear();
 	uvCache_.clear();
 
@@ -525,15 +491,14 @@ bool Text::update() {
 	}
 
 	dlg_assert(posCache_.size() == uvCache_.size());
-	return !indirect_ && posCache_.size() != prevSize;
 }
 
-bool Text::updateDevice(Context& ctx) {
+bool Text::updateDevice(const Context& ctx) {
 	bool rerecord = false;
 
 	// now upload data to gpu
 	dlg_assert(posCache_.size() == uvCache_.size());
-	auto ioff = indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto ioff = sizeof(vk::DrawIndirectCommand);
 	auto byteSize = sizeof(Vec2f) * posCache_.size();
 	auto neededSize = ioff + 2 * byteSize;
 
@@ -548,24 +513,16 @@ bool Text::updateDevice(Context& ctx) {
 	auto ptr = map.ptr();
 
 	// the positionBuf contains the indirect draw command, if there is any
-	if(indirect_) {
-		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = posCache_.size();
-		cmd.instanceCount = 1;
-		write(ptr, cmd);
-	}
+	vk::DrawIndirectCommand cmd {};
+	cmd.vertexCount = posCache_.size();
+	cmd.instanceCount = 1;
+	write(ptr, cmd);
 
 	std::memcpy(ptr, posCache_.data(), byteSize);
 	ptr = ptr + (buf_.size() - ioff) / 2;
 	std::memcpy(ptr, uvCache_.data(), byteSize);
 
 	return rerecord;
-}
-
-bool Text::updateDevice(Context& ctx, bool newIndirect) {
-	auto ret = indirect_ != newIndirect;
-	indirect_ = newIndirect;
-	return ret || updateDevice(ctx);
 }
 
 void Text::draw(const DrawInstance& ini) const {
@@ -580,15 +537,11 @@ void Text::draw(const DrawInstance& ini) const {
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), 1, {font->atlas().ds()}, {});
 
-	auto ioff = indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto ioff = sizeof(vk::DrawIndirectCommand);
 	auto off = buf_.offset() + ioff;
 	vk::cmdBindVertexBuffers(cmdb, 0, {buf_.buffer(), buf_.buffer()},
 		{off, off + (buf_.size() - ioff) / 2});
-	if(indirect_) {
-		vk::cmdDrawIndirect(cmdb, buf_.buffer(), buf_.offset(), 1, 0);
-	} else {
-		vk::cmdDraw(cmdb, posCache_.size(), 1, 0, 0);
-	}
+	vk::cmdDrawIndirect(cmdb, buf_.buffer(), buf_.offset(), 1, 0);
 }
 
 Text::CharAt Text::charAt(float x) const {
@@ -666,8 +619,7 @@ void Paint::updateDevice() {
 
 // Transform
 constexpr auto transformUboSize = sizeof(Mat4f);
-Transform::Transform(Context& ctx) : Transform(ctx, identity<4, float>())
-{
+Transform::Transform(Context& ctx) : Transform(ctx, identity<4, float>()) {
 }
 
 Transform::Transform(Context& ctx, const Mat4f& m) : matrix(m) {

@@ -1,6 +1,7 @@
 #include "gui.hpp"
 #include <dlg/dlg.hpp>
 #include <nytl/rectOps.hpp>
+#include <nytl/utf.hpp>
 
 namespace vui {
 
@@ -176,25 +177,49 @@ bool Button::updateDevice() const {
 
 // Textfield
 Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
+	auto& ctx = gui.context();
+	auto padding = Vec {10.f, 10.f};
+
 	auto& font = gui.font();
-	auto height = font.height() + 10.f;
+	auto height = font.height() + 2 * padding.y;
 	draw_.bg.shape = {pos, {width, height}, {true, 2.f}};
-	draw_.cursor.shape = {};
+	draw_.bg.paint = {ctx, gui.styles.textfield.bg};
+
+	auto cursorSize = Vec {2.f, font.height() + padding.y};
+	auto cursorPos = pos + Vec {padding.x, 0.5f * padding.y};
+	draw_.cursor.shape = {cursorPos, cursorSize, {true, 0.f}};
+
+	draw_.label.text = {"", font, pos + padding};
+	draw_.label.paint = {ctx, gui.styles.textfield.label};
 }
 
-void Textfield::mouseButton(const MouseButtonEvent&) {
+void Textfield::mouseButton(const MouseButtonEvent& ev) {
 }
 void Textfield::focus(bool gained) {
 }
-void Textfield::textInput(const TextInputEvent&) {
+void Textfield::textInput(const TextInputEvent& ev) {
+	auto utf32 = toUtf32(ev.utf8);
+	auto& str = draw_.label.text.text;
+	str.insert(cursor_, utf32);
+	cursor_ += utf32.length();
 }
-void Textfield::key(const KeyEvent&) {
+void Textfield::key(const KeyEvent& ev) {
 }
 
-void Textfield::draw(const DrawInstance&) const {
+void Textfield::draw(const DrawInstance& di) const {
+	draw_.bg.paint.bind(di);
+	draw_.bg.shape.fill(di);
+
+	draw_.label.paint.bind(di);
+	draw_.label.text.draw(di);
+
+	draw_.cursor.shape.fill(di);
+
+	draw_.bg.shape.stroke(di);
 }
 
 bool Textfield::updateDevice() const {
+	return false;
 }
 
 } // namespace vui
