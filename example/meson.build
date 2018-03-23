@@ -3,7 +3,7 @@ dep_ny = dependency('ny', fallback: ['ny', 'ny_dep'])
 example_src = [
 	'example.cpp',
 
-	'gui.cpp',
+	# 'gui.cpp',
 
 	'render.cpp',
 	'window.cpp']

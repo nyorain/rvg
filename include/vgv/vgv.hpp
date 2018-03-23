@@ -12,6 +12,7 @@
 
 #include <vector>
 #include <string>
+#include <variant>
 
 // fwd decls from nk_font
 struct nk_font;
@@ -21,6 +22,12 @@ namespace vgv {
 
 using namespace nytl;
 class Context;
+
+/// Represents a render pass instance using a context.
+struct DrawInstance {
+	Context& context;
+	vk::CommandBuffer cmdBuf;
+};
 
 /// Matrix-based transform used to specify how shape coordinates
 /// are mapped to the output.
@@ -35,7 +42,7 @@ public:
 
 	auto& ubo() const { return ubo_; }
 	void updateDevice();
-	void bind(Context&, vk::CommandBuffer);
+	void bind(const DrawInstance&);
 
 protected:
 	vpp::BufferRange ubo_;
@@ -51,6 +58,7 @@ public:
 	const vpp::Device& device() const { return device_; };
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
 	const auto& dsPool() const { return dsPool_; }
+	DrawInstance record(vk::CommandBuffer);
 
 	vk::Pipeline fanPipe() const { return fanPipe_; }
 	vk::Pipeline listPipe() const { return listPipe_; }
@@ -76,6 +84,7 @@ private:
 
 	vpp::ViewableImage emptyImage_;
 	vpp::DescriptorSet dummyTex_;
+	Transform identityTransform_;
 };
 
 struct Color { float r {}, g {}, b {}, a {}; };
@@ -85,20 +94,15 @@ struct Color { float r {}, g {}, b {}, a {}; };
 /// Used with PaintBinding to bind it for drawing.
 class PaintBuffer {
 public:
-	/// The color used to draw.
-	/// Can be freely changed, but changes will only be applied
-	/// to the device when updateDevice is called.
-	Color color;
-
-public:
 	PaintBuffer() = default;
-	PaintBuffer(Context&, const Color& color);
+	PaintBuffer(const Context&, const Color& color);
 
 	/// Uploads changes to the device.
 	/// Will never invalidate/recreate any resources.
 	/// Must not be called while this a CommandBuffer that uses
 	/// this PaintBuffer in any way has not completed.
-	void updateDevice();
+	void updateDevice(const Color& color) const;
+	const auto& ubo() const { return ubo_; }
 
 protected:
 	vpp::BufferRange ubo_;
@@ -109,25 +113,20 @@ protected:
 class PaintBinding {
 public:
 	PaintBinding() = default;
-	PaintBinding(Context&, const PaintBuffer& buffer);
+	PaintBinding(const Context&, const PaintBuffer& buffer);
 
 	/// Binds the associated PaintBuffer for drawing in the given
-	/// CommandBuffer.
-	void bind(Context&, vk::CommandBuffer);
+	/// DrawInstance.
+	void bind(const DrawInstance&) const;
 
-	/// Changes the associated PaintBuffer. Can be called at any
-	/// time but will only be updated to the device when updateDevice
-	/// is called. Returns the old buffer (if any).
-	const PaintBuffer* buffer(const PaintBuffer& newbuf);
-
-	/// Uploads a changed PaintBuffer to the device.
+	/// Updates a changed PaintBuffer binding to the device.
 	/// Will never invalidate/recreate any resources.
 	/// Must not be called while this a CommandBuffer that uses
 	/// this PaintBinding in any way has not completed.
-	void updateDevice();
+	void updateDevice(const PaintBuffer&) const;
+	const auto& ds() const { return ds_; }
 
 protected:
-	const PaintBuffer* buffer_;
 	vpp::DescriptorSet ds_;
 };
 
@@ -139,16 +138,20 @@ public:
 
 public:
 	Paint() = default;
-	Paint(Context& ctx, const Color& color);
+	Paint(Context&, const Color& color = {});
 
-	void bind(Context&, vk::CommandBuffer);
+	void bind(const DrawInstance&);
 	void updateDevice();
 
+	const auto& buffer() const { return buffer_; }
+	const auto& binding() const { return binding_; }
+
 protected:
-	vpp::BufferRange ubo_;
-	vpp::DescriptorSet ds_;
+	PaintBuffer buffer_;
+	PaintBinding binding_;
 };
 
+/// Type (format) of a texture.
 enum class TextureType {
 	rgba32,
 	a8
@@ -164,29 +167,98 @@ vpp::ViewableImage createTexture(const vpp::Device&,
 vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
 	unsigned int height, const std::byte* data, TextureType);
 
-enum class PolygonMode {
-	fan = 0,
-	list,
-	strip,
+/// Specifies in which way a polygon can be drawn.
+struct DrawMode {
+	bool fill {};
+	float stroke {};
 };
 
+/// A shape defined by points that can be stroked or filled.
 class Polygon {
 public:
-	std::vector<Vec2f> points {};
-	PolygonMode mode {};
+	Polygon(bool indirect = false) : indirect_(indirect) {}
 
-public:
-	Polygon() = default;
-	Polygon(Context&, PolygonMode = PolygonMode::fan, bool indirect = false);
+	/// Returns whether a rerecord is needed.
+	/// Can be called at any time, computes the polygon from the given
+	/// points and draw mode. The DrawMode specifies whether this polygon
+	/// can be used for filling or stroking and their properties.
+	bool update(Span<const Vec2f> points, const DrawMode&);
 
-	bool updateDevice(Context&);
-	void draw(Context&, vk::CommandBuffer);
+	/// Uploads data to the device. Must not be called while a command
+	/// buffer drawing the Polygon is executing.
+	/// Returns whether a command buffer rerecord is needed.
+	bool updateDevice(const Context&);
+
+	/// Like the other updateDevice overload but updates whether the
+	/// polygon should be drawn indirect.
+	bool updateDevice(const Context&, bool newIndirect);
+
+	/// Records commands to fill this polygon into the given DrawInstance.
+	/// Undefined behaviour if it was updates without fill support.
+	void fill(const DrawInstance&) const;
+
+	/// Records commands to stroke this polygon into the given DrawInstance.
+	/// Undefined behaviour if it was updates without stroke support.
+	void stroke(const DrawInstance&) const;
 
 protected:
-	vpp::BufferRange verts_ {};
-	bool indirect_ {};
+	bool indirect_;
+
+	std::vector<Vec2f> fillCache_;
+	vpp::BufferRange fillBuf_;
+
+	std::vector<Vec2f> strokeCache_;
+	vpp::BufferRange strokeBuf_;
 };
 
+/// Convex shape specifies by its outlining points.
+/// Can be filled to stroked.
+class Shape {
+public:
+	std::vector<Vec2f> points;
+	DrawMode draw;
+
+public:
+	Shape() = default;
+	Shape(std::vector<Vec2f>&&, const DrawMode&);
+
+	bool update();
+	bool updateDevice(const Context&);
+	bool updateDevice(const Context&, bool newIndirect);
+
+	void fill(const DrawInstance&) const;
+	void stroke(const DrawInstance&) const;
+
+	const auto& polygon() const { return polygon_; }
+
+protected:
+	Polygon polygon_;
+};
+
+/// Rectangle shape that can be filled to stroked.
+class Rect {
+public:
+	Vec2f pos;
+	Vec2f size;
+	DrawMode draw;
+
+public:
+	Rect() = default;
+	Rect(Vec2f p, Vec2f s, const DrawMode& mode);
+
+	bool update();
+	bool updateDevice(const Context&);
+
+	void fill(const DrawInstance&) const;
+	void stroke(const DrawInstance&) const;
+
+	const auto& polygon() const { return polygon_; }
+
+protected:
+	Polygon polygon_;
+};
+
+/// Holds a texture on the device to which multiple fonts can be uploaded.
 class FontAtlas {
 public:
 	FontAtlas(Context&);
@@ -205,6 +277,7 @@ protected:
 	unsigned width_ = 0, height_ = 0;
 };
 
+/// Represents information about one font in a font atlas.
 class Font {
 public:
 	Font(FontAtlas&, const char* file, unsigned height);
@@ -230,17 +303,18 @@ public:
 
 public:
 	Text() = default;
-	Text(Context&, std::string text, const Font& font, Vec2f pos,
-		bool indirect = false);
+	Text(std::string&& text, const Font&, Vec2f pos, bool indirect = false);
 
+	bool update();
 	bool updateDevice(Context&);
-	void draw(Context&, vk::CommandBuffer);
+	bool updateDevice(Context&, bool newIndirect);
+	void draw(const DrawInstance&);
 
 protected:
-	vpp::BufferRange positionBuf_;
-	vpp::BufferRange uvBuf_;
+	std::vector<Vec2f> posCache_;
+	std::vector<Vec2f> uvCache_;
+	vpp::BufferRange buf_;
 	bool indirect_ {};
-	unsigned drawCount_ {};
 };
 
 } // namespace vgv

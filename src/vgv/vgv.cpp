@@ -1,4 +1,5 @@
 #include <vgv/vgv.hpp>
+#include <vgv/path.hpp>
 
 #include <vpp/vk.hpp>
 #include <vpp/formats.hpp>
@@ -81,17 +82,6 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	poolInfo.poolSizeCount = 2;
 	poolInfo.pPoolSizes = poolSizes;
 	dsPool_ = {dev, poolInfo};
-
-	// dummies
-	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
-	emptyImage_ = createTexture(dev, 1, 1,
-		reinterpret_cast<const std::byte*>(bytes),
-		TextureType::rgba32);
-
-	dummyTex_ = {dsLayoutTex_, dsPool_};
-	vpp::DescriptorSetUpdate update(dummyTex_);
-	auto layout = vk::ImageLayout::general;
-	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
 
 	// pipeline
 	auto fillVertex = vpp::ShaderModule(dev, fill_vert_data);
@@ -211,73 +201,190 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	fanPipe_ = {dev, pipes[0]};
 	listPipe_ = {dev, pipes[1]};
 	stripPipe_ = {dev, pipes[2]};
+
+	// dummies
+	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
+	emptyImage_ = createTexture(dev, 1, 1,
+		reinterpret_cast<const std::byte*>(bytes),
+		TextureType::rgba32);
+
+	dummyTex_ = {dsLayoutTex_, dsPool_};
+	vpp::DescriptorSetUpdate update(dummyTex_);
+	auto layout = vk::ImageLayout::general;
+	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
+
+	identityTransform_ = {*this};
+}
+
+DrawInstance Context::record(vk::CommandBuffer cmdb) {
+	DrawInstance ret { *this, cmdb };
+	identityTransform_.bind(ret);
+	return ret;
 }
 
 // Polygon
-Polygon::Polygon(Context&, PolygonMode xmode, bool indirect) :
-	mode(xmode), indirect_(indirect) {
-}
-
-bool Polygon::updateDevice(Context& ctx) {
-	bool rerecord = false;
-	if(points.empty()) {
-		return false;
+bool Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
+	auto rerecord = false;
+	if(mode.fill) {
+		auto size = fillCache_.size();
+		fillCache_.clear();
+		fillCache_.insert(fillCache_.end(), points.begin(), points.end());
+		rerecord |= !indirect_ && fillCache_.size() != size;
 	}
 
-	auto neededSize = sizeof(Vec2f) * points.size();
-	if(indirect_) {
-		neededSize += sizeof(vk::DrawIndirectCommand);
+	if(mode.stroke > 0.f) {
+		auto size = strokeCache_.size();
+		strokeCache_.clear();
+		bakeStroke(points, mode.stroke, strokeCache_);
+		rerecord |= !indirect_ && strokeCache_.size() != size;
 	}
-
-	if(verts_.size() < neededSize) {
-		neededSize *= 2;
-		verts_ = ctx.device().bufferAllocator().alloc(true, neededSize,
-			vk::BufferUsageBits::vertexBuffer);
-		rerecord = true;
-	}
-
-	auto map = verts_.memoryMap();
-	auto ptr = map.ptr();
-	if(indirect_) {
-		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = points.size();
-		cmd.instanceCount = 1;
-		write(ptr, cmd);
-	}
-
-	std::memcpy(ptr, points.data(), points.size() * sizeof(points[0]));
 
 	return rerecord;
 }
 
-void Polygon::draw(Context& ctx, vk::CommandBuffer cmdb) {
-	if(points.empty()) {
+bool Polygon::updateDevice(const Context& ctx) {
+	bool rerecord = false;
+	auto upload = [&](auto& cache, auto& buf) {
+		if(cache.empty()) {
+			return;
+		}
+
+		auto neededSize = sizeof(cache[0]) * cache.size();
+		if(indirect_) {
+			neededSize += sizeof(vk::DrawIndirectCommand);
+		}
+
+		if(buf.size() < neededSize) {
+			neededSize *= 2;
+			buf = ctx.device().bufferAllocator().alloc(true, neededSize,
+				vk::BufferUsageBits::vertexBuffer);
+			rerecord = true;
+		}
+
+		auto map = buf.memoryMap();
+		auto ptr = map.ptr();
+		if(indirect_) {
+			vk::DrawIndirectCommand cmd {};
+			cmd.vertexCount = cache.size();
+			cmd.instanceCount = 1;
+			write(ptr, cmd);
+		}
+
+		std::memcpy(ptr, cache.data(), cache.size() * sizeof(cache[0]));
+	};
+
+	upload(fillCache_, fillBuf_);
+	upload(strokeCache_, strokeBuf_);
+	return rerecord;
+}
+
+bool Polygon::updateDevice(const Context& ctx, bool newIndirect) {
+	auto ret = indirect_ != newIndirect;
+	indirect_ = newIndirect;
+	return ret || updateDevice(ctx);
+}
+
+void Polygon::fill(const DrawInstance& ini) const {
+	if(!indirect_ && fillCache_.empty()) {
 		return;
 	}
 
-	dlg_assert(verts_.size());
+	dlg_assert(fillBuf_.size() > 0);
 
-	vk::Pipeline pipe;
-	switch(mode) {
-		case PolygonMode::fan: pipe = ctx.fanPipe(); break;
-		case PolygonMode::list: pipe = ctx.listPipe(); break;
-		case PolygonMode::strip: pipe = ctx.stripPipe(); break;
-	}
+	auto& ctx = ini.context;
+	auto& cmdb = ini.cmdBuf;
 
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, pipe);
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
 
-	// bind the vertex buffer 2 times since we use it as (dummy) uv buffer
-	// as well.
-	auto offset = verts_.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {verts_.buffer(), verts_.buffer()},
-		{offset, offset});
+	// we use the position buffer as (dummy) uv buffer.
+	auto& b = fillBuf_;
+	auto off = b.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
+	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
 	if(indirect_) {
-		vk::cmdDrawIndirect(cmdb, verts_.buffer(), verts_.offset(), 1, 0);
+		vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 	} else {
-		vk::cmdDraw(cmdb, points.size(), 1, 0, 0);
+		vk::cmdDraw(cmdb, fillCache_.size(), 1, 0, 0);
 	}
+}
+
+void Polygon::stroke(const DrawInstance& ini) const {
+	if(!indirect_ && strokeCache_.empty()) {
+		return;
+	}
+
+	dlg_assert(strokeBuf_.size() > 0);
+
+	auto& ctx = ini.context;
+	auto& cmdb = ini.cmdBuf;
+
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
+	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
+
+	// we use the position buffer as (dummy) uv buffer.
+	auto& b = strokeBuf_;
+	auto off = b.offset() + indirect_ * sizeof(vk::DrawIndirectCommand);
+	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
+	if(indirect_) {
+		vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
+	} else {
+		vk::cmdDraw(cmdb, strokeCache_.size(), 1, 0, 0);
+	}
+}
+
+// Shape
+Shape::Shape(std::vector<Vec2f>&& p, const DrawMode& xdraw) :
+		points(std::move(p)), draw(xdraw) {
+	update();
+}
+
+bool Shape::update() {
+	return polygon_.update(points, draw);
+}
+
+bool Shape::updateDevice(const Context& ctx) {
+	return polygon_.updateDevice(ctx);
+}
+
+bool Shape::updateDevice(const Context& ctx, bool newIndirect) {
+	return polygon_.updateDevice(ctx, newIndirect);
+}
+
+void Shape::fill(const DrawInstance& di) const {
+	return polygon_.fill(di);
+}
+
+void Shape::stroke(const DrawInstance& di) const {
+	return polygon_.stroke(di);
+}
+
+// Rect
+Rect::Rect(Vec2f p, Vec2f s, const DrawMode& xdraw) :
+		pos(p), size(s), draw(xdraw) {
+	update();
+}
+
+bool Rect::update() {
+	auto points = {
+		pos,
+		pos + Vec {size.x, 0.f},
+		pos + size,
+		pos + Vec {0.f, size.y}};
+	return polygon_.update(points, draw);
+}
+
+bool Rect::updateDevice(const Context& ctx) {
+	return polygon_.updateDevice(ctx);
+}
+
+void Rect::fill(const DrawInstance& di) const {
+	return polygon_.fill(di);
+}
+
+void Rect::stroke(const DrawInstance& di) const {
+	return polygon_.stroke(di);
 }
 
 // FontAtlas
@@ -363,38 +470,37 @@ float Font::height() const {
 }
 
 // Text
-Text::Text(Context&, std::string xtext, const Font& xfont, Vec2f xpos,
-	bool indirect) : text(std::move(xtext)), font(&xfont), pos(xpos),
-		indirect_(indirect) {
+Text::Text(std::string&& xtext, const Font& xfont, Vec2f xpos, bool indirect) :
+		text(std::move(xtext)), font(&xfont), pos(xpos), indirect_(indirect) {
+	update();
 }
 
-// TODO(performance): put the vertex baking outside of this function in an
-// extra update function that just stores the results in the object.
-// Or call it automatically everytime text is changed.
-// Since those function could then be called while the gpu is still rendering.
-// That also caches the vertices vector for fewer allocations.
-bool Text::updateDevice(Context& ctx) {
-	dlg_assert(font && font->nkFont());
-	bool rerecord = false;
+bool Text::update() {
+	// TODO: should return true when font was changed to a font
+	// in a different atlas. Rework font (atlas) binding.
+	// Or (alternatively) make Font private and proviate an update overload
+	// taking a Font&
 
-	// we first calculate all vertices since we cannot know the needed
-	// size up front (because of utf-8 encoding).
-	std::vector<Vec2f> positions;
-	std::vector<Vec2f> uvs;
+	dlg_assert(font && font->nkFont());
+	dlg_assert(posCache_.size() == uvCache_.size());
+
+	auto prevSize = posCache_.size();
+	posCache_.clear();
+	uvCache_.clear();
 
 	// good approximcation for usually-ascii
-	positions.reserve(text.size());
-	uvs.reserve(text.size());
+	posCache_.reserve(text.size());
+	uvCache_.reserve(text.size());
 
 	auto x = pos.x;
 	auto addVert = [&](const nk_font_glyph& glyph, unsigned i) {
 		auto left = i == 0 || i == 3;
 		auto top = i == 0 || i == 1;
 
-		positions.push_back({
+		posCache_.push_back({
 			x + (left ? glyph.x0 : glyph.x1),
 			pos.y + (top ? glyph.y0 : glyph.y1)});
-		uvs.push_back({
+		uvCache_.push_back({
 			left ? glyph.u0 : glyph.u1,
 			top ? glyph.v0 : glyph.v1});
 	};
@@ -414,90 +520,120 @@ bool Text::updateDevice(Context& ctx) {
 		x += glyph.xadvance;
 	}
 
-	// now upload data to gpu
-	dlg_assert(positions.size() == uvs.size());
-	auto byteSize = sizeof(Vec2f) * positions.size();
-	auto neededSize = byteSize;
-	if(indirect_) {
-		neededSize += sizeof(vk::DrawIndirectCommand);
-	}
+	dlg_assert(posCache_.size() == uvCache_.size());
+	return !indirect_ && posCache_.size() != prevSize;
+}
 
-	if(positionBuf_.size() < neededSize) {
-		positionBuf_ = {};
-		uvBuf_ = {};
-		ctx.device().bufferAllocator().reserve(true,
-			(neededSize + byteSize) * 2, vk::BufferUsageBits::vertexBuffer);
-		positionBuf_ = ctx.device().bufferAllocator().alloc(true,
-			neededSize * 2, vk::BufferUsageBits::vertexBuffer);
-		uvBuf_ = ctx.device().bufferAllocator().alloc(true,
-			byteSize * 2, vk::BufferUsageBits::vertexBuffer);
+bool Text::updateDevice(Context& ctx) {
+	bool rerecord = false;
+
+	// now upload data to gpu
+	dlg_assert(posCache_.size() == uvCache_.size());
+	auto ioff = indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto byteSize = sizeof(Vec2f) * posCache_.size();
+	auto neededSize = ioff + 2 * byteSize;
+
+	if(buf_.size() < neededSize) {
+		neededSize *= 2;
+		buf_ = ctx.device().bufferAllocator().alloc(true,
+			neededSize, vk::BufferUsageBits::vertexBuffer);
 		rerecord = true;
 	}
 
-	auto map = positionBuf_.memoryMap();
+	auto map = buf_.memoryMap();
 	auto ptr = map.ptr();
 
 	// the positionBuf contains the indirect draw command, if there is any
 	if(indirect_) {
 		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = positions.size();
+		cmd.vertexCount = posCache_.size();
 		cmd.instanceCount = 1;
 		write(ptr, cmd);
-	} else {
-		drawCount_ = positions.size();
 	}
 
-	std::memcpy(ptr, positions.data(), byteSize);
-
-	map = uvBuf_.memoryMap();
-	ptr = map.ptr();
-	std::memcpy(ptr, uvs.data(), byteSize);
+	std::memcpy(ptr, posCache_.data(), byteSize);
+	ptr = ptr + (buf_.size() - ioff) / 2;
+	std::memcpy(ptr, uvCache_.data(), byteSize);
 
 	return rerecord;
 }
 
-void Text::draw(Context& ctx, vk::CommandBuffer cmdb) {
-	if(!positionBuf_.size()) {
+bool Text::updateDevice(Context& ctx, bool newIndirect) {
+	auto ret = indirect_ != newIndirect;
+	indirect_ = newIndirect;
+	return ret || updateDevice(ctx);
+}
+
+void Text::draw(const DrawInstance& ini) {
+	if(posCache_.empty()) {
 		return;
 	}
+
+	auto& ctx = ini.context;
+	auto& cmdb = ini.cmdBuf;
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.listPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), 1, {font->atlas().ds()}, {});
 
-	auto ioffset = indirect_ ? sizeof(vk::DrawIndirectCommand) : 0u;
-	vk::cmdBindVertexBuffers(cmdb, 0, {positionBuf_.buffer(), uvBuf_.buffer()},
-		{positionBuf_.offset() + ioffset, uvBuf_.offset()});
+	auto ioff = indirect_ * sizeof(vk::DrawIndirectCommand);
+	auto off = buf_.offset() + ioff;
+	vk::cmdBindVertexBuffers(cmdb, 0, {buf_.buffer(), buf_.buffer()},
+		{off, off + (buf_.size() - ioff) / 2});
 	if(indirect_) {
-		vk::cmdDrawIndirect(cmdb, positionBuf_.buffer(),
-			positionBuf_.offset(), 1, 0);
+		vk::cmdDrawIndirect(cmdb, buf_.buffer(), buf_.offset(), 1, 0);
 	} else {
-		vk::cmdDraw(cmdb, drawCount_, 1, 0, 0);
+		vk::cmdDraw(cmdb, posCache_.size(), 1, 0, 0);
 	}
 }
 
-// Paint
+// PaintBuffer
 constexpr auto paintUboSize = sizeof(float) * 4;
-Paint::Paint(Context& ctx, const Color& xcolor) : color(xcolor) {
+PaintBuffer::PaintBuffer(const Context& ctx, const Color& color) {
 	ubo_ = ctx.device().bufferAllocator().alloc(true, paintUboSize,
 		vk::BufferUsageBits::uniformBuffer);
-	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
-
-	updateDevice();
-	vpp::DescriptorSetUpdate update(ds_);
-	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
+	updateDevice(color);
 }
 
-void Paint::bind(Context& ctx, vk::CommandBuffer cmdBuf) {
-	dlg_assert(ubo_.size() && ds_);
-	vk::cmdBindDescriptorSets(cmdBuf, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 0, {ds_}, {});
+void PaintBuffer::updateDevice(const Color& color) const {
+	dlg_assert(ubo_.size() == paintUboSize);
+	auto map = ubo_.memoryMap();
+	auto ptr = map.ptr();
+	write(ptr, color);
+}
+
+// PaintBinding
+PaintBinding::PaintBinding(const Context& ctx, const PaintBuffer& buffer) {
+	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
+	updateDevice(buffer);
+}
+
+void PaintBinding::updateDevice(const PaintBuffer& buf) const {
+	auto& ubo = buf.ubo();
+	dlg_assert(ubo.size() == paintUboSize);
+	dlg_assert(ds_);
+
+	vpp::DescriptorSetUpdate update(ds_);
+	update.uniform({{ubo.buffer(), ubo.offset(), ubo.size()}});
+}
+
+void PaintBinding::bind(const DrawInstance& di) const {
+	dlg_assert(ds_);
+	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
+		di.context.pipeLayout(), 0, {ds_}, {});
+}
+
+// Paint
+Paint::Paint(Context& ctx, const Color& xcolor) : color(xcolor),
+	buffer_(ctx, color), binding_(ctx, buffer_) {
+}
+
+void Paint::bind(const DrawInstance& ini) {
+	binding().bind(ini);
 }
 
 void Paint::updateDevice() {
-	dlg_assert(ubo_.size() && ds_);
-	auto map = ubo_.memoryMap();
-	std::memcpy(map.ptr(), &color, sizeof(float) * 4);
+	buffer_.updateDevice(color);
 }
 
 // Transform
@@ -522,10 +658,10 @@ void Transform::updateDevice() {
 	std::memcpy(map.ptr(), &matrix, sizeof(Mat4f));
 }
 
-void Transform::bind(Context& ctx, vk::CommandBuffer cmdBuf) {
+void Transform::bind(const DrawInstance& di) {
 	dlg_assert(ubo_.size() && ds_);
-	vk::cmdBindDescriptorSets(cmdBuf, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 2, {ds_}, {});
+	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
+		di.context.pipeLayout(), 2, {ds_}, {});
 }
 
 } // namespace vgv

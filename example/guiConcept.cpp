@@ -502,3 +502,46 @@ draw.stroke(somePaint);
 
 draw.mask(someShape2);
 draw.fill(somePaint);
+
+
+
+
+
+
+
+
+
+
+
+class PathPolygon {
+public:
+	Path path;
+	DrawMode draw;
+
+public:
+	void update();
+	bool updateDevice(const Context&);
+	bool updateDevice(const Context&, bool newIndirect);
+
+	void fill(const DrawInstance&) const;
+	void stroke(const DrawInstance&) const;
+
+	const auto& polygon() const { return polygon_; }
+
+protected:
+	Polygon polygon_;
+};
+
+
+enum class LineCap {
+	butt = 0,
+	round,
+	square,
+};
+
+enum class LineJoin {
+	miter = 0,
+	round,
+	bevel
+};
+
