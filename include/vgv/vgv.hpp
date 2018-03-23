@@ -8,6 +8,7 @@
 
 #include <nytl/vec.hpp>
 #include <nytl/mat.hpp>
+#include <nytl/rect.hpp>
 #include <nytl/stringParam.hpp>
 
 #include <vector>
@@ -213,7 +214,8 @@ public:
 
 public:
 	Shape() = default;
-	Shape(const Context&, std::vector<Vec2f> points, const DrawMode&);
+	Shape(const Context&, std::vector<Vec2f> points, const DrawMode&,
+		bool hide = false);
 
 	void update();
 	bool updateDevice(const Context&);
@@ -236,7 +238,8 @@ public:
 
 public:
 	RectShape() = default;
-	RectShape(const Context&, Vec2f pos, Vec2f size, const DrawMode&);
+	RectShape(const Context&, Vec2f pos, Vec2f size, const DrawMode&,
+		bool hide = false);
 
 	void update();
 	bool updateDevice(const Context&);
@@ -325,6 +328,9 @@ public:
 	};
 
 	CharAt charAt(float x) const;
+
+	/// Returns the bounds of the ith char in local coordinates.
+	Rect2f ithBounds(unsigned n) const;
 
 protected:
 	std::vector<Vec2f> posCache_;

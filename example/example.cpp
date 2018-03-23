@@ -123,7 +123,7 @@ int main() {
 	translate(transform.matrix, {-1.f, -1.f, 0.f});
 	transform.updateDevice();
 
-	vgv::Shape shape({}, {false, 10.f});
+	vgv::Shape shape(ctx, {}, {false, 2.f});
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
 	auto fontHeight = 14;
@@ -132,7 +132,7 @@ int main() {
 	atlas.bake(ctx);
 
 	auto string = "yo, whaddup";
-	vgv::Text text(string, font, {0, 0});
+	vgv::Text text(ctx, string, font, {0, 0});
 	auto textWidth = font.width(string);
 
 	text.updateDevice(ctx);
@@ -141,8 +141,7 @@ int main() {
 	auto svgSubpath = vgv::parseSvgSubpath({300, 200},
 		"h -150 a150 150 0 1 0 150 -150 z");
 
-	vgv::Shape svgShape(vgv::bake(svgSubpath), {true, 0.f});
-	svgShape.updateDevice(ctx);
+	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
 
 	// gui
 	// auto label = vgv::PaintBuffer(ctx, {1.f, 1.f, 1.f, 1.f});
@@ -162,6 +161,9 @@ int main() {
 				label,
 				pressed
 			}
+		}, { // textfield
+			label,
+			normal,
 		}
 	};
 
@@ -220,7 +222,8 @@ int main() {
 
 		text.pos.x = (ev.size[0] - textWidth) / 2;
 		text.pos.y = ev.size[1] - fontHeight - 20;
-		if(text.update() || text.updateDevice(ctx)) {
+		text.update();
+		if(text.updateDevice(ctx)) {
 			dlg_warn("unexpected text rerecord");
 		}
 
@@ -249,7 +252,8 @@ int main() {
 		} else {
 			subpath.commands.push_back({p, vgv::SQBezierParams {}});
 			shape.points = vgv::bake(subpath);
-			if(shape.update() | shape.updateDevice(ctx)) {
+			shape.update();
+			if(shape.updateDevice(ctx)) {
 				dlg_info("rerecord");
 				renderer.invalidate();
 			}

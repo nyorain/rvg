@@ -120,10 +120,10 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 	auto& ctx = gui.context();
 	auto& font = gui.font();
 	auto padding = Vec {40, 15};
-	draw_.label.text = {label, font, pos + padding};
+	draw_.label.text = {ctx, label, font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.button.normal.label.get()};
 	auto size = 2 * padding + Vec {font.width(label), font.height()};
-	draw_.bg.shape = {pos, size, DrawMode {true, 2.f}};
+	draw_.bg.shape = {ctx, pos, size, DrawMode {true, 2.f}};
 	draw_.bg.paint = {ctx, gui.styles.button.normal.bg.get()};
 
 	bounds = {pos, size};
@@ -165,7 +165,7 @@ void Button::draw(const DrawInstance& di) const {
 	draw_.bg.shape.stroke(di);
 }
 
-bool Button::updateDevice() const {
+bool Button::updateDevice() {
 	auto& bs = gui.styles.button;
 	auto& draw = pressed_ ? bs.pressed : hovered_ ? bs.hovered : bs.normal;
 
@@ -182,28 +182,47 @@ Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 
 	auto& font = gui.font();
 	auto height = font.height() + 2 * padding.y;
-	draw_.bg.shape = {pos, {width, height}, {true, 2.f}};
+	draw_.bg.shape = {ctx, pos, {width, height}, {true, 2.f}};
 	draw_.bg.paint = {ctx, gui.styles.textfield.bg};
 
-	auto cursorSize = Vec {2.f, font.height() + padding.y};
+	auto cursorSize = Vec {1.f, font.height() + padding.y};
 	auto cursorPos = pos + Vec {padding.x, 0.5f * padding.y};
-	draw_.cursor.shape = {cursorPos, cursorSize, {true, 0.f}};
+	draw_.cursor.shape = {ctx, cursorPos, cursorSize, {true, 0.f}, true};
 
-	draw_.label.text = {"", font, pos + padding};
+	draw_.label.text = {ctx, "", font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.textfield.label};
 }
 
 void Textfield::mouseButton(const MouseButtonEvent& ev) {
+	auto& text = draw_.label.text;
+	auto ca = text.charAt(ev.position.x - text.pos.x);
+	cursor_ = ca.last;
+	draw_.cursor.shape.pos.x = ca.nearestBoundary;
+	draw_.cursor.shape.update();
+	registerUpdateDevice();
 }
+
 void Textfield::focus(bool gained) {
+	focus_ = gained;
+	draw_.cursor.shape.hide = gained;
+	registerUpdateDevice();
 }
 void Textfield::textInput(const TextInputEvent& ev) {
 	auto utf32 = toUtf32(ev.utf8);
 	auto& str = draw_.label.text.text;
 	str.insert(cursor_, utf32);
+	draw_.label.text.update();
 	cursor_ += utf32.length();
+
+	auto x = draw_.label.text.ithBounds(cursor_).position.x;
+	draw_.cursor.shape.pos.x = x - 1.f;
+	draw_.cursor.shape.update();
+
+	registerUpdateDevice();
 }
+
 void Textfield::key(const KeyEvent& ev) {
+	((void) ev);
 }
 
 void Textfield::draw(const DrawInstance& di) const {
@@ -218,8 +237,10 @@ void Textfield::draw(const DrawInstance& di) const {
 	draw_.bg.shape.stroke(di);
 }
 
-bool Textfield::updateDevice() const {
-	return false;
+bool Textfield::updateDevice() {
+	auto& ctx = gui.context();
+	return draw_.label.text.updateDevice(ctx) |
+		draw_.cursor.shape.updateDevice(ctx);
 }
 
 } // namespace vui

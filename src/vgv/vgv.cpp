@@ -239,10 +239,6 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 bool Polygon::updateDevice(const Context& ctx, bool hide) {
 	bool rerecord = false;
 	auto upload = [&](auto& cache, auto& buf) {
-		if(cache.empty()) {
-			return;
-		}
-
 		auto neededSize = sizeof(cache[0]) * cache.size();
 		neededSize += sizeof(vk::DrawIndirectCommand);
 
@@ -304,8 +300,8 @@ void Polygon::stroke(const DrawInstance& ini) const {
 }
 
 // Shape
-Shape::Shape(const Context& ctx, std::vector<Vec2f> p, const DrawMode& xdraw) :
-		points(std::move(p)), draw(xdraw) {
+Shape::Shape(const Context& ctx, std::vector<Vec2f> p, const DrawMode& d,
+		bool h) : points(std::move(p)), draw(d), hide(h) {
 	update();
 	updateDevice(ctx);
 }
@@ -328,7 +324,7 @@ void Shape::stroke(const DrawInstance& di) const {
 
 // Rect
 RectShape::RectShape(const Context& ctx, Vec2f p, Vec2f s,
-		const DrawMode& xdraw) : pos(p), size(s), draw(xdraw) {
+		const DrawMode& d, bool h) : pos(p), size(s), draw(d), hide(h) {
 	update();
 	updateDevice(ctx);
 }
@@ -566,6 +562,15 @@ Text::CharAt Text::charAt(float x) const {
 
 	auto nearest = posCache_.empty() ? -1.f : posCache_[last].x;
 	return {unsigned(posCache_.size() / 6), -1.f, nearest};
+}
+
+Rect2f Text::ithBounds(unsigned n) const {
+	if(posCache_.size() <= n * 6) {
+		throw std::out_of_range("Text::ithBounds");
+	}
+
+	auto start = posCache_[n * 6] - pos;
+	return {start, posCache_[n * 6 + 2] - pos};
 }
 
 // PaintBuffer

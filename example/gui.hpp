@@ -163,7 +163,7 @@ public:
 	virtual void mouseOver(bool) {}
 
 	virtual void update(double) {}
-	virtual bool updateDevice() const { return false; }
+	virtual bool updateDevice() { return false; }
 	virtual void draw(const DrawInstance&) const {}
 
 	void registerUpdate();
@@ -181,7 +181,7 @@ public:
 	void mouseOver(bool gained) override;
 
 	void draw(const DrawInstance&) const override;
-	bool updateDevice() const override;
+	bool updateDevice() override;
 
 protected:
 	struct {
@@ -210,7 +210,10 @@ public:
 	void key(const KeyEvent&) override;
 
 	void draw(const DrawInstance&) const override;
-	bool updateDevice() const override;
+	bool updateDevice() override;
+
+protected:
+	void updateCursor();
 
 protected:
 	struct {
