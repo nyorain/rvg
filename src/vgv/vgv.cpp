@@ -541,27 +541,28 @@ void Text::draw(const DrawInstance& ini) const {
 }
 
 Text::CharAt Text::charAt(float x) const {
-	auto last = 0u;
+	auto lastEnd = posCache_.empty() ? -1.f : posCache_[0].x;
 	x += pos.x;
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
 		auto start = posCache_[i].x;
 		auto end = posCache_[i + 1].x;
 		dlg_assert(end > start);
 
-		if(start < x) {
-			return {i / 6, -1.f, posCache_[last + 1].x};
+		if(x < start) {
+			auto nearest = (i == 0) ? posCache_[0].x - pos.x : lastEnd;
+			return {i / 6, -1.f, nearest};
 		}
 
-		if(end < x) {
+		if(x < end) {
 			auto fac = (end - start) / (x - start);
-			return {i / 6 + 1, fac, fac > 0.5f ? end : posCache_[last].x};
+			auto nearest = (fac > 0.5f ? end - pos.x : lastEnd);
+			return {i / 6 + 1, fac, nearest};
 		}
 
-		last = i;
+		lastEnd = end - pos.x;
 	}
 
-	auto nearest = posCache_.empty() ? -1.f : posCache_[last].x;
-	return {unsigned(posCache_.size() / 6), -1.f, nearest};
+	return {unsigned(posCache_.size() / 6), -1.f, lastEnd};
 }
 
 Rect2f Text::ithBounds(unsigned n) const {
@@ -569,8 +570,8 @@ Rect2f Text::ithBounds(unsigned n) const {
 		throw std::out_of_range("Text::ithBounds");
 	}
 
-	auto start = posCache_[n * 6] - pos;
-	return {start, posCache_[n * 6 + 2] - pos};
+	auto start = posCache_[n * 6];
+	return {start - pos, posCache_[n * 6 + 2] - start};
 }
 
 // PaintBuffer

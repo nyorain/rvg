@@ -5,16 +5,15 @@
 #include <nytl/rect.hpp>
 #include <nytl/callback.hpp>
 #include <nytl/stringParam.hpp>
+#include <unordered_set>
 
 namespace vui {
 
 using namespace nytl;
 using namespace vgv;
 
-// TODO!
-/*
 enum class MouseButton {
-	left,
+	left = 2,
 	right,
 	middle,
 	custom1,
@@ -22,12 +21,15 @@ enum class MouseButton {
 };
 
 enum class Key {
-	enter,
-	left,
-	right,
-	escape
+	escape = 1,
+	backspace = 14,
+	enter = 28,
+	up = 103,
+	left = 105,
+	right = 106,
+	del = 111,
+	down = 108,
 };
-*/
 
 // events
 struct MouseMoveEvent {
@@ -36,7 +38,7 @@ struct MouseMoveEvent {
 
 struct MouseButtonEvent {
 	bool pressed;
-	unsigned int button;
+	MouseButton button;
 	Vec2f position;
 };
 
@@ -45,7 +47,7 @@ struct MouseWheelEvent {
 };
 
 struct KeyEvent {
-	unsigned int key;
+	Key key;
 	bool pressed;
 };
 
@@ -97,7 +99,7 @@ public:
 		GuiListener& listener = GuiListener::nop());
 
 	void mouseMove(const MouseMoveEvent&);
-	void mouseButton(const MouseButtonEvent&);
+	bool mouseButton(const MouseButtonEvent&);
 	void mouseWheel(const MouseWheelEvent&);
 	void key(const KeyEvent&);
 	void textInput(const TextInputEvent&);
@@ -136,10 +138,10 @@ protected:
 	const Font& font_;
 	std::reference_wrapper<GuiListener> listener_;
 	std::vector<std::unique_ptr<Widget>> widgets_;
-	std::vector<Widget*> update_;
-	std::vector<Widget*> updateDevice_;
+	std::unordered_set<Widget*> update_;
+	std::unordered_set<Widget*> updateDevice_;
 	Widget* mouseOver_ {};
-	std::pair<Widget*, unsigned> buttonGrab_ {};
+	std::pair<Widget*, MouseButton> buttonGrab_ {};
 	Widget* focus_ {};
 	bool rerecord_ {};
 };
@@ -209,11 +211,13 @@ public:
 	void textInput(const TextInputEvent&) override;
 	void key(const KeyEvent&) override;
 
+	void update(double delta) override;
 	void draw(const DrawInstance&) const override;
 	bool updateDevice() override;
 
 protected:
-	void updateCursor();
+	void updateCursorPosition();
+	void cursor(bool show, bool resetBlink = true);
 
 protected:
 	struct {
@@ -233,8 +237,9 @@ protected:
 		} label;
 	} draw_;
 
-	unsigned cursor_;
-	bool focus_;
+	unsigned cursor_ {};
+	bool focus_ {false};
+	double blinkAccum_ {};
 };
 
 } // namespace oui

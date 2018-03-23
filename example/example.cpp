@@ -38,8 +38,7 @@ constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
-constexpr auto vsync = true;
-// constexpr auto clearColor = std::array<float, 4>{{0.6f, 0.8f, 0.9f, 1.f}};
+constexpr auto vsync = false;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
 // TODO: move to nytl
@@ -126,7 +125,7 @@ int main() {
 	vgv::Shape shape(ctx, {}, {false, 2.f});
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
-	auto fontHeight = 14;
+	auto fontHeight = 18;
 	vgv::FontAtlas atlas(ctx);
 	vgv::Font font(atlas, "../../example/OpenSans-Light.ttf", fontHeight);
 	atlas.bake(ctx);
@@ -171,7 +170,8 @@ int main() {
 
 	auto& button = gui.create<Button>(Vec {500.f, 100.f}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
-	gui.create<Button>(Vec {500.f, 300.f}, "Button Number Two");
+	gui.create<Button>(Vec {500.f, 250.f}, "Button Number Two");
+	gui.create<Textfield>(Vec {500.f, 400.f}, 200);
 	gui.updateDevice();
 
 	// render recoreding
@@ -193,28 +193,32 @@ int main() {
 	auto run = true;
 	window.onClose = [&](const auto&) { run = false; };
 	window.onKey = [&](const auto& ev) {
-		if(!ev.pressed) {
-			return;
+		gui.key({(vui::Key) ev.keycode, ev.pressed});
+
+		if(ev.pressed && !ev.utf8.empty() && !ny::specialKey(ev.keycode)) {
+			gui.textInput({ev.utf8.c_str()});
 		}
 
-		if(ev.keycode == ny::Keycode::escape) {
-			dlg_info("Escape pressed, exiting");
-			run = false;
-		} else if(ev.keycode == ny::Keycode::b) {
-			paint.color = {0.2, 0.2, 0.8, 1.f};
-			paint.updateDevice();
-		} else if(ev.keycode == ny::Keycode::g) {
-			paint.color = {0.1, 0.6, 0.3, 1.f};
-			paint.updateDevice();
-		} else if(ev.keycode == ny::Keycode::r) {
-			paint.color = {0.8, 0.2, 0.3, 1.f};
-			paint.updateDevice();
-		} else if(ev.keycode == ny::Keycode::d) {
-			paint.color = {0.1, 0.1, 0.1, 1.f};
-			paint.updateDevice();
-		} else if(ev.keycode == ny::Keycode::w) {
-			paint.color = {1, 1, 1, 1.f};
-			paint.updateDevice();
+		if(ev.pressed) {
+			if(ev.keycode == ny::Keycode::escape) {
+				dlg_info("Escape pressed, exiting");
+				run = false;
+			} else if(ev.keycode == ny::Keycode::b) {
+				paint.color = {0.2, 0.2, 0.8, 1.f};
+				paint.updateDevice();
+			} else if(ev.keycode == ny::Keycode::g) {
+				paint.color = {0.1, 0.6, 0.3, 1.f};
+				paint.updateDevice();
+			} else if(ev.keycode == ny::Keycode::r) {
+				paint.color = {0.8, 0.2, 0.3, 1.f};
+				paint.updateDevice();
+			} else if(ev.keycode == ny::Keycode::d) {
+				paint.color = {0.1, 0.1, 0.1, 1.f};
+				paint.updateDevice();
+			} else if(ev.keycode == ny::Keycode::w) {
+				paint.color = {1, 1, 1, 1.f};
+				paint.updateDevice();
+			}
 		}
 	};
 	window.onResize = [&](const auto& ev) {
@@ -238,10 +242,9 @@ int main() {
 	bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
-		gui.mouseButton({ev.pressed,
-			static_cast<unsigned>(ev.button),
-			static_cast<Vec2f>(ev.position)});
-		if(!ev.pressed) {
+		if(gui.mouseButton({ev.pressed,
+				static_cast<vui::MouseButton>(ev.button),
+				static_cast<Vec2f>(ev.position)}) || !ev.pressed) {
 			return;
 		}
 

@@ -2,6 +2,7 @@
 #include <dlg/dlg.hpp>
 #include <nytl/rectOps.hpp>
 #include <nytl/utf.hpp>
+#include <cmath>
 
 namespace vui {
 
@@ -40,24 +41,50 @@ void Gui::mouseMove(const MouseMoveEvent& ev) {
 		mouseOver_ = nullptr;
 	}
 }
-void Gui::mouseButton(const MouseButtonEvent& ev) {
+bool Gui::mouseButton(const MouseButtonEvent& ev) {
 	if(!ev.pressed && buttonGrab_.first && ev.button == buttonGrab_.second) {
 		buttonGrab_.first->mouseButton(ev);
 		buttonGrab_ = {};
-	} else if(mouseOver_) {
-		if(ev.pressed) {
-			buttonGrab_ = {mouseOver_, ev.button};
+	} else {
+		if(mouseOver_ != focus_) {
+			if(focus_) {
+				focus_->focus(false);
+				listener().focus(focus_, mouseOver_);
+			}
+
+			focus_ = mouseOver_;
+			if(focus_) {
+				focus_->focus(true);
+			}
 		}
 
-		mouseOver_->mouseButton(ev);
+		if(mouseOver_) {
+			if(ev.pressed) {
+				buttonGrab_ = {mouseOver_, ev.button};
+			}
+
+			mouseOver_->mouseButton(ev);
+		}
+	}
+
+	return mouseOver_;
+}
+void Gui::key(const KeyEvent& ev) {
+	if(focus_) {
+		focus_->key(ev);
 	}
 }
-void Gui::key(const KeyEvent&) {
-}
-void Gui::textInput(const TextInputEvent&) {
+void Gui::textInput(const TextInputEvent& ev) {
+	if(focus_) {
+		focus_->textInput(ev);
+	}
 }
 void Gui::focus(bool gained) {
-	((void) gained);
+	if(!gained && focus_) {
+		focus_->focus(false);
+		listener().focus(focus_, nullptr);
+		focus_ = nullptr;
+	}
 }
 void Gui::mouseOver(bool gained) {
 	if(!gained && mouseOver_) {
@@ -100,10 +127,10 @@ Widget& Gui::add(std::unique_ptr<Widget> widget) {
 }
 
 void Gui::addUpdate(Widget& widget) {
-	update_.push_back(&widget);
+	update_.insert(&widget);
 }
 void Gui::addUpdateDevice(Widget& widget) {
-	updateDevice_.push_back(&widget);
+	updateDevice_.insert(&widget);
 }
 
 // Widget
@@ -132,7 +159,7 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 }
 
 void Button::mouseButton(const MouseButtonEvent& event) {
-	if(event.button != 2) {
+	if(event.button != MouseButton::left) {
 		return;
 	}
 
@@ -191,38 +218,63 @@ Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 
 	draw_.label.text = {ctx, "", font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.textfield.label};
+
+	this->bounds = {pos, {width, height}};
 }
 
 void Textfield::mouseButton(const MouseButtonEvent& ev) {
 	auto& text = draw_.label.text;
 	auto ca = text.charAt(ev.position.x - text.pos.x);
 	cursor_ = ca.last;
-	draw_.cursor.shape.pos.x = ca.nearestBoundary;
+	draw_.cursor.shape.pos.x = text.pos.x + ca.nearestBoundary;
 	draw_.cursor.shape.update();
 	registerUpdateDevice();
+	dlg_assert(cursor_ <= text.text.length());
 }
 
 void Textfield::focus(bool gained) {
 	focus_ = gained;
-	draw_.cursor.shape.hide = gained;
-	registerUpdateDevice();
+	cursor(focus_, true);
+	registerUpdate();
 }
 void Textfield::textInput(const TextInputEvent& ev) {
 	auto utf32 = toUtf32(ev.utf8);
 	auto& str = draw_.label.text.text;
+	dlg_assert(cursor_ <= str.length());
 	str.insert(cursor_, utf32);
 	draw_.label.text.update();
 	cursor_ += utf32.length();
-
-	auto x = draw_.label.text.ithBounds(cursor_).position.x;
-	draw_.cursor.shape.pos.x = x - 1.f;
-	draw_.cursor.shape.update();
-
-	registerUpdateDevice();
+	updateCursorPosition();
+	dlg_assert(cursor_ <= str.length());
+	cursor(true, true);
 }
 
 void Textfield::key(const KeyEvent& ev) {
-	((void) ev);
+	auto& str = draw_.label.text.text;
+	dlg_assert(cursor_ <= str.length());
+
+	if(ev.pressed) {
+		if(ev.key == Key::backspace && cursor_ > 0) {
+			cursor_ -= 1;
+			str.erase(cursor_, 1);
+			draw_.label.text.update();
+			updateCursorPosition();
+		} else if(ev.key == Key::left && cursor_ > 0) {
+			cursor_ -= 1;
+			updateCursorPosition();
+			cursor(true, true);
+		} else if(ev.key == Key::right && cursor_ < str.length()) {
+			cursor_ += 1;
+			updateCursorPosition();
+			cursor(true, true);
+		} else if(ev.key == Key::del && cursor_ < str.length()) {
+			str.erase(cursor_, 1);
+			draw_.label.text.update();
+			registerUpdateDevice();
+		}
+	}
+
+	dlg_assert(cursor_ <= str.length());
 }
 
 void Textfield::draw(const DrawInstance& di) const {
@@ -241,6 +293,45 @@ bool Textfield::updateDevice() {
 	auto& ctx = gui.context();
 	return draw_.label.text.updateDevice(ctx) |
 		draw_.cursor.shape.updateDevice(ctx);
+}
+
+void Textfield::update(double delta) {
+	constexpr auto blinkTime = 0.5;
+	blinkAccum_ = blinkAccum_ + delta;
+	if(blinkAccum_ > blinkTime) {
+		blinkAccum_ = std::fmod(blinkAccum_, blinkTime);
+		draw_.cursor.shape.hide ^= true;
+		registerUpdateDevice();
+	}
+
+	if(focus_) {
+		registerUpdate();
+	}
+}
+
+void Textfield::updateCursorPosition() {
+	auto len = draw_.label.text.text.size();
+	dlg_assert(cursor_ <= len);
+	auto x = bounds.position.x + 10.f; // padding
+	if(cursor_ > 0 && cursor_ == len) {
+		auto b = draw_.label.text.ithBounds(cursor_ - 1);
+		x += b.position.x + b.size.x;
+	} else if(cursor_ > 0) {
+		x += draw_.label.text.ithBounds(cursor_).position.x;
+	}
+
+	draw_.cursor.shape.pos.x = x;
+	draw_.cursor.shape.update();
+
+	registerUpdateDevice();
+}
+
+void Textfield::cursor(bool show, bool resetBlink) {
+	draw_.cursor.shape.hide = !show;
+	registerUpdateDevice();
+	if(resetBlink) {
+		blinkAccum_ = 0.f;
+	}
 }
 
 } // namespace vui
