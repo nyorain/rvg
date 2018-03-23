@@ -133,6 +133,7 @@ vpp::RenderPass createRenderPass(const vpp::Device& dev,
 {
 	vk::AttachmentDescription attachments[2] {};
 	auto msaa = sampleCount != vk::SampleCountBits::e1;
+	dlg_info("msaa: {}", msaa);
 
 	auto swapchainID = 0u;
 	if(msaa) {

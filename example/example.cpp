@@ -125,14 +125,15 @@ int main() {
 	vgv::Shape shape(ctx, {}, {false, 2.f});
 	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
 
-	auto fontHeight = 18;
+	auto fontHeight = 12;
 	vgv::FontAtlas atlas(ctx);
-	vgv::Font font(atlas, "../../example/OpenSans-Light.ttf", fontHeight);
+	vgv::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
+	vgv::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
 	atlas.bake(ctx);
 
 	auto string = "yo, whaddup";
-	vgv::Text text(ctx, string, font, {0, 0});
-	auto textWidth = font.width(string);
+	vgv::Text text(ctx, string, lsFont, {0, 0});
+	auto textWidth = lsFont.width(string);
 
 	text.updateDevice(ctx);
 
@@ -166,7 +167,7 @@ int main() {
 		}
 	};
 
-	Gui gui(ctx, font, std::move(styles));
+	Gui gui(ctx, lsFont, std::move(styles));
 
 	auto& button = gui.create<Button>(Vec {500.f, 100.f}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
@@ -218,6 +219,14 @@ int main() {
 			} else if(ev.keycode == ny::Keycode::w) {
 				paint.color = {1, 1, 1, 1.f};
 				paint.updateDevice();
+			} if(ev.keycode == ny::Keycode::k1) {
+				text.font = &lsFont;
+				text.update();
+				text.updateDevice(ctx);
+			} else if(ev.keycode == ny::Keycode::k2) {
+				text.font = &osFont;
+				text.update();
+				text.updateDevice(ctx);
 			}
 		}
 	};
