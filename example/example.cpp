@@ -125,7 +125,7 @@ int main() {
 	vgv::Shape shape(ctx, {}, {false, 50.f});
 	vgv::Paint paint(ctx, vgv::colorPaint({vgv::norm, 0.1f, .6f, .3f}));
 
-	auto fontHeight = 12;
+	auto fontHeight = 14;
 	vgv::FontAtlas atlas(ctx);
 	vgv::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
 	vgv::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
@@ -148,10 +148,10 @@ int main() {
 	// Paint svgPaint = {ctx, vgv::colorPaint({vgv::norm, 0.0, 0.0, 0.0})};
 
 	// gui
-	auto label = paint.paint;
-	auto normal = vgv::colorPaint({vgv::norm, 0.05f, 0.05f, 0.05f});
-	auto hovered = vgv::colorPaint({vgv::norm, 0.07f, 0.07f, 0.07f});
-	auto pressed = vgv::colorPaint({vgv::norm, 0.09f, 0.09f, 0.09f});
+	auto label = vgv::colorPaint({240, 240, 240});
+	auto normal = vgv::colorPaint({vgv::norm, 0.02f, 0.02f, 0.02f});
+	auto hovered = vgv::colorPaint({vgv::norm, 0.08f, 0.08f, 0.08f});
+	auto pressed = vgv::colorPaint({vgv::norm, 0.12f, 0.12f, 0.12f});
 
 	Gui::Styles styles {
 		{ // button

@@ -16,9 +16,10 @@ layout(set = 1, binding = 2) uniform sampler2D tex;
 layout(set = 2, binding = 0) uniform sampler2D font;
 
 void main() {
-	out_color = texture(font, in_uv).a * paintColor(in_paint, PaintData(
+	out_color = paintColor(in_paint, PaintData(
 		paint.data.inner,
 		paint.data.outer,
 		paint.data.custom,
 		paint.data.type), tex);
+	out_color.a *= texture(font, in_uv).a;
 }

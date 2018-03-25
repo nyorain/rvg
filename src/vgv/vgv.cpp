@@ -54,8 +54,6 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 
 	samplerInfo.magFilter = vk::Filter::nearest;
 	samplerInfo.minFilter = vk::Filter::nearest;
-	samplerInfo.minLod = 0.f;
-	samplerInfo.maxLod = 0.f;
 	fontSampler_ = {dev, samplerInfo};
 
 	// layouts
