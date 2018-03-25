@@ -123,7 +123,7 @@ int main() {
 	transform.updateDevice();
 
 	vgv::Shape shape(ctx, {}, {false, 50.f});
-	vgv::Paint paint(ctx, vgv::colorPaint({0.1f, .6f, .3f, 1.f}));
+	vgv::Paint paint(ctx, vgv::colorPaint({vgv::norm, 0.1f, .6f, .3f}));
 
 	auto fontHeight = 12;
 	vgv::FontAtlas atlas(ctx);
@@ -138,18 +138,20 @@ int main() {
 	text.updateDevice(ctx);
 
 	// svg path
-	auto svgSubpath = vgv::parseSvgSubpath({300, 200},
-		"h -150 a150 150 0 1 0 150 -150 z");
-	// auto svgSubpath = vgv::parseSvgSubpath({0, 0},
-		// "h 1920 v 1080 h -1920 z");
+	// auto svgSubpath = vgv::parseSvgSubpath({300, 200},
+		// "h -150 a150 150 0 1 0 150 -150 z");
+	auto svgSubpath = vgv::parseSvgSubpath({0, 0},
+		"h 1920 v 1080 h -1920 z");
 
 	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
+	Paint svgPaint = {ctx, vgv::colorPaint({vgv::norm, 0.5, 0.2, 0.2})};
+	// Paint svgPaint = {ctx, vgv::colorPaint({vgv::norm, 0.0, 0.0, 0.0})};
 
 	// gui
 	auto label = paint.paint;
-	auto normal = vgv::colorPaint({0.05f, 0.05f, 0.05f, 1.f});
-	auto hovered = vgv::colorPaint({0.07f, 0.07f, 0.07f, 1.f});
-	auto pressed = vgv::colorPaint({0.09f, 0.09f, 0.09f, 1.f});
+	auto normal = vgv::colorPaint({vgv::norm, 0.05f, 0.05f, 0.05f});
+	auto hovered = vgv::colorPaint({vgv::norm, 0.07f, 0.07f, 0.07f});
+	auto pressed = vgv::colorPaint({vgv::norm, 0.09f, 0.09f, 0.09f});
 
 	Gui::Styles styles {
 		{ // button
@@ -171,10 +173,18 @@ int main() {
 
 	Gui gui(ctx, lsFont, std::move(styles));
 
-	auto& button = gui.create<Button>(Vec {500.f, 100.f}, "Click me");
+	auto& button = gui.create<Button>(Vec {100.f, 100.f}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
-	gui.create<Button>(Vec {500.f, 250.f}, "Button Number Two");
-	gui.create<Textfield>(Vec {500.f, 400.f}, 200);
+	gui.create<Button>(Vec {100.f, 250.f}, "Button Number Two");
+	gui.create<Textfield>(Vec {100.f, 400.f}, 200);
+	auto& cp = gui.create<ColorPicker>(Vec {100.f, 550.f}, Vec {230.f, 200.f});
+	cp.onPick = [&](auto& cp) {
+		svgPaint.paint = vgv::colorPaint(cp.picked);
+		if(svgPaint.updateDevice(ctx)) {
+			dlg_warn("Unexpected rerecord");
+		}
+	};
+
 	gui.updateDevice();
 
 	// render recoreding
@@ -182,10 +192,12 @@ int main() {
 		auto di = ctx.record(buf);
 
 		transform.bind(di);
-		paint.bind(di);
 
-		shape.stroke(di);
+		svgPaint.bind(di);
 		svgShape.fill(di);
+
+		paint.bind(di);
+		shape.stroke(di);
 		text.draw(di);
 		gui.draw(di);
 	};
@@ -208,27 +220,27 @@ int main() {
 				dlg_info("Escape pressed, exiting");
 				run = false;
 			} else if(ev.keycode == ny::Keycode::b) {
-				paint.paint = vgv::colorPaint({0.2, 0.2, 0.8, 1.f});
+				paint.paint = vgv::colorPaint({vgv::norm, 0.2, 0.2, 0.8});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::g) {
-				paint.paint = vgv::colorPaint({0.1, 0.6, 0.3, 1.f});
+				paint.paint = vgv::colorPaint({vgv::norm, 0.1, 0.6, 0.3});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::r) {
-				paint.paint = vgv::colorPaint({0.8, 0.2, 0.3, 1.f});
+				paint.paint = vgv::colorPaint({vgv::norm, 0.8, 0.2, 0.3});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::d) {
-				paint.paint = vgv::colorPaint({0.1, 0.1, 0.1, 1.f});
+				paint.paint = vgv::colorPaint({vgv::norm, 0.1, 0.1, 0.1});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::w) {
-				paint.paint = vgv::colorPaint({1, 1, 1, 1.f});
+				paint.paint = vgv::colorPaint(vgv::Color::white);
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::p) {
 				paint.paint = vgv::linearGradient({0, 0}, {2000, 1000},
-					{1, 0, 0, 1}, {1, 1, 0, 1});
+					{255, 0, 0}, {255, 255, 0});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::c) {
 				paint.paint = vgv::radialGradient({1000, 500}, 0, 1000,
-					{1, 0, 0, 1}, {1, 1, 0, 1});
+					{255, 0, 0}, {255, 255, 0});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::k1) {
 				text.font = &lsFont;

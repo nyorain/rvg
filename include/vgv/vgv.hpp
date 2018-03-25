@@ -91,8 +91,61 @@ private:
 	Transform identityTransform_;
 };
 
-struct Color { float r {}, g {}, b {}, a {}; };
+using u8 = std::uint8_t;
+constexpr struct Norm {} norm;
 
+/// RGBA32 color tuple.
+/// Offers various utility and conversion functions below.
+class Color {
+public:
+	u8 r {0};
+	u8 g {0};
+	u8 b {0};
+	u8 a {255};
+
+public:
+	Color() = default;
+
+	Color(u8 r, u8 g, u8 b, u8 a = 255);
+	Color(Vec3u8 rgb, u8 a = 255);
+	Color(Vec4u8 rgba);
+
+	Color(Norm, float r, float g, float b, float a = 1.f);
+	Color(Norm, Vec3f rgb, float a = 1.f);
+	Color(Norm, Vec4f rgba);
+
+	Vec3u8 rgb() const { return {r, g, b}; }
+	Vec4u8 rgba() const { return {r, g, b, a}; }
+
+	Vec3f rgbNorm() const;
+	Vec4f rgbaNorm() const;
+
+public:
+	const static Color white;
+	const static Color black;
+	const static Color red;
+	const static Color green;
+	const static Color blue;
+};
+
+Color hsl(u8 h, u8 s, u8 l, u8 a = 255);
+Color hslNorm(float h, float s, float l, float a = 1.f);
+
+Vec3u8 hsl(const Color&);
+Vec4u8 hsla(const Color&);
+
+Vec3f hslNorm(const Color&);
+Vec4f hslaNorm(const Color&);
+
+/// De/En-codes color as 32 bit rgba packed values.
+/// This means the most significant byte will always hold the red value, the
+/// actual byte order depends on the endianess of the machine.
+Color u32rgba(std::uint32_t);
+std::uint32_t u32rgba(const Color&);
+
+Color mix(const Color& a, const Color& b, float fac);
+
+// - Paint -
 enum class PaintType : std::uint32_t {
 	color = 1,
 	linGrad = 2,
@@ -236,6 +289,35 @@ public:
 	RectShape() = default;
 	RectShape(const Context&, Vec2f pos, Vec2f size, const DrawMode&,
 		bool hide = false);
+
+	void update();
+	bool updateDevice(const Context&);
+
+	void fill(const DrawInstance&) const;
+	void stroke(const DrawInstance&) const;
+
+	const auto& polygon() const { return polygon_; }
+
+protected:
+	Polygon polygon_;
+};
+
+/// Circular shape that can be filled or stroked.
+class CircleShape {
+public:
+	Vec2f center;
+	Vec2f radius;
+	DrawMode draw;
+	bool hide {false};
+	unsigned points {16};
+	float startAngle {0.f};
+
+public:
+	CircleShape() = default;
+	CircleShape(const Context&, Vec2f center, Vec2f radius, const DrawMode&,
+		bool hide = false, unsigned points = 16, float startAngle = 0.f);
+	CircleShape(const Context&, Vec2f center, float radius, const DrawMode&,
+		bool hide = false, unsigned points = 16, float startAngle = 0.f);
 
 	void update();
 	bool updateDevice(const Context&);

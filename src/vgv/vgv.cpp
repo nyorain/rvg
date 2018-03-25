@@ -20,6 +20,7 @@
 #include <shaders/text.frag.h>
 
 // TODO(performance): optionally create (static) Polygons in deviceLocal memory.
+// TODO(performance): cache points vec in *Shape::update
 
 namespace vgv {
 namespace {
@@ -89,14 +90,14 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
-	poolSizes[0].descriptorCount = 20;
+	poolSizes[0].descriptorCount = 100;
 	poolSizes[0].type = vk::DescriptorType::uniformBuffer;
 
 	poolSizes[1].descriptorCount = 20;
 	poolSizes[1].type = vk::DescriptorType::combinedImageSampler;
 
 	vk::DescriptorPoolCreateInfo poolInfo;
-	poolInfo.maxSets = 20;
+	poolInfo.maxSets = 100;
 	poolInfo.poolSizeCount = 2;
 	poolInfo.pPoolSizes = poolSizes;
 	dsPool_ = {dev, poolInfo};
@@ -377,6 +378,53 @@ void RectShape::fill(const DrawInstance& di) const {
 }
 
 void RectShape::stroke(const DrawInstance& di) const {
+	return polygon_.stroke(di);
+}
+
+// CircleShape
+CircleShape::CircleShape(const Context& ctx,
+		Vec2f xcenter, Vec2f xradius, const DrawMode& xdraw,
+		bool xhide, unsigned xpoints, float xstartAngle)
+			: center(xcenter), radius(xradius), draw(xdraw), hide(xhide),
+				points(xpoints), startAngle(xstartAngle) {
+
+	update();
+	updateDevice(ctx);
+}
+
+CircleShape::CircleShape(const Context& ctx,
+		Vec2f xcenter, float xradius, const DrawMode& xdraw,
+		bool xhide, unsigned xpoints, float xstartAngle)
+			: CircleShape(ctx, xcenter, {xradius, xradius},
+				xdraw, xhide, xpoints, xstartAngle) {
+}
+
+void CircleShape::update() {
+	dlg_assertl(dlg_level_warn, points > 2);
+
+	std::vector<Vec2f> pts;
+	pts.reserve(points);
+
+	auto a = startAngle;
+	auto d = 2 * nytl::constants::pi / points;
+	for(auto i = 0u; i < points + 1; ++i) {
+		using namespace nytl::vec::cw::operators;
+		pts.push_back(center + Vec {std::cos(a), std::sin(a)} * radius);
+		a += d;
+	}
+
+	polygon_.update(pts, draw);
+}
+
+bool CircleShape::updateDevice(const Context& ctx) {
+	return polygon_.updateDevice(ctx, hide);
+}
+
+void CircleShape::fill(const DrawInstance& di) const {
+	return polygon_.fill(di);
+}
+
+void CircleShape::stroke(const DrawInstance& di) const {
 	return polygon_.stroke(di);
 }
 

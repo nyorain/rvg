@@ -31,6 +31,7 @@ void Gui::mouseMove(const MouseMoveEvent& ev) {
 			}
 
 			w->mouseOver(true);
+			w->mouseMove(ev);
 			return;
 		}
 	}
@@ -60,6 +61,8 @@ bool Gui::mouseButton(const MouseButtonEvent& ev) {
 
 		if(mouseOver_) {
 			if(ev.pressed) {
+				// TODO: send release to old buttonGrab_?
+				//   or use multiple button grabs?
 				buttonGrab_ = {mouseOver_, ev.button};
 			}
 
@@ -342,6 +345,122 @@ void Textfield::cursor(bool show, bool resetBlink) {
 	registerUpdateDevice();
 	if(resetBlink) {
 		blinkAccum_ = 0.f;
+	}
+}
+
+// ColorPicker
+ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) : Widget(gui) {
+	auto& ctx = gui.context();
+	bounds = {pos, size};
+
+	auto hueWidth = 20.f;
+	auto huePad = 10.f;
+
+	selector_ = {ctx, pos, size - Vec {hueWidth + huePad, 0}, {true, 2.f}};
+	hue_ = {ctx, pos + Vec{size.x - hueWidth, 0},
+		Vec{hueWidth, size.y}, {true, 0.f}};
+
+	stroke_ = {ctx, vgv::colorPaint({1, 1, 1, 1})};
+	auto y6 = size.y / 6.f;
+	for(auto i = 0u; i < 6; ++i) {
+		hueGrads_[i] = {ctx,
+			vgv::linearGradient(
+				hue_.pos + i * Vec{0, y6},
+				hue_.pos + (i + 1) * Vec {0, y6},
+				vgv::hslNorm(i / 6.f, 1.f, 0.5f, 1.f * (i == 0)),
+				vgv::hslNorm((i + 1) / 6.f, 1.f, 0.5f, 1.f)
+			)};
+	}
+
+	base = vgv::Color {255, 20, 10};
+
+	auto left = bounds.position;
+	auto top = bounds.position;
+	auto right = bounds.position + Vec {bounds.size.x, 0};
+	auto bottom = bounds.position + Vec {0, bounds.size.y};
+	grad1_ = {ctx, vgv::linearGradient(top, bottom,
+		Color::white, Color::black)};
+	grad2_ = {ctx, vgv::linearGradient(left, right,
+		{base.r, base.g, base.b, 0}, base)};
+	grad3_ = {ctx, vgv::linearGradient(top, bottom,
+		{0, 0, 0, 0}, Color::black)};
+}
+
+void ColorPicker::mouseButton(const MouseButtonEvent& ev) {
+	if(ev.button != MouseButton::left) {
+		return;
+	}
+
+	sliding_ = ev.pressed;
+	if(ev.pressed) {
+		click(ev.position);
+	}
+}
+
+void ColorPicker::mouseMove(const MouseMoveEvent& ev) {
+	if(sliding_) {
+		click(ev.position);
+	}
+}
+
+void ColorPicker::draw(const DrawInstance& di) const {
+	grad1_.bind(di);
+	selector_.fill(di);
+
+	grad2_.bind(di);
+	selector_.fill(di);
+
+	grad3_.bind(di);
+	selector_.fill(di);
+
+	for(auto& g : hueGrads_) {
+		g.bind(di);
+		hue_.fill(di);
+	}
+
+	stroke_.bind(di);
+	selector_.stroke(di);
+}
+
+bool ColorPicker::updateDevice() {
+	auto& ctx = gui.context();
+	return grad1_.updateDevice(ctx) |
+		grad2_.updateDevice(ctx) |
+		grad3_.updateDevice(ctx);
+}
+
+void ColorPicker::pick(Vec2f f) {
+	auto c = (1 - f.y) * (1 - f.y) * mix(base, Color::white, f.x).rgb();
+	picked = {Vec3u8(c)};
+	onPick(*this);
+}
+
+void ColorPicker::computeGradients() {
+	auto left = bounds.position;
+	auto top = bounds.position;
+	auto right = bounds.position + Vec {bounds.size.x, 0};
+	auto bottom = bounds.position + Vec {0, bounds.size.y};
+
+	grad1_.paint = vgv::linearGradient(top, bottom,
+		Color::white, Color::black);
+	grad2_.paint = vgv::linearGradient(left, right,
+		{base.r, base.g, base.b, 0}, base);
+	grad3_.paint = vgv::linearGradient(top, bottom,
+		{0, 0, 0, 0}, Color::black);
+
+	registerUpdateDevice();
+}
+
+void ColorPicker::click(Vec2f pos) {
+	if(pos.x < hue_.pos.x) {
+		using namespace nytl::vec::cw::operators;
+		selected_ = (pos - bounds.position) / bounds.size;
+		pick(selected_);
+	} else {
+		auto y = (pos.y - hue_.pos.y) / hue_.size.y;
+		base = vgv::hslNorm(y, 1.f, 0.5f);
+		computeGradients();
+		pick(selected_);
 	}
 }
 

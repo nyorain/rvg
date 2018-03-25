@@ -242,4 +242,36 @@ protected:
 	double blinkAccum_ {};
 };
 
+class ColorPicker : public Widget {
+public:
+	Callback<void(ColorPicker&)> onPick;
+	vgv::Color picked;
+	vgv::Color base;
+
+public:
+	ColorPicker(Gui&, Vec2f pos, Vec2f size);
+
+	void mouseButton(const MouseButtonEvent&) override;
+	void mouseMove(const MouseMoveEvent&) override;
+	void draw(const DrawInstance&) const override;
+	bool updateDevice() override;
+
+protected:
+	void click(Vec2f pos);
+	void computeGradients();
+	void pick(Vec2f pos);
+
+protected:
+	RectShape hue_;
+	RectShape selector_;
+	Paint grad1_;
+	Paint grad2_;
+	Paint grad3_;
+	Paint stroke_;
+	std::array<Paint, 6> hueGrads_;
+	Vec2f selected_ {1.f, 0.f};
+
+	bool sliding_ {};
+};
+
 } // namespace oui
