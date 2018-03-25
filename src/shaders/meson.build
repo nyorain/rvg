@@ -1,7 +1,9 @@
-shaders_dep = []
+shaders_dep = files('paint.glsl')
 shaders_src = [
 	'fill.vert',
 	'fill.frag',
+	'text.frag',
+	'text.vert',
 ]
 
 shaders = []

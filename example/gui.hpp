@@ -74,8 +74,8 @@ public:
 class Gui {
 public:
 	struct ButtonDraw {
-		std::reference_wrapper<const PaintBuffer> label;
-		std::reference_wrapper<const PaintBuffer> bg;
+		vgv::PaintData label;
+		vgv::PaintData bg;
 	};
 
 	struct ButtonStyle {
@@ -85,8 +85,8 @@ public:
 	};
 
 	struct TextfieldStyle {
-		std::reference_wrapper<const PaintBuffer> label;
-		std::reference_wrapper<const PaintBuffer> bg;
+		vgv::PaintData label;
+		vgv::PaintData bg;
 	};
 
 	struct Styles {
@@ -101,8 +101,8 @@ public:
 	void mouseMove(const MouseMoveEvent&);
 	bool mouseButton(const MouseButtonEvent&);
 	void mouseWheel(const MouseWheelEvent&);
-	void key(const KeyEvent&);
-	void textInput(const TextInputEvent&);
+	bool key(const KeyEvent&);
+	bool textInput(const TextInputEvent&);
 	void focus(bool gained);
 	void mouseOver(bool gained);
 
@@ -189,12 +189,12 @@ protected:
 	struct {
 		struct {
 			RectShape shape;
-			PaintBinding paint;
+			Paint paint;
 		} bg;
 
 		struct {
 			Text text;
-			PaintBinding paint;
+			Paint paint;
 		} label;
 	} draw_;
 
@@ -223,7 +223,7 @@ protected:
 	struct {
 		struct {
 			RectShape shape;
-			PaintBinding paint;
+			Paint paint;
 		} bg;
 
 		struct {
@@ -233,7 +233,7 @@ protected:
 
 		struct {
 			Text text;
-			PaintBinding paint;
+			Paint paint;
 		} label;
 	} draw_;
 

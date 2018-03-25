@@ -62,26 +62,29 @@ public:
 	DrawInstance record(vk::CommandBuffer);
 
 	vk::Pipeline fanPipe() const { return fanPipe_; }
-	vk::Pipeline listPipe() const { return listPipe_; }
+	vk::Pipeline textPipe() const { return textPipe_; }
 	vk::Pipeline stripPipe() const { return stripPipe_; }
 
-	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
-	const auto& dsLayoutTex() const { return dsLayoutTex_; }
 	const auto& dsLayoutTransform() const { return dsLayoutTransform_; }
+	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
+	const auto& dsLayoutFontAtlas() const { return dsLayoutFontAtlas_; }
 
+	const auto& emptyImage() const { return emptyImage_; };
 	const auto& dummyTex() const { return dummyTex_; };
 
 private:
 	const vpp::Device& device_;
 	vpp::Pipeline fanPipe_;
-	vpp::Pipeline listPipe_;
+	vpp::Pipeline textPipe_;
 	vpp::Pipeline stripPipe_;
 	vpp::PipelineLayout pipeLayout_;
-	vpp::DescriptorSetLayout dsLayoutPaint_;
-	vpp::DescriptorSetLayout dsLayoutTex_;
 	vpp::DescriptorSetLayout dsLayoutTransform_;
+	vpp::DescriptorSetLayout dsLayoutPaint_;
+	vpp::DescriptorSetLayout dsLayoutFontAtlas_;
 	vpp::DescriptorPool dsPool_;
-	vpp::Sampler sampler_;
+
+	vpp::Sampler fontSampler_;
+	vpp::Sampler texSampler_;
 
 	vpp::ViewableImage emptyImage_;
 	vpp::DescriptorSet dummyTex_;
@@ -90,66 +93,60 @@ private:
 
 struct Color { float r {}, g {}, b {}, a {}; };
 
-/// A buffer holding paint data on the device.
-/// Useful for more fine-grained control than Paint.
-/// Used with PaintBinding to bind it for drawing.
-class PaintBuffer {
-public:
-	PaintBuffer() = default;
-	PaintBuffer(const Context&, const Color& color);
-
-	/// Uploads changes to the device.
-	/// Will never invalidate/recreate any resources.
-	/// Must not be called while this a CommandBuffer that uses
-	/// this PaintBuffer in any way has not completed.
-	void updateDevice(const Color& color) const;
-	const auto& ubo() const { return ubo_; }
-
-protected:
-	vpp::BufferRange ubo_;
+enum class PaintType : std::uint32_t {
+	color = 1,
+	gradient = 2,
+	textureRGBA = 3,
+	textureA = 4,
 };
 
-/// Used to bind a PaintBuffer for drawing.
-/// Useful for more fine-grained control than Paint.
-class PaintBinding {
-public:
-	PaintBinding() = default;
-	PaintBinding(const Context&, const PaintBuffer& buffer);
-
-	/// Binds the associated PaintBuffer for drawing in the given
-	/// DrawInstance.
-	void bind(const DrawInstance&) const;
-
-	/// Updates a changed PaintBuffer binding to the device.
-	/// Will never invalidate/recreate any resources.
-	/// Must not be called while this a CommandBuffer that uses
-	/// this PaintBinding in any way has not completed.
-	void updateDevice(const PaintBuffer&) const;
-	const auto& ds() const { return ds_; }
-
-protected:
-	vpp::DescriptorSet ds_;
+struct FragPaintData {
+	Color inner;
+	Color outer;
+	Vec2f extent;
+	float radius {};
+	float feather {};
+	PaintType type {};
 };
+
+struct DevicePaintData {
+	nytl::Mat4f transform {};
+	FragPaintData frag;
+};
+
+struct PaintData {
+	vk::ImageView texture {};
+	DevicePaintData data;
+};
+
+PaintData colorPaint(const Color&);
+PaintData linearGradient(Vec2f start, Vec2f end,
+	const Color& startColor, const Color& endColor);
+PaintData radialGradient(Vec2f center, float innerRadius, float outerRadius,
+	const Color& innerColor, const Color& outerColor);
+PaintData texturePaintRGBA(const nytl::Mat4f& transform, vk::ImageView);
+PaintData texturePaintA(const nytl::Mat4f& transform, vk::ImageView);
 
 /// Defines how shapes are drawn.
 /// For a more fine-grained control see PaintBinding and PaintBuffer.
 class Paint {
 public:
-	Color color;
+	PaintData paint;
 
 public:
 	Paint() = default;
-	Paint(Context&, const Color& color = {});
+	Paint(Context&, const PaintData& data);
 
-	void bind(const DrawInstance&);
-	void updateDevice();
+	void bind(const DrawInstance&) const;
+	bool updateDevice(const Context&);
 
-	const auto& buffer() const { return buffer_; }
-	const auto& binding() const { return binding_; }
+	const auto& ubo() const { return ubo_; }
+	const auto& ds() const { return ds_; }
 
 protected:
-	PaintBuffer buffer_;
-	PaintBinding binding_;
+	vk::ImageView oldView_;
+	vpp::BufferRange ubo_;
+	vpp::DescriptorSet ds_;
 };
 
 /// Type (format) of a texture.
@@ -205,7 +202,7 @@ protected:
 };
 
 /// Convex shape specifies by its outlining points.
-/// Can be filled to stroked.
+/// Can be filled or stroked.
 class Shape {
 public:
 	std::vector<Vec2f> points;
@@ -337,5 +334,9 @@ protected:
 	std::vector<Vec2f> uvCache_;
 	vpp::BufferRange buf_;
 };
+
+constexpr auto transformBindSet = 0u;
+constexpr auto paintBindSet = 1u;
+constexpr auto fontBindSet = 2u;
 
 } // namespace vgv

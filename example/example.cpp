@@ -123,7 +123,7 @@ int main() {
 	transform.updateDevice();
 
 	vgv::Shape shape(ctx, {}, {false, 2.f});
-	vgv::Paint paint(ctx, {0.1f, .6f, .3f, 1.f});
+	vgv::Paint paint(ctx, vgv::colorPaint({0.1f, .6f, .3f, 1.f}));
 
 	auto fontHeight = 12;
 	vgv::FontAtlas atlas(ctx);
@@ -144,11 +144,11 @@ int main() {
 	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
 
 	// gui
-	// auto label = vgv::PaintBuffer(ctx, {1.f, 1.f, 1.f, 1.f});
-	auto& label = paint.buffer();
-	auto normal = vgv::PaintBuffer(ctx, {0.05f, 0.05f, 0.05f, 1.f});
-	auto hovered = vgv::PaintBuffer(ctx, {0.07f, 0.07f, 0.07f, 1.f});
-	auto pressed = vgv::PaintBuffer(ctx, {0.09f, 0.09f, 0.09f, 1.f});
+	auto label = paint.paint;
+	auto normal = vgv::colorPaint({0.05f, 0.05f, 0.05f, 1.f});
+	auto hovered = vgv::colorPaint({0.07f, 0.07f, 0.07f, 1.f});
+	auto pressed = vgv::colorPaint({0.09f, 0.09f, 0.09f, 1.f});
+
 	Gui::Styles styles {
 		{ // button
 			{ // normal
@@ -194,39 +194,49 @@ int main() {
 	auto run = true;
 	window.onClose = [&](const auto&) { run = false; };
 	window.onKey = [&](const auto& ev) {
-		gui.key({(vui::Key) ev.keycode, ev.pressed});
-
+		auto processed = false;
+		processed |= gui.key({(vui::Key) ev.keycode, ev.pressed});
 		if(ev.pressed && !ev.utf8.empty() && !ny::specialKey(ev.keycode)) {
-			gui.textInput({ev.utf8.c_str()});
+			processed |= gui.textInput({ev.utf8.c_str()});
 		}
 
-		if(ev.pressed) {
+		if(ev.pressed && !processed) {
+			bool re = false;
 			if(ev.keycode == ny::Keycode::escape) {
 				dlg_info("Escape pressed, exiting");
 				run = false;
 			} else if(ev.keycode == ny::Keycode::b) {
-				paint.color = {0.2, 0.2, 0.8, 1.f};
-				paint.updateDevice();
+				paint.paint = vgv::colorPaint({0.2, 0.2, 0.8, 1.f});
+				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::g) {
-				paint.color = {0.1, 0.6, 0.3, 1.f};
-				paint.updateDevice();
+				paint.paint = vgv::colorPaint({0.1, 0.6, 0.3, 1.f});
+				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::r) {
-				paint.color = {0.8, 0.2, 0.3, 1.f};
-				paint.updateDevice();
+				paint.paint = vgv::colorPaint({0.8, 0.2, 0.3, 1.f});
+				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::d) {
-				paint.color = {0.1, 0.1, 0.1, 1.f};
-				paint.updateDevice();
+				paint.paint = vgv::colorPaint({0.1, 0.1, 0.1, 1.f});
+				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::w) {
-				paint.color = {1, 1, 1, 1.f};
-				paint.updateDevice();
-			} if(ev.keycode == ny::Keycode::k1) {
+				paint.paint = vgv::colorPaint({1, 1, 1, 1.f});
+				re |= paint.updateDevice(ctx);
+			} else if(ev.keycode == ny::Keycode::p) {
+				paint.paint = vgv::linearGradient({0, 0}, {0.01, 0.01},
+					{1, 1, 0, 1}, {0, 1, 1, 1});
+				re |= paint.updateDevice(ctx);
+			} else if(ev.keycode == ny::Keycode::k1) {
 				text.font = &lsFont;
 				text.update();
-				text.updateDevice(ctx);
+				re |= text.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::k2) {
 				text.font = &osFont;
 				text.update();
-				text.updateDevice(ctx);
+				re |= text.updateDevice(ctx);
+			}
+
+			if(re) {
+				dlg_warn("Unexpected rerecord from key press");
+				gui.rerecord();
 			}
 		}
 	};

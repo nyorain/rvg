@@ -16,6 +16,9 @@
 #include <shaders/fill.vert.h>
 #include <shaders/fill.frag.h>
 
+#include <shaders/text.vert.h>
+#include <shaders/text.frag.h>
+
 // TODO(performance): optionally create (static) Polygons in deviceLocal memory.
 
 namespace vgv {
@@ -37,8 +40,8 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 
 	// sampler
 	vk::SamplerCreateInfo samplerInfo;
-	samplerInfo.magFilter = vk::Filter::nearest;
-	samplerInfo.minFilter = vk::Filter::nearest;
+	samplerInfo.magFilter = vk::Filter::linear;
+	samplerInfo.minFilter = vk::Filter::linear;
 	samplerInfo.minLod = 0.f;
 	samplerInfo.maxLod = 0.25f;
 	samplerInfo.mipmapMode = vk::SamplerMipmapMode::nearest;
@@ -46,29 +49,43 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	samplerInfo.addressModeV = vk::SamplerAddressMode::clampToEdge;
 	samplerInfo.addressModeW = vk::SamplerAddressMode::clampToEdge;
 	samplerInfo.borderColor = vk::BorderColor::floatOpaqueWhite;
-	sampler_ = {dev, samplerInfo};
+	texSampler_ = {dev, samplerInfo};
+
+	samplerInfo.magFilter = vk::Filter::nearest;
+	samplerInfo.minFilter = vk::Filter::nearest;
+	samplerInfo.minLod = 0.f;
+	samplerInfo.maxLod = 0.f;
+	fontSampler_ = {dev, samplerInfo};
 
 	// layouts
-	auto paintDSB = {
-		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
-			vk::ShaderStageBits::fragment),
-	};
-
-	auto texDSB = {
-		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
-			vk::ShaderStageBits::fragment, -1, 1, &sampler_.vkHandle()),
-	};
-
 	auto transformDSB = {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
 			vk::ShaderStageBits::vertex),
 	};
 
-	dsLayoutPaint_ = {dev, paintDSB};
-	dsLayoutTex_ = {dev, texDSB};
-	dsLayoutTransform_ = {dev, transformDSB};
+	auto paintDSB = {
+		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
+			vk::ShaderStageBits::vertex),
+		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
+			vk::ShaderStageBits::fragment),
+		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
+			vk::ShaderStageBits::fragment, -1, 1, &texSampler_.vkHandle()),
+	};
 
-	pipeLayout_ = {dev, {dsLayoutPaint_, dsLayoutTex_, dsLayoutTransform_}, {}};
+	auto fontAtlasDSB = {
+		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
+			vk::ShaderStageBits::fragment, -1, 1, &fontSampler_.vkHandle()),
+	};
+
+	dsLayoutTransform_ = {dev, transformDSB};
+	dsLayoutPaint_ = {dev, paintDSB};
+	dsLayoutFontAtlas_ = {dev, fontAtlasDSB};
+
+	pipeLayout_ = {dev, {
+		dsLayoutTransform_,
+		dsLayoutPaint_,
+		dsLayoutFontAtlas_
+	}, {}};
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
@@ -183,24 +200,37 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	fanPipeInfo.pDynamicState = &dynamicInfo;
 
 	// listPipe
-	auto listPipeInfo = fanPipeInfo;
-	listPipeInfo.flags = vk::PipelineCreateBits::derivative;
-	listPipeInfo.basePipelineIndex = 0;
+	auto textVertex = vpp::ShaderModule(dev, text_vert_data);
+	auto textFragment = vpp::ShaderModule(dev, text_frag_data);
 
-	auto listAssemblyInfo = assemblyInfo;
-	listAssemblyInfo.topology = vk::PrimitiveTopology::triangleList;
-	listPipeInfo.pInputAssemblyState = &listAssemblyInfo;
+	vpp::ShaderProgram textProgram {{
+		{textVertex, vk::ShaderStageBits::vertex},
+		{textFragment, vk::ShaderStageBits::fragment}
+	}};
+
+	auto textPipeInfo = fanPipeInfo;
+	textPipeInfo.stageCount = textProgram.vkStageInfos().size();
+	textPipeInfo.pStages = textProgram.vkStageInfos().data();
+	textPipeInfo.flags = vk::PipelineCreateBits::derivative;
+	textPipeInfo.basePipelineIndex = 0;
+
+	auto textAssemblyInfo = assemblyInfo;
+	textAssemblyInfo.topology = vk::PrimitiveTopology::triangleList;
+	textPipeInfo.pInputAssemblyState = &textAssemblyInfo;
 
 	// stripPipe
-	auto stripPipeInfo = listPipeInfo;
+	auto stripPipeInfo = fanPipeInfo;
+	stripPipeInfo.flags = vk::PipelineCreateBits::derivative;
+	stripPipeInfo.basePipelineIndex = 0;
+
 	auto stripAssemblyInfo = assemblyInfo;
 	stripAssemblyInfo.topology = vk::PrimitiveTopology::triangleStrip;
 	stripPipeInfo.pInputAssemblyState = &stripAssemblyInfo;
 
 	auto pipes = vk::createGraphicsPipelines(dev, {},
-		{fanPipeInfo, listPipeInfo, stripPipeInfo});
+		{fanPipeInfo, textPipeInfo, stripPipeInfo});
 	fanPipe_ = {dev, pipes[0]};
-	listPipe_ = {dev, pipes[1]};
+	textPipe_ = {dev, pipes[1]};
 	stripPipe_ = {dev, pipes[2]};
 
 	// dummies
@@ -209,10 +239,12 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 		reinterpret_cast<const std::byte*>(bytes),
 		TextureType::rgba32);
 
+	/* TODO: remove whole dummy tex stuff?
 	dummyTex_ = {dsLayoutTex_, dsPool_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
 	auto layout = vk::ImageLayout::general;
 	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
+	*/
 
 	identityTransform_ = {*this};
 }
@@ -272,8 +304,6 @@ void Polygon::fill(const DrawInstance& ini) const {
 	auto& cmdb = ini.cmdBuf;
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
-	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
 
 	// we use the position buffer as (dummy) uv buffer.
 	auto& b = fillBuf_;
@@ -289,8 +319,6 @@ void Polygon::stroke(const DrawInstance& ini) const {
 	auto& cmdb = ini.cmdBuf;
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
-	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 1, {ctx.dummyTex()}, {});
 
 	// we use the position buffer as (dummy) uv buffer.
 	auto& b = strokeBuf_;
@@ -356,7 +384,7 @@ void RectShape::stroke(const DrawInstance& di) const {
 FontAtlas::FontAtlas(Context& ctx) {
 	atlas_ = std::make_unique<nk_font_atlas>();
 	nk_font_atlas_init_default(&nkAtlas());
-	ds_ = {ctx.dsLayoutTex(), ctx.dsPool()};
+	ds_ = {ctx.dsLayoutFontAtlas(), ctx.dsPool()};
 }
 
 FontAtlas::~FontAtlas() {
@@ -529,9 +557,9 @@ void Text::draw(const DrawInstance& ini) const {
 	auto& ctx = ini.context;
 	auto& cmdb = ini.cmdBuf;
 
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.listPipe());
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.textPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), 1, {font->atlas().ds()}, {});
+		ctx.pipeLayout(), fontBindSet, {font->atlas().ds()}, {});
 
 	auto ioff = sizeof(vk::DrawIndirectCommand);
 	auto off = buf_.offset() + ioff;
@@ -546,7 +574,7 @@ Text::CharAt Text::charAt(float x) const {
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
 		auto start = posCache_[i].x;
 		auto end = posCache_[i + 1].x;
-		dlg_assert(end > start);
+		dlg_assert(end >= start);
 
 		if(x < start) {
 			auto nearest = (i == 0) ? posCache_[0].x - pos.x : lastEnd;
@@ -574,55 +602,6 @@ Rect2f Text::ithBounds(unsigned n) const {
 	return {start - pos, posCache_[n * 6 + 2] - start};
 }
 
-// PaintBuffer
-constexpr auto paintUboSize = sizeof(float) * 4;
-PaintBuffer::PaintBuffer(const Context& ctx, const Color& color) {
-	ubo_ = ctx.device().bufferAllocator().alloc(true, paintUboSize,
-		vk::BufferUsageBits::uniformBuffer);
-	updateDevice(color);
-}
-
-void PaintBuffer::updateDevice(const Color& color) const {
-	dlg_assert(ubo_.size() == paintUboSize);
-	auto map = ubo_.memoryMap();
-	auto ptr = map.ptr();
-	write(ptr, color);
-}
-
-// PaintBinding
-PaintBinding::PaintBinding(const Context& ctx, const PaintBuffer& buffer) {
-	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
-	updateDevice(buffer);
-}
-
-void PaintBinding::updateDevice(const PaintBuffer& buf) const {
-	auto& ubo = buf.ubo();
-	dlg_assert(ubo.size() == paintUboSize);
-	dlg_assert(ds_);
-
-	vpp::DescriptorSetUpdate update(ds_);
-	update.uniform({{ubo.buffer(), ubo.offset(), ubo.size()}});
-}
-
-void PaintBinding::bind(const DrawInstance& di) const {
-	dlg_assert(ds_);
-	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), 0, {ds_}, {});
-}
-
-// Paint
-Paint::Paint(Context& ctx, const Color& xcolor) : color(xcolor),
-	buffer_(ctx, color), binding_(ctx, buffer_) {
-}
-
-void Paint::bind(const DrawInstance& ini) {
-	binding().bind(ini);
-}
-
-void Paint::updateDevice() {
-	buffer_.updateDevice(color);
-}
-
 // Transform
 constexpr auto transformUboSize = sizeof(Mat4f);
 Transform::Transform(Context& ctx) : Transform(ctx, identity<4, float>()) {
@@ -647,7 +626,7 @@ void Transform::updateDevice() {
 void Transform::bind(const DrawInstance& di) {
 	dlg_assert(ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), 2, {ds_}, {});
+		di.context.pipeLayout(), transformBindSet, {ds_}, {});
 }
 
 } // namespace vgv

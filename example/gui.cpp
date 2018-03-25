@@ -69,15 +69,19 @@ bool Gui::mouseButton(const MouseButtonEvent& ev) {
 
 	return mouseOver_;
 }
-void Gui::key(const KeyEvent& ev) {
+bool Gui::key(const KeyEvent& ev) {
 	if(focus_) {
 		focus_->key(ev);
 	}
+
+	return focus_;
 }
-void Gui::textInput(const TextInputEvent& ev) {
+bool Gui::textInput(const TextInputEvent& ev) {
 	if(focus_) {
 		focus_->textInput(ev);
 	}
+
+	return focus_;
 }
 void Gui::focus(bool gained) {
 	if(!gained && focus_) {
@@ -105,13 +109,15 @@ void Gui::update(double delta) {
 }
 bool Gui::updateDevice() {
 	auto moved = std::move(updateDevice_);
-	bool rerecord = false;
+	bool rerecord = rerecord_;
+
 	for(auto& widget : moved) {
 		dlg_assert(widget);
 		rerecord |= widget->updateDevice();
 	}
 
-	return rerecord || rerecord_;
+	rerecord_ = false;
+	return rerecord;
 }
 void Gui::draw(const DrawInstance& di) {
 	for(auto& widget : widgets_) {
@@ -148,10 +154,10 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 	auto& font = gui.font();
 	auto padding = Vec {40, 15};
 	draw_.label.text = {ctx, label, font, pos + padding};
-	draw_.label.paint = {ctx, gui.styles.button.normal.label.get()};
+	draw_.label.paint = {ctx, gui.styles.button.normal.label};
 	auto size = 2 * padding + Vec {font.width(label), font.height()};
 	draw_.bg.shape = {ctx, pos, size, DrawMode {true, 2.f}};
-	draw_.bg.paint = {ctx, gui.styles.button.normal.bg.get()};
+	draw_.bg.paint = {ctx, gui.styles.button.normal.bg};
 
 	bounds = {pos, size};
 	draw_.label.text.updateDevice(ctx);
@@ -193,13 +199,18 @@ void Button::draw(const DrawInstance& di) const {
 }
 
 bool Button::updateDevice() {
+	auto re = false;
+	auto& ctx = gui.context();
 	auto& bs = gui.styles.button;
 	auto& draw = pressed_ ? bs.pressed : hovered_ ? bs.hovered : bs.normal;
 
-	draw_.bg.paint.updateDevice(draw.bg.get());
-	draw_.label.paint.updateDevice(draw.label.get());
+	draw_.bg.paint.paint = draw.bg;
+	re |= draw_.bg.paint.updateDevice(ctx);
 
-	return false;
+	draw_.label.paint.paint = draw.label;
+	re |= draw_.label.paint.updateDevice(ctx);
+
+	return re;
 }
 
 // Textfield
