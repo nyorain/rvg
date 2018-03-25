@@ -19,8 +19,6 @@ void main() {
 	out_color = texture(font, in_uv).a * paintColor(in_paint, PaintData(
 		paint.data.inner,
 		paint.data.outer,
-		paint.data.extent,
-		paint.data.radius,
-		paint.data.feather,
+		paint.data.custom,
 		paint.data.type), tex);
 }

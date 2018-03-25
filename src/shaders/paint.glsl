@@ -1,29 +1,31 @@
 struct PaintData {
 	vec4 inner;
 	vec4 outer;
-	vec2 extent;
-	float radius;
-	float feather;
+	vec4 custom;
 	uint type;
 };
 
-float sdroundrect(vec2 coords, vec2 ext, float radius) {
-	vec2 d = abs(coords) - ext + vec2(radius, radius);
-	return min(max(d.x,d.y), 0.0) + length(max(d, 0.0)) - radius;
-}
-
 const uint paintTypeColor = 1u;
-const uint paintTypeGradient = 2u;
-const uint paintTypeTexRGBA = 3u;
-const uint paintTypeTexA = 4u;
+const uint paintTypeLinGrad = 2u;
+const uint paintTypeRadGrad = 3u;
+const uint paintTypeTexRGBA = 4u;
+const uint paintTypeTexA = 5u;
 
 vec4 paintColor(vec2 coords, PaintData paint, sampler2D tex) {
 	if(paint.type == paintTypeColor) {
 		return paint.inner;
-	} else if(paint.type == paintTypeGradient) {
-		float sdr = sdroundrect(coords, paint.extent, paint.radius);
-		float d = (sdr + paint.feather * 0.5) / paint.feather;
-		return mix(paint.inner, paint.outer, clamp(d, 0, 1));
+	} else if(paint.type == paintTypeLinGrad) {
+		vec2 start = paint.custom.xy;
+		vec2 end = paint.custom.zw;
+		vec2 dir = end - start;
+		float fac = dot(coords - start, dir) / dot(dir, dir);
+		return mix(paint.inner, paint.outer, clamp(fac, 0, 1));
+	} else if(paint.type == paintTypeRadGrad) {
+		vec2 center = paint.custom.xy;	
+		float r1 = paint.custom.z;
+		float r2 = paint.custom.w;
+		float fac = (length(coords - center) - r1) / (r2 - r1);
+		return mix(paint.inner, paint.outer, clamp(fac, 0, 1));
 	} else if(paint.type == paintTypeTexRGBA) {
 		return paint.inner * texture(tex, coords);
 	} else if(paint.type == paintTypeTexA) {

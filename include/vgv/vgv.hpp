@@ -95,17 +95,16 @@ struct Color { float r {}, g {}, b {}, a {}; };
 
 enum class PaintType : std::uint32_t {
 	color = 1,
-	gradient = 2,
-	textureRGBA = 3,
-	textureA = 4,
+	linGrad = 2,
+	radGrad = 3,
+	textureRGBA = 4,
+	textureA = 5,
 };
 
 struct FragPaintData {
 	Color inner;
 	Color outer;
-	Vec2f extent;
-	float radius {};
-	float feather {};
+	Vec4f custom;
 	PaintType type {};
 };
 

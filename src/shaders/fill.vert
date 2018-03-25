@@ -16,7 +16,6 @@ layout(row_major, set = 1, binding = 0) uniform Paint {
 
 void main() {
 	gl_Position = transform.matrix * vec4(in_pos, 0.0, 1.0);
-	out_paint = (transform.matrix * paint.matrix * vec4(in_pos, 0.0, 1.0)).xy;
-	// out_paint = (paint.matrix * vec4(in_pos, 0.0, 1.0)).xy;
+	out_paint = (paint.matrix * vec4(in_pos, 0.0, 1.0)).xy;
 	out_uv = in_uv;
 }

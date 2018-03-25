@@ -393,12 +393,12 @@ FontAtlas::~FontAtlas() {
 
 bool FontAtlas::bake(Context& ctx) {
 	// TODO: use r8 format. Figure out why it did not work
-	constexpr auto format = vk::Format::r8g8b8a8Uint;
+	constexpr auto format = vk::Format::r8Uint;
 	bool rerecord = false;
 
 	int w, h;
 	auto data = reinterpret_cast<const std::byte*>(
-		nk_font_atlas_bake(&nkAtlas(), &w, &h, NK_FONT_ATLAS_RGBA32));
+		nk_font_atlas_bake(&nkAtlas(), &w, &h, NK_FONT_ATLAS_ALPHA8));
 
 	if(w == 0 || h == 0) {
 		dlg_info("FontAtlas::bake on empty atlas");
@@ -412,7 +412,7 @@ bool FontAtlas::bake(Context& ctx) {
 		//   the rectpack algorithm does not only produce squares
 		texture_ = vgv::createTexture(ctx.device(), w, h,
 			reinterpret_cast<const std::byte*>(data),
-			vgv::TextureType::rgba32);
+			vgv::TextureType::a8);
 		rerecord = true;
 
 		vpp::DescriptorSetUpdate update(ds_);
@@ -423,7 +423,7 @@ bool FontAtlas::bake(Context& ctx) {
 		auto cmdBuf = ctx.device().commandAllocator().get(qs.queue().family());
 		vk::beginCommandBuffer(cmdBuf, {});
 		auto buf = vpp::fillStaging(cmdBuf, texture_.image(), format,
-			vk::ImageLayout::general, {uw, uh, 1}, {data, w * h * 4u},
+			vk::ImageLayout::general, {uw, uh, 1}, {data, uw * uh},
 			{vk::ImageAspectBits::color});
 		vk::endCommandBuffer(cmdBuf);
 

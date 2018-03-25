@@ -38,7 +38,7 @@ constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
-constexpr auto vsync = false;
+constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
 // TODO: move to nytl
@@ -122,7 +122,7 @@ int main() {
 	translate(transform.matrix, {-1.f, -1.f, 0.f});
 	transform.updateDevice();
 
-	vgv::Shape shape(ctx, {}, {false, 2.f});
+	vgv::Shape shape(ctx, {}, {false, 50.f});
 	vgv::Paint paint(ctx, vgv::colorPaint({0.1f, .6f, .3f, 1.f}));
 
 	auto fontHeight = 12;
@@ -140,6 +140,8 @@ int main() {
 	// svg path
 	auto svgSubpath = vgv::parseSvgSubpath({300, 200},
 		"h -150 a150 150 0 1 0 150 -150 z");
+	// auto svgSubpath = vgv::parseSvgSubpath({0, 0},
+		// "h 1920 v 1080 h -1920 z");
 
 	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
 
@@ -221,8 +223,12 @@ int main() {
 				paint.paint = vgv::colorPaint({1, 1, 1, 1.f});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::p) {
-				paint.paint = vgv::linearGradient({0, 0}, {0.01, 0.01},
-					{1, 1, 0, 1}, {0, 1, 1, 1});
+				paint.paint = vgv::linearGradient({0, 0}, {2000, 1000},
+					{1, 0, 0, 1}, {1, 1, 0, 1});
+				re |= paint.updateDevice(ctx);
+			} else if(ev.keycode == ny::Keycode::c) {
+				paint.paint = vgv::radialGradient({1000, 500}, 0, 1000,
+					{1, 0, 0, 1}, {1, 1, 0, 1});
 				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::k1) {
 				text.font = &lsFont;

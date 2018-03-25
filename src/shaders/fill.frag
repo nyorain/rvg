@@ -18,8 +18,6 @@ void main() {
 	out_color = paintColor(in_paint, PaintData(
 		paint.data.inner,
 		paint.data.outer,
-		paint.data.extent,
-		paint.data.radius,
-		paint.data.feather,
+		paint.data.custom,
 		paint.data.type), tex);
 }

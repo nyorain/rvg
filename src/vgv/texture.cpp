@@ -54,16 +54,16 @@ vpp::ViewableImage createTexture(const vpp::Device& dev, unsigned int width,
 		info = vpp::ViewableImageCreateInfo::color(dev, extent,
 			vk::ImageUsageBits::transferDst |
 			vk::ImageUsageBits::sampled,
-			{vk::Format::r8Uint}).value();
+			{vk::Format::r8Unorm}).value();
 		info.view.components = {
 			vk::ComponentSwizzle::zero,
 			vk::ComponentSwizzle::zero,
 			vk::ComponentSwizzle::zero,
-			vk::ComponentSwizzle::one,
+			vk::ComponentSwizzle::r,
 		};
 
-		dlg_assert(info.view.format == vk::Format::r8Uint);
-		dlg_assert(info.img.format == vk::Format::r8Uint);
+		dlg_assert(info.view.format == vk::Format::r8Unorm);
+		dlg_assert(info.img.format == vk::Format::r8Unorm);
 	} else {
 		throw std::runtime_error("Invalid TextureType");
 	}
@@ -82,7 +82,7 @@ vpp::ViewableImage createTexture(const vpp::Device& dev, unsigned int width,
 vpp::ViewableImage createTexture(const vpp::Device& dev, const char* filename,
 		TextureType type) {
 
-	int width,height,channels;
+	int width, height, channels;
 	unsigned char* data = stbi_load(filename, &width, &height, &channels, 4);
 	if(!data) {
 		dlg_warn("Failed to open texture file {}", filename);
@@ -93,8 +93,24 @@ vpp::ViewableImage createTexture(const vpp::Device& dev, const char* filename,
 		throw std::runtime_error(err);
 	}
 
-	return createTexture(dev, width, height,
-		reinterpret_cast<const std::byte*>(data), type);
+	if((channels == 1 || channels == 3) && type == TextureType::a8) {
+		dlg_warn("Creating a8 texture from alpha-less image");
+	}
+
+	dlg_assert(width > 0 && height > 0);
+	std::vector<std::byte> alphaData;
+	auto ptr = reinterpret_cast<const std::byte*>(data);
+	if(type == TextureType::a8) {
+		alphaData.resize(width * height);
+		ptr = alphaData.data();
+		for(auto i = 0u; i < unsigned(width * height); ++i) {
+			alphaData[i] = std::byte {data[4 * i + 3]};
+		}
+	}
+
+	auto tex = createTexture(dev, width, height, ptr, type);
+	free(data);
+	return tex;
 }
 
 } // namespace vgv
