@@ -19,7 +19,8 @@ vec4 paintColor(vec2 coords, PaintData paint, sampler2D tex, vec4 col) {
 		vec2 start = paint.custom.xy;
 		vec2 end = paint.custom.zw;
 		vec2 dir = end - start;
-		float fac = sqrt(dot(coords - start, dir) / dot(dir, dir));
+		// float fac = sqrt(dot(coords - start, dir) / dot(dir, dir));
+		float fac = dot(coords - start, dir) / dot(dir, dir);
 		return mix(paint.inner, paint.outer, clamp(fac, 0, 1));
 	} else if(paint.type == paintTypeRadGrad) {
 		vec2 center = paint.custom.xy;

@@ -277,7 +277,6 @@ bool Polygon::updateDevice(const Context& ctx, bool hide) {
 		neededSize += sizeof(ccache[0]) * ccache.size();
 
 		if(ccache.empty() == (state_ & cstate)) {
-			dlg_info("toggle bit");
 			state_ ^= cstate;
 			rerecord = true;
 		}

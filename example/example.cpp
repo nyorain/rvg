@@ -38,7 +38,7 @@ constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
-constexpr auto vsync = true;
+constexpr auto vsync = false;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
 // TODO: move to nytl
@@ -144,8 +144,6 @@ int main() {
 		"h 1920 v 1080 h -1920 z");
 
 	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
-	Paint svgPaint = {ctx, vgv::colorPaint({vgv::norm, 0.5, 0.2, 0.2})};
-	// Paint svgPaint = {ctx, vgv::colorPaint({vgv::norm, 0.0, 0.0, 0.0})};
 
 	// gui
 	auto label = vgv::colorPaint({240, 240, 240});
@@ -177,6 +175,8 @@ int main() {
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
 	gui.create<Button>(Vec {100.f, 250.f}, "Button Number Two");
 	gui.create<Textfield>(Vec {100.f, 400.f}, 200);
+
+	Paint svgPaint;
 	auto& cp = gui.create<ColorPicker>(Vec {100.f, 550.f}, Vec {230.f, 200.f});
 	cp.onPick = [&](auto& cp) {
 		svgPaint.paint = vgv::colorPaint(cp.picked);
@@ -185,6 +185,7 @@ int main() {
 		}
 	};
 
+	svgPaint = {ctx, vgv::colorPaint(cp.picked)};
 	gui.updateDevice();
 
 	// render recoreding

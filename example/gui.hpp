@@ -261,7 +261,10 @@ protected:
 
 protected:
 	Shape hue_;
+	RectShape hueMarker_;
+
 	RectShape selector_;
+	CircleShape colorMarker_;
 
 	float xEndSel_ {};
 	float xBegHue_ {};

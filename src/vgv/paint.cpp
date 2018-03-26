@@ -142,7 +142,7 @@ Color hsvNorm(float h, float s, float v, float a) {
 		return {norm, v, v, v, a};
 	}
 
-	auto hh = h * 6.f;
+	auto hh = std::fmod((h * 6.f), 6.f);
 	auto i = static_cast<unsigned>(hh);
 	auto ff = hh - i;
 	auto p = v * (1.f - s);
@@ -155,7 +155,7 @@ Color hsvNorm(float h, float s, float v, float a) {
 		case 2: return {norm, p, v, t, a};
 		case 3: return {norm, p, q, v, a};
 		case 4: return {norm, t, p, v, a};
-		default: return {norm, v, p ,q, a};
+		default: return {norm, v, p, q, a};
     }
 }
 

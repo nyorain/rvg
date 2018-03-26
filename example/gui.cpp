@@ -362,7 +362,7 @@ ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) : Widget(gui) {
 	auto huePad = 10.f;
 
 	selector_ = {ctx, pos, size - Vec {hueWidth + huePad, 0}, {true, 2.f}};
-	stroke_ = {ctx, vgv::colorPaint({1, 1, 1, 1})};
+	stroke_ = {ctx, vgv::colorPaint({0, 0, 0})};
 
 	xBegHue_ = pos.x + size.x - hueWidth;
 	xEndSel_ = xBegHue_ - huePad;
@@ -370,7 +370,7 @@ ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) : Widget(gui) {
 	std::vector<Vec2f> points;
 	std::vector<Vec4u8> colors;
 
-	auto steps = 12u;
+	auto steps = 6u;
 	auto ystep = size.y / float(steps);
 	auto x = pos.x + size.x - hueWidth / 2;
 	for(auto i = 0u; i < steps + 1; ++i) {
@@ -384,12 +384,22 @@ ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) : Widget(gui) {
 	drawMode.color.points = std::move(colors);
 	hue_ = {ctx, std::move(points), drawMode};
 
-	basePaint_ = {ctx, vgv::colorPaint(hsv(currentHue_, 255, 255))};
+	picked = hsv(currentHue_, 255, 255);
+	basePaint_ = {ctx, vgv::colorPaint(picked)};
 
-	sGrad_ = {ctx, vgv::linearGradient(pos, pos + Vec {size.x, 0},
+	sGrad_ = {ctx, vgv::linearGradient(pos, Vec {xEndSel_, pos.y},
 		hsv(0, 0, 255), hsv(0, 0, 255, 0))};
 	vGrad_ = {ctx, vgv::linearGradient(pos, pos + Vec {0, size.y},
 		hsv(0, 255, 0, 0), hsv(0, 255, 0))};
+
+	auto hmwidth = 5.f;
+	auto hmheight = 10.f;
+	hueMarker_ = {ctx, {xBegHue_, pos.y - hmheight / 2},
+		{hueWidth, hmheight}, {false, hmwidth}};
+
+	auto cmradius = 3.f;
+	colorMarker_ = {ctx, Vec {xEndSel_, pos.y}, cmradius, {false, 1.5f},
+		false, 6};
 }
 
 void ColorPicker::mouseButton(const MouseButtonEvent& ev) {
@@ -422,11 +432,16 @@ void ColorPicker::draw(const DrawInstance& di) const {
 
 	stroke_.bind(di);
 	selector_.stroke(di);
+	hueMarker_.stroke(di);
+	colorMarker_.stroke(di);
 }
 
 bool ColorPicker::updateDevice() {
 	auto& ctx = gui.context();
-	return selector_.updateDevice(ctx) | basePaint_.updateDevice(ctx);
+	return selector_.updateDevice(ctx) |
+		basePaint_.updateDevice(ctx) |
+		hueMarker_.updateDevice(ctx) |
+		colorMarker_.updateDevice(ctx);
 }
 
 void ColorPicker::pick(Vec2f f) {
@@ -437,14 +452,22 @@ void ColorPicker::pick(Vec2f f) {
 void ColorPicker::click(Vec2f pos) {
 	if(pos.x < xEndSel_) {
 		using namespace nytl::vec::cw::operators;
-		selected_ = (pos - bounds.position) / bounds.size;
+		selected_ = (pos - selector_.pos) / selector_.size;
 		pick(selected_);
-	} else if(pos.x > xBegHue_) {
-		currentHue_ = (pos.y - hue_.points[0].y) / selector_.size.y;
-		pick(selected_);
-		basePaint_.paint.data.frag.inner = hsvNorm(currentHue_, 1.f, 1.f);
-		registerUpdateDevice();
 
+		colorMarker_.center = pos;
+		colorMarker_.update();
+		registerUpdateDevice();
+	} else if(pos.x > xBegHue_) {
+		auto y = (pos.y - hue_.points[0].y) / selector_.size.y;
+		currentHue_ = std::clamp(y, 0.f, 1.f);
+		pick(selected_);
+
+		basePaint_.paint.data.frag.inner = hsvNorm(currentHue_, 1.f, 1.f);
+
+		hueMarker_.pos.y = pos.y - hueMarker_.size.y / 2.f;
+		hueMarker_.update();
+		registerUpdateDevice();
 	}
 }
 

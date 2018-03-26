@@ -369,6 +369,7 @@ void bakeStroke(Span<const Vec2f> points, const StrokeSettings& settings,
 		// skip point if same to next or previous one
 		// this assures normalized below will not throw (for nullvector)
 		if(d0 == approx(Vec {0.f, 0.f}) || d1 == approx(Vec {0.f, 0.f})) {
+			dlg_debug("bakeStroke: doubled point {}", p1);
 			p1 = p2;
 			p2 = points[i + 2 % points.size()];
 			continue;
@@ -379,9 +380,9 @@ void bakeStroke(Span<const Vec2f> points, const StrokeSettings& settings,
 		ret.push_back(p1 + width * extrusion);
 		ret.push_back(p1 - width * extrusion);
 
-		p0 = points[i];
-		p1 = points[i + 1 % points.size()];
-		p2 = points[i + 2 % points.size()];
+		p0 = points[(i + 0) % points.size()];
+		p1 = points[(i + 1) % points.size()];
+		p2 = points[(i + 2) % points.size()];
 	}
 }
 
