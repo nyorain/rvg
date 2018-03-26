@@ -261,6 +261,7 @@ void Textfield::textInput(const TextInputEvent& ev) {
 	updateCursorPosition();
 	dlg_assert(cursor_ <= str.length());
 	cursor(true, true);
+	dlg_info("cursor: {}", cursor_);
 }
 
 void Textfield::key(const KeyEvent& ev) {
@@ -289,6 +290,7 @@ void Textfield::key(const KeyEvent& ev) {
 	}
 
 	dlg_assert(cursor_ <= str.length());
+	dlg_info("cursor: {}", cursor_);
 }
 
 void Textfield::draw(const DrawInstance& di) const {
@@ -327,11 +329,14 @@ void Textfield::updateCursorPosition() {
 	auto len = draw_.label.text.text.size();
 	dlg_assert(cursor_ <= len);
 	auto x = bounds.position.x + 10.f; // padding
-	if(cursor_ > 0 && cursor_ == len) {
-		auto b = draw_.label.text.ithBounds(cursor_ - 1);
-		x += b.position.x + b.size.x;
-	} else if(cursor_ > 0) {
-		x += draw_.label.text.ithBounds(cursor_).position.x;
+	if(cursor_ > 0) {
+		if(cursor_ == len) {
+			dlg_info("last");
+			auto b = draw_.label.text.ithBounds(cursor_ - 1);
+			x += b.position.x + b.size.x;
+		} else {
+			x += draw_.label.text.ithBounds(cursor_).position.x;
+		}
 	}
 
 	draw_.cursor.shape.pos.x = x;

@@ -545,6 +545,9 @@ float Font::height() const {
 }
 
 // Text
+constexpr auto vertIndex0 = 2;
+constexpr auto vertIndex2 = 3;
+
 Text::Text(const Context& ctx, std::string xtext, const Font& f, Vec2f xpos) :
 	Text(ctx, toUtf32(xtext), f, xpos) {
 }
@@ -663,15 +666,15 @@ void Text::draw(const DrawInstance& ini) const {
 }
 
 Text::CharAt Text::charAt(float x) const {
-	auto lastEnd = posCache_.empty() ? -1.f : posCache_[0].x;
+	auto lastEnd = posCache_.empty() ? -1.f : posCache_[vertIndex0].x;
 	x += pos.x;
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
-		auto start = posCache_[i].x;
-		auto end = posCache_[i + 1].x;
+		auto start = posCache_[i + vertIndex0].x;
+		auto end = posCache_[i + vertIndex2].x;
 		dlg_assert(end >= start);
 
 		if(x < start) {
-			auto nearest = (i == 0) ? posCache_[0].x - pos.x : lastEnd;
+			auto nearest = (i == 0) ? posCache_[vertIndex0].x - pos.x : lastEnd;
 			return {i / 6, -1.f, nearest};
 		}
 
@@ -692,8 +695,8 @@ Rect2f Text::ithBounds(unsigned n) const {
 		throw std::out_of_range("Text::ithBounds");
 	}
 
-	auto start = posCache_[n * 6];
-	return {start - pos, posCache_[n * 6 + 2] - start};
+	auto start = posCache_[n * 6 + vertIndex0];
+	return {start - pos, posCache_[n * 6 + vertIndex2] - start};
 }
 
 // Transform
