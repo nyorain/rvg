@@ -379,36 +379,12 @@ ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) : Widget(gui) {
 	drawMode.color.points = std::move(colors);
 	hue_ = {ctx, std::move(points), drawMode};
 
-	/*
-	hue_ = {ctx, pos + Vec{size.x - hueWidth, 0},
-		Vec{hueWidth, size.y}, {true, 0.f}};
+	basePaint_ = {ctx, vgv::colorPaint(hsv(currentHue_, 255, 255))};
 
-	for(auto i = 0u; i < 6; ++i) {
-		hueGrads_[i] = {ctx,
-			vgv::linearGradient(
-				hue_.pos + i * Vec{0, y6},
-				hue_.pos + (i + 1) * Vec {0, y6},
-				vgv::hsvNorm(i / 6.f, 1.f, 1.f, 1.f * (i == 0)),
-				vgv::hsvNorm((i + 1) / 6.f, 1.f, 1.f, 1.f)
-			)};
-	}
-	*/
-
-	base = vgv::Color {255, 20, 10};
-	computeGradients();
-
-	/*
-	auto left = bounds.position;
-	auto top = bounds.position;
-	auto right = bounds.position + Vec {bounds.size.x, 0};
-	auto bottom = bounds.position + Vec {0, bounds.size.y};
-	grad1_ = {ctx, vgv::linearGradient(top, bottom,
-		Color::white, Color::black)};
-	grad2_ = {ctx, vgv::linearGradient(left, right,
-		{base.r, base.g, base.b, 0}, base)};
-	grad3_ = {ctx, vgv::linearGradient(top, bottom,
-		{0, 0, 0, 0}, Color::black)};
-	*/
+	sGrad_ = {ctx, vgv::linearGradient(pos, pos + Vec {size.x, 0},
+		hsv(0, 0, 255), hsv(0, 0, 255, 0))};
+	vGrad_ = {ctx, vgv::linearGradient(pos, pos + Vec {0, size.y},
+		hsv(0, 255, 0, 0), hsv(0, 255, 0))};
 }
 
 void ColorPicker::mouseButton(const MouseButtonEvent& ev) {
@@ -429,28 +405,15 @@ void ColorPicker::mouseMove(const MouseMoveEvent& ev) {
 }
 
 void ColorPicker::draw(const DrawInstance& di) const {
-
-	/*
-	grad1_.bind(di);
-	selector_.fill(di);
-
-	grad2_.bind(di);
-	selector_.fill(di);
-
-	grad3_.bind(di);
-	selector_.fill(di);
-
-	for(auto& g : hueGrads_) {
-		g.bind(di);
-		hue_.fill(di);
-	}
-	*/
-
 	auto& ctx = gui.context();
-	ctx.pointColorPaint().bind(di);
 
+	for(auto* p : {&basePaint_, &sGrad_, &vGrad_}) {
+		p->bind(di);
+		selector_.fill(di);
+	}
+
+	ctx.pointColorPaint().bind(di);
 	hue_.stroke(di);
-	selector_.fill(di);
 
 	stroke_.bind(di);
 	selector_.stroke(di);
@@ -458,42 +421,12 @@ void ColorPicker::draw(const DrawInstance& di) const {
 
 bool ColorPicker::updateDevice() {
 	auto& ctx = gui.context();
-	return selector_.updateDevice(ctx);
+	return selector_.updateDevice(ctx) | basePaint_.updateDevice(ctx);
 }
 
 void ColorPicker::pick(Vec2f f) {
-	auto c = (1 - f.y) * (1 - f.y) * mix(base, Color::white, f.x).rgb();
-	picked = {Vec3u8(c)};
+	picked = hsvNorm(currentHue_, f.x, 1 - f.y);
 	onPick(*this);
-}
-
-void ColorPicker::computeGradients() {
-	/*
-	auto left = bounds.position;
-	auto top = bounds.position;
-	auto right = bounds.position + Vec {bounds.size.x, 0};
-	auto bottom = bounds.position + Vec {0, bounds.size.y};
-
-	grad1_.paint = vgv::linearGradient(top, bottom,
-		Color::white, Color::black);
-	grad2_.paint = vgv::linearGradient(left, right,
-		{base.r, base.g, base.b, 0}, base);
-	grad3_.paint = vgv::linearGradient(top, bottom,
-		{0, 0, 0, 0}, Color::black);
-
-	registerUpdateDevice();
-	*/
-
-	selector_.draw.color.points.resize(5);
-	selector_.draw.color.points[0] = hsv(0, 0, 255).rgba();
-	selector_.draw.color.points[1] = hsv(0, 0, 0, 0).rgba();
-	selector_.draw.color.points[2] = hsv(0, 0, 0).rgba();
-	selector_.draw.color.points[3] = hsv(0, 0, 0).rgba();
-	selector_.draw.color.points[4] = selector_.draw.color.points[0];
-	selector_.draw.color.fill = true;
-
-	selector_.update();
-	registerUpdateDevice();
 }
 
 void ColorPicker::click(Vec2f pos) {
@@ -502,10 +435,11 @@ void ColorPicker::click(Vec2f pos) {
 		selected_ = (pos - bounds.position) / bounds.size;
 		pick(selected_);
 	} else if(pos.x > xBegHue_) {
-		auto y = (pos.y - hue_.points[0].y) / selector_.size.y;
-		base = vgv::hsvNorm(y, 1.f, 1.f);
-		computeGradients();
+		currentHue_ = (pos.y - hue_.points[0].y) / selector_.size.y;
 		pick(selected_);
+		basePaint_.paint.data.frag.inner = hsvNorm(currentHue_, 1.f, 1.f);
+		registerUpdateDevice();
+
 	}
 }
 

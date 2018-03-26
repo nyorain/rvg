@@ -246,7 +246,6 @@ class ColorPicker : public Widget {
 public:
 	Callback<void(ColorPicker&)> onPick;
 	vgv::Color picked;
-	vgv::Color base;
 
 public:
 	ColorPicker(Gui&, Vec2f pos, Vec2f size);
@@ -258,7 +257,6 @@ public:
 
 protected:
 	void click(Vec2f pos);
-	void computeGradients();
 	void pick(Vec2f pos);
 
 protected:
@@ -267,15 +265,11 @@ protected:
 
 	float xEndSel_ {};
 	float xBegHue_ {};
+	float currentHue_ {};
 
 	Paint basePaint_ {};
-
-	/*
-	Paint grad1_;
-	Paint grad2_;
-	Paint grad3_;
-	std::array<Paint, 6> hueGrads_;
-	*/
+	Paint sGrad_ {}; // saturation gradient
+	Paint vGrad_ {}; // value gradient
 
 	Paint stroke_;
 	Vec2f selected_ {1.f, 0.f};
