@@ -1,0 +1,38 @@
+# Roadmap
+
+- [ ] windows (basic panes, no operations)
+- [ ] row layouts
+- [ ] slider
+- [ ] vgv: antialiasing
+- [ ] vgv: sanity checking (with asserts/logs)
+  - [ ] color functions, conversion
+  - [ ] shape drawing functions
+- [ ] vgv: rounded rect
+- [ ] vgv: reorganize/split header/sources
+  - [ ] also make nk/font.h public header
+  - [ ] separate path.hpp in separate library/utility
+- [ ] more advanced textfield
+  - [ ] enter/escape
+  - [ ] selection
+  - [ ] some basic shortcuts like ctrl-a
+- [ ] split vgv and gui library
+- [ ] clipboard support
+- [ ] widget styles, also spacings etc
+- [ ] popups (needed for dropdown menu, tooltip)
+- [ ] dropdown menu
+- [ ] tooltip
+- [ ] tabs
+- [ ] benchmark alternative pipelines, optimize default use cases
+  - [ ] vgv: better with more (but also more optimized) pipelines?
+- [ ] beautiful demos with screenshots
+- [ ] release public version
+- [ ] vgv: more stroke settings: linecap/linejoin
+- [ ] animations
+- [ ] textfields/slider combos for ints/floats
+- [ ] better,easier custom navigation (e.g. tab-based)
+- [ ] custom grabbing slider
+- [ ] window operations
+- [ ] window decorations/integrate with tabs
+- [ ] graph widget, e.g. for frametimes
+- [ ] drag and drop stuff (not sure if needed at all)
+- [ ] helper for non-convex shapes (in vgv: stencil buffer? or decomposition?)

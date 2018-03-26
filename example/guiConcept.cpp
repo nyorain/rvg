@@ -545,3 +545,54 @@ enum class LineJoin {
 	bevel
 };
 
+
+
+
+
+
+
+
+// gui layouts
+auto& row = window.create<Row>();
+row.create<Button>("label1");
+row.create<Button>("label2");
+row.create<Textfield>();
+
+auto& nextRow = window.create<Row>();
+// ...
+
+// #2
+auto& row = window.create<Row>();
+
+{
+	auto& layout = row.beginLayout();
+	layout.create<Button>("label1");
+	layout.create<Button>("label2");
+	layout.create<Textfield>();
+}
+
+auto& nextRow = window.create<Row>();
+// ...
+
+
+class Window {
+public:
+
+protected:
+	std::vector<std::unique_ptr<Widget>> widgets_;
+};
+
+class Row : public Widget {
+public:
+	Row(float height);
+
+	template<typename W> W& createSized();
+	template<typename W> W& create();
+
+	void add(std::unique_ptr<Widget>);
+
+protected:
+	std::vector<std::unique_ptr<Widget>> widgets_;
+};
+
+
