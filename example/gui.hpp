@@ -262,13 +262,22 @@ protected:
 	void pick(Vec2f pos);
 
 protected:
-	RectShape hue_;
+	Shape hue_;
 	RectShape selector_;
+
+	float xEndSel_ {};
+	float xBegHue_ {};
+
+	Paint basePaint_ {};
+
+	/*
 	Paint grad1_;
 	Paint grad2_;
 	Paint grad3_;
-	Paint stroke_;
 	std::array<Paint, 6> hueGrads_;
+	*/
+
+	Paint stroke_;
 	Vec2f selected_ {1.f, 0.f};
 
 	bool sliding_ {};

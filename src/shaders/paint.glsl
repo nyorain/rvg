@@ -10,8 +10,9 @@ const uint paintTypeLinGrad = 2u;
 const uint paintTypeRadGrad = 3u;
 const uint paintTypeTexRGBA = 4u;
 const uint paintTypeTexA = 5u;
+const uint paintTypePointColor = 6u;
 
-vec4 paintColor(vec2 coords, PaintData paint, sampler2D tex) {
+vec4 paintColor(vec2 coords, PaintData paint, sampler2D tex, vec4 col) {
 	if(paint.type == paintTypeColor) {
 		return paint.inner;
 	} else if(paint.type == paintTypeLinGrad) {
@@ -30,6 +31,8 @@ vec4 paintColor(vec2 coords, PaintData paint, sampler2D tex) {
 		return paint.inner * texture(tex, coords);
 	} else if(paint.type == paintTypeTexA) {
 		return paint.inner * texture(tex, coords).a;
+	} else if(paint.type == paintTypePointColor) {
+		return col;
 	}
 
 	return vec4(1, 1, 1, 1);

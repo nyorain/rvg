@@ -90,8 +90,13 @@ struct StrokeSettings {
 };
 
 std::vector<Vec2f> bakeStroke(Span<const Vec2f> points, const StrokeSettings&);
-std::vector<Vec2f> bakeStroke(const Subpath& sub, const StrokeSettings&);
 void bakeStroke(Span<const Vec2f> points, const StrokeSettings&,
 	std::vector<Vec2f>& baked);
+
+void bakeColoredStroke(Span<const Vec2f> points, Span<const Vec4u8> color,
+	const StrokeSettings&, std::vector<Vec2f>& outPoints,
+	std::vector<Vec4u8>& outColor);
+
+std::vector<Vec2f> bakeStroke(const Subpath& sub, const StrokeSettings&);
 
 } // namespace vgv

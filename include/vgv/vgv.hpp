@@ -30,67 +30,7 @@ struct DrawInstance {
 	vk::CommandBuffer cmdBuf;
 };
 
-/// Matrix-based transform used to specify how shape coordinates
-/// are mapped to the output.
-class Transform {
-public:
-	Mat4f matrix;
-
-public:
-	Transform() = default;
-	Transform(Context& ctx);
-	Transform(Context& ctx, const Mat4f&);
-
-	auto& ubo() const { return ubo_; }
-	void updateDevice();
-	void bind(const DrawInstance&);
-
-protected:
-	vpp::BufferRange ubo_;
-	vpp::DescriptorSet ds_;
-};
-
-/// Drawing context. Manages all pipelines and layouts needed to
-/// draw any shapes.
-class Context {
-public:
-	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
-
-	const vpp::Device& device() const { return device_; };
-	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
-	const auto& dsPool() const { return dsPool_; }
-	DrawInstance record(vk::CommandBuffer);
-
-	vk::Pipeline fanPipe() const { return fanPipe_; }
-	vk::Pipeline textPipe() const { return textPipe_; }
-	vk::Pipeline stripPipe() const { return stripPipe_; }
-
-	const auto& dsLayoutTransform() const { return dsLayoutTransform_; }
-	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
-	const auto& dsLayoutFontAtlas() const { return dsLayoutFontAtlas_; }
-
-	const auto& emptyImage() const { return emptyImage_; };
-	const auto& dummyTex() const { return dummyTex_; };
-
-private:
-	const vpp::Device& device_;
-	vpp::Pipeline fanPipe_;
-	vpp::Pipeline textPipe_;
-	vpp::Pipeline stripPipe_;
-	vpp::PipelineLayout pipeLayout_;
-	vpp::DescriptorSetLayout dsLayoutTransform_;
-	vpp::DescriptorSetLayout dsLayoutPaint_;
-	vpp::DescriptorSetLayout dsLayoutFontAtlas_;
-	vpp::DescriptorPool dsPool_;
-
-	vpp::Sampler fontSampler_;
-	vpp::Sampler texSampler_;
-
-	vpp::ViewableImage emptyImage_;
-	vpp::DescriptorSet dummyTex_;
-	Transform identityTransform_;
-};
-
+// - Color -
 using u8 = std::uint8_t;
 constexpr struct Norm {} norm;
 
@@ -128,6 +68,7 @@ public:
 	const static Color blue;
 };
 
+// hsl
 Color hsl(u8 h, u8 s, u8 l, u8 a = 255);
 Color hslNorm(float h, float s, float l, float a = 1.f);
 
@@ -137,6 +78,20 @@ Vec4u8 hsla(const Color&);
 Vec3f hslNorm(const Color&);
 Vec4f hslaNorm(const Color&);
 
+// hsv
+Color hsv(u8 h, u8 s, u8 v, u8 a = 255);
+Color hsvNorm(float h, float s, float v, float a = 1.f);
+
+Vec3u8 hsv(const Color&);
+Vec4u8 hsva(const Color&);
+
+Vec3f hsvNorm(const Color&);
+Vec4f hsvaNorm(const Color&);
+
+// hsv/hsl conversion utility
+Vec3f hsl2hsv(Vec3f hsl);
+Vec3f hsv2hsl(Vec3f hsv);
+
 /// De/En-codes color as 32 bit rgba packed values.
 /// This means the most significant byte will always hold the red value, the
 /// actual byte order depends on the endianess of the machine.
@@ -145,6 +100,7 @@ std::uint32_t u32rgba(const Color&);
 
 Color mix(const Color& a, const Color& b, float fac);
 
+
 // - Paint -
 enum class PaintType : std::uint32_t {
 	color = 1,
@@ -152,6 +108,7 @@ enum class PaintType : std::uint32_t {
 	radGrad = 3,
 	textureRGBA = 4,
 	textureA = 5,
+	pointColor = 6,
 };
 
 struct FragPaintData {
@@ -178,6 +135,7 @@ PaintData radialGradient(Vec2f center, float innerRadius, float outerRadius,
 	const Color& innerColor, const Color& outerColor);
 PaintData texturePaintRGBA(const nytl::Mat4f& transform, vk::ImageView);
 PaintData texturePaintA(const nytl::Mat4f& transform, vk::ImageView);
+PaintData pointColorPaint();
 
 /// Defines how shapes are drawn.
 /// For a more fine-grained control see PaintBinding and PaintBuffer.
@@ -201,6 +159,68 @@ protected:
 	vpp::DescriptorSet ds_;
 };
 
+/// Matrix-based transform used to specify how shape coordinates
+/// are mapped to the output.
+class Transform {
+public:
+	Mat4f matrix;
+
+public:
+	Transform() = default;
+	Transform(Context& ctx);
+	Transform(Context& ctx, const Mat4f&);
+
+	auto& ubo() const { return ubo_; }
+	void updateDevice();
+	void bind(const DrawInstance&);
+
+protected:
+	vpp::BufferRange ubo_;
+	vpp::DescriptorSet ds_;
+};
+
+/// Drawing context. Manages all pipelines and layouts needed to
+/// draw any shapes.
+class Context {
+public:
+	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
+
+	const vpp::Device& device() const { return device_; };
+	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
+	const auto& dsPool() const { return dsPool_; }
+	DrawInstance record(vk::CommandBuffer);
+
+	vk::Pipeline fanPipe() const { return fanPipe_; }
+	vk::Pipeline stripPipe() const { return stripPipe_; }
+
+	const auto& dsLayoutTransform() const { return dsLayoutTransform_; }
+	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
+	const auto& dsLayoutFontAtlas() const { return dsLayoutFontAtlas_; }
+
+	const auto& emptyImage() const { return emptyImage_; };
+	const auto& dummyTex() const { return dummyTex_; };
+
+	const auto& pointColorPaint() const { return pointColorPaint_; }
+
+private:
+	const vpp::Device& device_;
+	vpp::Pipeline fanPipe_;
+	vpp::Pipeline stripPipe_;
+	vpp::PipelineLayout pipeLayout_;
+	vpp::DescriptorSetLayout dsLayoutTransform_;
+	vpp::DescriptorSetLayout dsLayoutPaint_;
+	vpp::DescriptorSetLayout dsLayoutFontAtlas_;
+	vpp::DescriptorPool dsPool_;
+
+	vpp::Sampler fontSampler_;
+	vpp::Sampler texSampler_;
+
+	vpp::ViewableImage emptyImage_;
+	vpp::DescriptorSet dummyTex_;
+	Transform identityTransform_;
+	Paint pointColorPaint_;
+};
+
 /// Type (format) of a texture.
 enum class TextureType {
 	rgba32,
@@ -221,6 +241,12 @@ vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
 struct DrawMode {
 	bool fill {};
 	float stroke {};
+
+	struct {
+		std::vector<Vec4u8> points {};
+		bool fill {};
+		bool stroke {};
+	} color {};
 };
 
 /// A shape defined by points that can be stroked or filled.
@@ -246,10 +272,19 @@ public:
 	void stroke(const DrawInstance&) const;
 
 protected:
+	enum class State {
+		fillColor = 1u,
+		strokeColor = 2u,
+	};
+
+	nytl::Flags<State> state_ {};
+
 	std::vector<Vec2f> fillCache_;
+	std::vector<Vec4u8> fillColorCache_;
 	vpp::BufferRange fillBuf_;
 
 	std::vector<Vec2f> strokeCache_;
+	std::vector<Vec4u8> strokeColorCache_;
 	vpp::BufferRange strokeBuf_;
 };
 

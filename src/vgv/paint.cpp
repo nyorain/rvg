@@ -3,9 +3,12 @@
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
 
-// Conversions source: stackoverflow and wikipedia
-// https://stackoverflow.com/questions/2353211/hsl-to-rgb-color-conversion
+// Conversions sources:
+// https://stackoverflow.com/questions/2353211/
 // http://en.wikipedia.org/wiki/HSL_color_space
+// https://codeitdown.com/hsl-hsb-hsv-color/
+// https://stackoverflow.com/questions/3423214/
+// https://stackoverflow.com/questions/3018313/
 
 namespace vgv {
 namespace {
@@ -71,6 +74,7 @@ Vec4f Color::rgbaNorm() const {
 	return (1 / 255.f) * rgba();
 }
 
+// - hsl -
 Color hsl(u8 h, u8 s, u8 l, u8 a) {
 	return hslNorm(255.f * h, 255.f * s, 255.f * l, 255.f * a);
 }
@@ -108,7 +112,7 @@ Vec3f hslNorm(const Color& c) {
 		return {0.f, 0.f, l};
     }
 
-	float h;
+	auto h = 0.f;
 	auto d = max - min;
 	auto s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
 	if(max == r) {
@@ -128,6 +132,91 @@ Vec4f hslaNorm(const Color& c) {
 	return {h.x, h.y, h.z, 255.f * c.a};
 }
 
+// - hsv -
+Color hsv(u8 h, u8 s, u8 v, u8 a) {
+	return hsvNorm(h / 255.f, s / 255.f, v / 255.f, a / 255.f);
+}
+
+Color hsvNorm(float h, float s, float v, float a) {
+	if(s == 0) {
+		return {norm, v, v, v, a};
+	}
+
+	auto hh = h * 6.f;
+	auto i = static_cast<unsigned>(hh);
+	auto ff = hh - i;
+	auto p = v * (1.f - s);
+    auto q = v * (1.f - (s * ff));
+    auto t = v * (1.f - (s * (1.f - ff)));
+
+    switch(i) {
+		case 0: return {norm, v, t, p, a};
+		case 1: return {norm, q, v, p, a};
+		case 2: return {norm, p, v, t, a};
+		case 3: return {norm, p, q, v, a};
+		case 4: return {norm, t, p, v, a};
+		default: return {norm, v, p ,q, a};
+    }
+}
+
+Vec3u8 hsv(const Color& c) {
+	return Vec3u8(255 * hsvNorm(c));
+}
+
+Vec4u8 hsva(const Color& c) {
+	return Vec4u8(255 * hsvaNorm(c));
+}
+
+Vec3f hsvNorm(const Color& c) {
+	auto hsva = hsvaNorm(c);
+	return {hsva[0], hsva[1], hsva[2]};
+}
+
+Vec4f hsvaNorm(const Color& c) {
+	auto [r, g, b] = c.rgbNorm();
+
+	auto min = std::min(r, std::min(g, b));
+	auto max = std::max(r, std::max(g, b));
+
+    if(max == min){
+		return {0.f, 0.f, max}; // h could be NaN
+    }
+
+	float h;
+	auto d = max - min;
+	auto s = d / max;
+	if(max == r) {
+		h = (g - b) / d + (g < b ? 6 : 0);
+	} else if(max == g) {
+		h = (b - r) / d + 2;
+	} else {
+		h = (r - g) / d + 4;
+	}
+	h /= 6;
+
+    return {h, s, max, c.a / 255.f};
+}
+
+// - hsv/hsl conversion -
+Vec3f hsl2hsv(Vec3f hsl) {
+	auto t = hsl[1] * 0.5f * (1 - std::abs(2 * hsl[2] - 1));
+	auto v = hsl[2] + t;
+  	auto s = hsl[2] > 0 ? 2 * t / v : 0.f;
+
+	return {hsl[0], s, v};
+}
+
+Vec3f hsv2hsl(Vec3f hsv) {
+	auto l = 0.5f * hsv.z * (2 - hsv.z);
+	auto s = hsv[1];
+	if(l > 0 && l < 1) {
+		s = hsv[1] * hsv[2] / (1 - std::abs(2 * l - 1));
+	}
+
+	return {hsv[0], s, l};
+}
+
+// - further util -
 Color u32rgba(std::uint32_t val) {
 	return {
 		u8(val & 0xFF000000),
@@ -191,6 +280,12 @@ PaintData texturePaintA(const nytl::Mat4f& transform, vk::ImageView iv) {
 	ret.texture = iv;
 	ret.data.transform = transform;
 	ret.data.frag.type = PaintType::textureA;
+	return ret;
+}
+
+PaintData pointColorPaint() {
+	PaintData ret;
+	ret.data.frag.type = PaintType::pointColor;
 	return ret;
 }
 

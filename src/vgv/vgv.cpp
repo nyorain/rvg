@@ -16,11 +16,10 @@
 #include <shaders/fill.vert.h>
 #include <shaders/fill.frag.h>
 
-#include <shaders/text.vert.h>
-#include <shaders/text.frag.h>
-
 // TODO(performance): optionally create (static) Polygons in deviceLocal memory.
 // TODO(performance): cache points vec in *Shape::update
+// TODO: something like default font(atlas) in context instead of dummy
+//   texture?
 
 namespace vgv {
 namespace {
@@ -84,7 +83,7 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 		dsLayoutTransform_,
 		dsLayoutPaint_,
 		dsLayoutFontAtlas_
-	}, {}};
+	}, {{vk::ShaderStageBits::fragment, 0, 4}}};
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
@@ -118,19 +117,23 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	fanPipeInfo.pStages = fillStages.vkStageInfos().data();
 	fanPipeInfo.flags = vk::PipelineCreateBits::allowDerivatives;
 
-	// vertex attribs: vec2 pos, vec2 uv
-	vk::VertexInputAttributeDescription vertexAttribs[2] = {};
+	// vertex attribs: vec2 pos, vec2 uv, vec4u8 color
+	std::array<vk::VertexInputAttributeDescription, 3> vertexAttribs = {};
 	vertexAttribs[0].format = vk::Format::r32g32Sfloat;
 
 	vertexAttribs[1].format = vk::Format::r32g32Sfloat;
 	vertexAttribs[1].location = 1;
 	vertexAttribs[1].binding = 1;
 
+	vertexAttribs[2].format = vk::Format::r8g8b8a8Unorm;
+	vertexAttribs[2].location = 2;
+	vertexAttribs[2].binding = 2;
+
 	// position and uv are in different buffers
 	// this allows polygons that don't use any uv-coords to simply
 	// reuse the position buffer which will result in better performance
 	// (due to caching) and waste less memory
-	vk::VertexInputBindingDescription vertexBindings[2] = {};
+	std::array<vk::VertexInputBindingDescription, 3> vertexBindings = {};
 	vertexBindings[0].inputRate = vk::VertexInputRate::vertex;
 	vertexBindings[0].stride = sizeof(float) * 2; // position
 	vertexBindings[0].binding = 0;
@@ -139,11 +142,15 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	vertexBindings[1].stride = sizeof(float) * 2; // uv
 	vertexBindings[1].binding = 1;
 
+	vertexBindings[2].inputRate = vk::VertexInputRate::vertex;
+	vertexBindings[2].stride = sizeof(u8) * 4; // color
+	vertexBindings[2].binding = 2;
+
 	vk::PipelineVertexInputStateCreateInfo vertexInfo {};
-	vertexInfo.pVertexAttributeDescriptions = vertexAttribs;
-	vertexInfo.vertexAttributeDescriptionCount = 2;
-	vertexInfo.pVertexBindingDescriptions = vertexBindings;
-	vertexInfo.vertexBindingDescriptionCount = 2;
+	vertexInfo.pVertexAttributeDescriptions = vertexAttribs.data();
+	vertexInfo.vertexAttributeDescriptionCount = vertexAttribs.size();
+	vertexInfo.pVertexBindingDescriptions = vertexBindings.data();
+	vertexInfo.vertexBindingDescriptionCount = vertexBindings.size();
 	fanPipeInfo.pVertexInputState = &vertexInfo;
 
 	vk::PipelineInputAssemblyStateCreateInfo assemblyInfo;
@@ -198,25 +205,6 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	dynamicInfo.pDynamicStates = dynStates.begin();
 	fanPipeInfo.pDynamicState = &dynamicInfo;
 
-	// listPipe
-	auto textVertex = vpp::ShaderModule(dev, text_vert_data);
-	auto textFragment = vpp::ShaderModule(dev, text_frag_data);
-
-	vpp::ShaderProgram textProgram {{
-		{textVertex, vk::ShaderStageBits::vertex},
-		{textFragment, vk::ShaderStageBits::fragment}
-	}};
-
-	auto textPipeInfo = fanPipeInfo;
-	textPipeInfo.stageCount = textProgram.vkStageInfos().size();
-	textPipeInfo.pStages = textProgram.vkStageInfos().data();
-	textPipeInfo.flags = vk::PipelineCreateBits::derivative;
-	textPipeInfo.basePipelineIndex = 0;
-
-	auto textAssemblyInfo = assemblyInfo;
-	textAssemblyInfo.topology = vk::PrimitiveTopology::triangleList;
-	textPipeInfo.pInputAssemblyState = &textAssemblyInfo;
-
 	// stripPipe
 	auto stripPipeInfo = fanPipeInfo;
 	stripPipeInfo.flags = vk::PipelineCreateBits::derivative;
@@ -227,10 +215,9 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	stripPipeInfo.pInputAssemblyState = &stripAssemblyInfo;
 
 	auto pipes = vk::createGraphicsPipelines(dev, {},
-		{fanPipeInfo, textPipeInfo, stripPipeInfo});
+		{fanPipeInfo, stripPipeInfo});
 	fanPipe_ = {dev, pipes[0]};
-	textPipe_ = {dev, pipes[1]};
-	stripPipe_ = {dev, pipes[2]};
+	stripPipe_ = {dev, pipes[1]};
 
 	// dummies
 	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
@@ -238,40 +225,62 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 		reinterpret_cast<const std::byte*>(bytes),
 		TextureType::rgba32);
 
-	/* TODO: remove whole dummy tex stuff?
-	dummyTex_ = {dsLayoutTex_, dsPool_};
+	dummyTex_ = {dsLayoutFontAtlas_, dsPool_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
 	auto layout = vk::ImageLayout::general;
 	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
-	*/
 
 	identityTransform_ = {*this};
+	pointColorPaint_ = {*this, ::vgv::pointColorPaint()};
 }
 
 DrawInstance Context::record(vk::CommandBuffer cmdb) {
 	DrawInstance ret { *this, cmdb };
 	identityTransform_.bind(ret);
+	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+		pipeLayout(), fontBindSet, {dummyTex_}, {});
 	return ret;
 }
 
 // Polygon
 void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
+	fillCache_.clear();
+	fillColorCache_.clear();
+	strokeCache_.clear();
+	strokeColorCache_.clear();
+
 	if(mode.fill) {
-		fillCache_.clear();
 		fillCache_.insert(fillCache_.end(), points.begin(), points.end());
+		if(mode.color.fill) {
+			dlg_assert(mode.color.points.size() == points.size());
+			fillColorCache_.insert(fillColorCache_.end(),
+				mode.color.points.begin(), mode.color.points.end());
+		}
 	}
 
 	if(mode.stroke > 0.f) {
-		strokeCache_.clear();
-		bakeStroke(points, {mode.stroke}, strokeCache_);
+		if(mode.color.stroke) {
+			dlg_assert(mode.color.points.size() == points.size());
+			bakeColoredStroke(points, mode.color.points, {mode.stroke},
+				strokeCache_, strokeColorCache_);
+		} else {
+			bakeStroke(points, {mode.stroke}, strokeCache_);
+		}
 	}
 }
 
 bool Polygon::updateDevice(const Context& ctx, bool hide) {
 	bool rerecord = false;
-	auto upload = [&](auto& cache, auto& buf) {
+	auto upload = [&](auto& cache, auto& ccache, auto cstate, auto& buf) {
 		auto neededSize = sizeof(cache[0]) * cache.size();
 		neededSize += sizeof(vk::DrawIndirectCommand);
+		neededSize += sizeof(ccache[0]) * ccache.size();
+
+		if(ccache.empty() == (state_ & cstate)) {
+			dlg_info("toggle bit");
+			state_ ^= cstate;
+			rerecord = true;
+		}
 
 		if(buf.size() < neededSize) {
 			neededSize *= 2;
@@ -289,10 +298,17 @@ bool Polygon::updateDevice(const Context& ctx, bool hide) {
 		write(ptr, cmd);
 
 		std::memcpy(ptr, cache.data(), cache.size() * sizeof(cache[0]));
+
+		if(!ccache.empty()) {
+			auto off = (2/3.f * (buf.size() - sizeof(vk::DrawIndirectCommand)));
+			dlg_assert(off >= cache.size() * sizeof(cache[0]));
+			ptr = ptr + unsigned(off);
+			std::memcpy(ptr, ccache.data(), ccache.size() * sizeof(ccache[0]));
+		}
 	};
 
-	upload(fillCache_, fillBuf_);
-	upload(strokeCache_, strokeBuf_);
+	upload(fillCache_, fillColorCache_, State::fillColor, fillBuf_);
+	upload(strokeCache_, strokeColorCache_, State::strokeColor, strokeBuf_);
 	return rerecord;
 }
 
@@ -304,10 +320,21 @@ void Polygon::fill(const DrawInstance& ini) const {
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
 
-	// we use the position buffer as (dummy) uv buffer.
+	static constexpr auto isText = uint32_t(0);
+	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
+		0, 4, &isText);
+
+	// position and dummy uv buffer
 	auto& b = fillBuf_;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
+
+	if(state_ & State::fillColor) {
+		off += unsigned(2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand)));
+	}
+
+	// (potentially dummy) color buffer
+	vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off});
 	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
@@ -319,10 +346,21 @@ void Polygon::stroke(const DrawInstance& ini) const {
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
 
-	// we use the position buffer as (dummy) uv buffer.
+	static constexpr auto isText = uint32_t(0);
+	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
+		0, 4, &isText);
+
+	// position and dummy uv buffer
 	auto& b = strokeBuf_;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
+
+	if(state_ & State::strokeColor) {
+		off += unsigned(2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand)));
+	}
+
+	// (potentially dummy) color buffer
+	vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off});
 	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
@@ -553,7 +591,10 @@ void Text::update() {
 		}
 
 		auto& glyph = *pglyph;
-		for(auto i : {0, 1, 2, 0, 2, 3}) {
+
+		// we render using a strip pipe. Those doubled points allow us to
+		// jump to the next quad. Not less efficient than using a list pipe
+		for(auto i : {1, 1, 0, 2, 3, 3}) {
 			addVert(glyph, i);
 		}
 
@@ -603,14 +644,21 @@ void Text::draw(const DrawInstance& ini) const {
 	auto& ctx = ini.context;
 	auto& cmdb = ini.cmdBuf;
 
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.textPipe());
+	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		ctx.pipeLayout(), fontBindSet, {font->atlas().ds()}, {});
 
+	static constexpr auto isText = uint32_t(1);
+	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
+		0, 4, &isText);
+
 	auto ioff = sizeof(vk::DrawIndirectCommand);
 	auto off = buf_.offset() + ioff;
-	vk::cmdBindVertexBuffers(cmdb, 0, {buf_.buffer(), buf_.buffer()},
-		{off, off + (buf_.size() - ioff) / 2});
+
+	// dummy color buffer
+	auto vkbuf = buf_.buffer().vkHandle();
+	vk::cmdBindVertexBuffers(cmdb, 0, {vkbuf, vkbuf, vkbuf},
+		{off, off + (buf_.size() - ioff) / 2, off});
 	vk::cmdDrawIndirect(cmdb, buf_.buffer(), buf_.offset(), 1, 0);
 }
 
