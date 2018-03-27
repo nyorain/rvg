@@ -7,6 +7,8 @@
 - [ ] vgv: sanity checking (with asserts/logs)
   - [ ] color functions, conversion
   - [ ] shape drawing functions
+- [ ] multistop gradients (?), using small 1d textures
+  - [ ] see discussion https://github.com/memononen/nanovg/pull/430
 - [ ] vgv: rounded rect
 - [ ] vgv: reorganize/split header/sources
   - [ ] also make nk/font.h public header

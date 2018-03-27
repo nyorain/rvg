@@ -125,7 +125,16 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	vertexAttribs[1].location = 1;
 	vertexAttribs[1].binding = 1;
 
+	// NOTE: we would naturally use r8g8b8a8Unorm here and then simply
+	// forward 'out_color = in_color' in the vertex shader but it
+	// seems the amd vulkan driver on windows has a bug there currently
+	// so we use this as a temporary workaround.
+	// e: It's probably not a driver bug, not sure what though. Works on
+	// linux (amdgpu radv), since the workaround has the same issue
+	// vertexAttribs[2].format = vk::Format::r32Uint;
+	
 	vertexAttribs[2].format = vk::Format::r8g8b8a8Unorm;
+	// vertexAttribs[2].format = vk::Format::r8g8b8a8Uint;
 	vertexAttribs[2].location = 2;
 	vertexAttribs[2].binding = 2;
 
@@ -269,12 +278,32 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 	}
 }
 
+// Buffer layouts (IDC = IndirectDrawCommand):
+//
+// -- start (align: 4)
+// IDC
+// -- pos: sizeof(IDC) 
+// position data (vec2f)
+// -- pos: align(IDC + 2/3.f * (buf.size - sizeof(IDC)), 4u)
+// color data [if any] (vec4u8)
+// -- end
+//
+// We use the buffer this way to avoid the need for rerecording just
+// because the point count changes. The align before the color
+// data is probably not needed by spec but it seems there is a bug
+// on the amd windows driver that requires it (or i oversaw something
+// in the spec).
+
 bool Polygon::updateDevice(const Context& ctx, bool hide) {
 	bool rerecord = false;
 	auto upload = [&](auto& cache, auto& ccache, auto cstate, auto& buf) {
-		auto neededSize = sizeof(cache[0]) * cache.size();
-		neededSize += sizeof(vk::DrawIndirectCommand);
-		neededSize += sizeof(ccache[0]) * ccache.size();
+		auto neededSize = sizeof(vk::DrawIndirectCommand);
+		neededSize += sizeof(cache[0]) * cache.size();
+
+		if(!ccache.empty()) {
+			neededSize = vpp::align(neededSize, 4u);
+			neededSize += sizeof(ccache[0]) * ccache.size();
+		}
 
 		if(ccache.empty() == (state_ & cstate)) {
 			state_ ^= cstate;
@@ -284,7 +313,7 @@ bool Polygon::updateDevice(const Context& ctx, bool hide) {
 		if(buf.size() < neededSize) {
 			neededSize *= 2;
 			buf = ctx.device().bufferAllocator().alloc(true, neededSize,
-				vk::BufferUsageBits::vertexBuffer);
+				vk::BufferUsageBits::vertexBuffer, 4u);
 			rerecord = true;
 		}
 
@@ -299,9 +328,10 @@ bool Polygon::updateDevice(const Context& ctx, bool hide) {
 		std::memcpy(ptr, cache.data(), cache.size() * sizeof(cache[0]));
 
 		if(!ccache.empty()) {
-			auto off = (2/3.f * (buf.size() - sizeof(vk::DrawIndirectCommand)));
-			dlg_assert(off >= cache.size() * sizeof(cache[0]));
-			ptr = ptr + unsigned(off);
+			auto off = 2/3.f * (buf.size() - sizeof(vk::DrawIndirectCommand));
+			off += sizeof(vk::DrawIndirectCommand);
+			auto uoff = vpp::align(vk::DeviceSize(off), 4u);
+			ptr = map.ptr() + uoff;
 			std::memcpy(ptr, ccache.data(), ccache.size() * sizeof(ccache[0]));
 		}
 	};
@@ -329,7 +359,9 @@ void Polygon::fill(const DrawInstance& ini) const {
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
 
 	if(state_ & State::fillColor) {
-		off += unsigned(2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand)));
+		auto o = 2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand));
+		o += sizeof(vk::DrawIndirectCommand);
+		off = b.offset() + vpp::align(vk::DeviceSize(o), 4u);
 	}
 
 	// (potentially dummy) color buffer
@@ -355,7 +387,9 @@ void Polygon::stroke(const DrawInstance& ini) const {
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
 
 	if(state_ & State::strokeColor) {
-		off += unsigned(2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand)));
+		auto o = 2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand));
+		o += sizeof(vk::DrawIndirectCommand);
+		off = b.offset() + vpp::align(vk::DeviceSize(o), 4u);
 	}
 
 	// (potentially dummy) color buffer
