@@ -1,6 +1,6 @@
 # Roadmap
 
-- [ ] windows (basic panes, no operations)
+- [x] windows (basic panes, no operations)
 - [ ] row layouts
 - [ ] slider
 - [ ] vgv: antialiasing
@@ -14,6 +14,7 @@
   - [ ] also make nk/font.h public header
   - [ ] separate path.hpp in separate library/utility
 - [ ] more advanced textfield
+  - [ ] scrolling, clipping
   - [ ] enter/escape
   - [ ] selection
   - [ ] some basic shortcuts like ctrl-a

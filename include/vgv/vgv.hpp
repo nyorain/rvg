@@ -315,7 +315,7 @@ protected:
 /// Rectangle shape that can be filled to stroked.
 class RectShape {
 public:
-	Vec2f pos;
+	Vec2f position;
 	Vec2f size;
 	DrawMode draw;
 	bool hide {false};

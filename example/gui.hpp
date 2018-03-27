@@ -71,7 +71,47 @@ public:
 	virtual void mouseOver(Widget*, Widget*) {}
 };
 
-class Gui {
+class WidgetContainer {
+public:
+	WidgetContainer(Gui& gui) : gui_(gui) {}
+
+	void mouseMove(const MouseMoveEvent&);
+	bool mouseButton(const MouseButtonEvent&);
+	void mouseWheel(const MouseWheelEvent&);
+	bool key(const KeyEvent&);
+	bool textInput(const TextInputEvent&);
+	void focus(bool gained);
+	void mouseOver(bool gained);
+
+	void draw(const DrawInstance&) const;
+
+	auto& gui() const { return gui_; }
+
+	Widget* nextMouseOver() const { return mouseOver_; }
+	Widget* nextFocus() const { return focus_; }
+
+	Widget* mouseOver() const;
+	Widget* focus() const;
+
+	Widget& add(std::unique_ptr<Widget>);
+
+	template<typename W, typename... Args>
+	W& create(Args&&... args) {
+		static_assert(std::is_base_of_v<Widget, W>, "Can only create widgets");
+		auto widget = std::make_unique<W>(gui(), std::forward<Args>(args)...);
+		auto& ret = *widget;
+		add(std::move(widget));
+		return ret;
+	}
+
+protected:
+	Gui& gui_;
+	std::vector<std::unique_ptr<Widget>> widgets_;
+	Widget* focus_ {};
+	Widget* mouseOver_ {};
+};
+
+class Gui : public WidgetContainer {
 public:
 	struct ButtonDraw {
 		vgv::PaintData label;
@@ -89,9 +129,15 @@ public:
 		vgv::PaintData bg;
 	};
 
+	struct WindowStyle {
+		vgv::PaintData bg;
+		vgv::PaintData border;
+	};
+
 	struct Styles {
 		ButtonStyle button;
 		TextfieldStyle textfield;
+		WindowStyle window;
 	} styles;
 
 public:
@@ -100,31 +146,14 @@ public:
 
 	void mouseMove(const MouseMoveEvent&);
 	bool mouseButton(const MouseButtonEvent&);
-	void mouseWheel(const MouseWheelEvent&);
-	bool key(const KeyEvent&);
-	bool textInput(const TextInputEvent&);
 	void focus(bool gained);
 	void mouseOver(bool gained);
 
 	void update(double delta);
 	bool updateDevice();
-	void draw(const DrawInstance&);
 
-	Widget* mouseOver() const { return mouseOver_; }
-	Widget* focus() const { return focus_; }
 	Context& context() const { return context_; }
-
-	Widget& add(std::unique_ptr<Widget>);
 	const Font& font() const { return font_; }
-
-	template<typename W, typename... Args>
-	W& create(Args&&... args) {
-		static_assert(std::is_base_of_v<Widget, W>, "Can only create widgets");
-		auto widget = std::make_unique<W>(*this, std::forward<Args>(args)...);
-		auto& ret = *widget;
-		add(std::move(widget));
-		return ret;
-	}
 
 	/// Registers the widget for the next update/updateDevice calls.
 	void addUpdate(Widget&);
@@ -137,23 +166,22 @@ protected:
 	Context& context_;
 	const Font& font_;
 	std::reference_wrapper<GuiListener> listener_;
-	std::vector<std::unique_ptr<Widget>> widgets_;
 	std::unordered_set<Widget*> update_;
 	std::unordered_set<Widget*> updateDevice_;
-	Widget* mouseOver_ {};
 	std::pair<Widget*, MouseButton> buttonGrab_ {};
-	Widget* focus_ {};
 	bool rerecord_ {};
 };
 
 class Widget : public nytl::NonMovable {
 public:
 	Gui& gui;
-	Rect2f bounds {};
 
 public:
 	Widget(Gui& xgui) : gui(xgui) {}
+	Widget(Gui& xgui, Rect2f bounds) : gui(xgui), bounds_{bounds} {}
 	virtual ~Widget() = default;
+
+	virtual void bounds(const Rect2f&) = 0;
 
 	virtual void mouseMove(const MouseMoveEvent&) {}
 	virtual void mouseButton(const MouseButtonEvent&) {}
@@ -168,8 +196,22 @@ public:
 	virtual bool updateDevice() { return false; }
 	virtual void draw(const DrawInstance&) const {}
 
+	virtual Widget* mouseOver() const { return nullptr; }
+	virtual Widget* focus() const { return nullptr; }
+
+	virtual bool contains(Vec2f point) const;
+	virtual void position(Vec2f pos);
+	virtual void size(Vec2f pos);
+
+	const Rect2f& bounds() const { return bounds_; }
+	Vec2f position() const { return bounds_.position; }
+	Vec2f size() const { return bounds_.size; }
+
 	void registerUpdate();
 	void registerUpdateDevice();
+
+protected:
+	Rect2f bounds_ {};
 };
 
 class Button : public Widget {
@@ -178,6 +220,9 @@ public:
 
 public:
 	Button(Gui&, Vec2f pos, std::string xlabel);
+
+	void bounds(const Rect2f& bounds) override;
+	using Widget::bounds;
 
 	void mouseButton(const MouseButtonEvent&) override;
 	void mouseOver(bool gained) override;
@@ -206,6 +251,9 @@ class Textfield : public Widget {
 public:
 	Textfield(Gui&, Vec2f pos, float width);
 
+	void bounds(const Rect2f& bounds) override;
+	using Widget::bounds;
+
 	void mouseButton(const MouseButtonEvent&) override;
 	void focus(bool gained) override;
 	void textInput(const TextInputEvent&) override;
@@ -228,7 +276,6 @@ protected:
 
 		struct {
 			RectShape shape;
-			// PaintBinding paint;
 		} cursor;
 
 		struct {
@@ -250,16 +297,28 @@ public:
 public:
 	ColorPicker(Gui&, Vec2f pos, Vec2f size);
 
+	void bounds(const Rect2f& bounds) override;
+	using Widget::bounds;
+
 	void mouseButton(const MouseButtonEvent&) override;
 	void mouseMove(const MouseMoveEvent&) override;
 	void draw(const DrawInstance&) const override;
 	bool updateDevice() override;
 
 protected:
+	void layout(Vec2f pos, Vec2f size);
 	void click(Vec2f pos);
 	void pick(Vec2f pos);
 
 protected:
+	static constexpr auto hueWidth_ = 20.f;
+	static constexpr auto hueSteps_ = 6u;
+	static constexpr auto hueMarkerThickness_ = 4.f;
+	static constexpr auto hueMarkerHeight_ = 8.f;
+	static constexpr auto colorMarkerRadius_ = 3.f;
+	static constexpr auto colorMarkerThickness_ = 1.5f;
+	static constexpr auto defaultSelected_ = Vec {0.5f, 0.5f};
+
 	Shape hue_;
 	RectShape hueMarker_;
 
@@ -275,9 +334,48 @@ protected:
 	Paint vGrad_ {}; // value gradient
 
 	Paint stroke_;
-	Vec2f selected_ {1.f, 0.f};
+	Vec2f selected_ = defaultSelected_;
 
 	bool sliding_ {};
+
+	struct {
+		bool hue : 1;
+		bool hueMarker : 1;
+		bool selector : 1;
+		bool colorMarker : 1;
+		bool basePaint : 1;
+		bool grads : 1;
+	} ud_ {}; // updateDevice
+};
+
+class Window : public Widget, public WidgetContainer {
+public:
+	Window(Gui& gui, Vec2f pos, Vec2f size);
+
+	void bounds(const Rect2f& bounds) override;
+	using Widget::bounds;
+
+	void mouseMove(const MouseMoveEvent&) override;
+	void mouseButton(const MouseButtonEvent&) override;
+	void mouseWheel(const MouseWheelEvent&) override;
+	void key(const KeyEvent&) override;
+	void textInput(const TextInputEvent&) override;
+
+	void focus(bool) override;
+	void mouseOver(bool) override;
+
+	Widget* focus() const override;
+	Widget* mouseOver() const override;
+
+	void draw(const DrawInstance&) const override;
+	bool updateDevice() override;
+
+	const auto& gui() const { return Widget::gui; }
+
+protected:
+	RectShape bg_;
+	Paint bgPaint_;
+	Paint borderPaint_;
 };
 
 } // namespace oui

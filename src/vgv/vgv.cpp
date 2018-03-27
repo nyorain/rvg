@@ -132,7 +132,7 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	// e: It's probably not a driver bug, not sure what though. Works on
 	// linux (amdgpu radv), since the workaround has the same issue
 	// vertexAttribs[2].format = vk::Format::r32Uint;
-	
+
 	vertexAttribs[2].format = vk::Format::r8g8b8a8Unorm;
 	// vertexAttribs[2].format = vk::Format::r8g8b8a8Uint;
 	vertexAttribs[2].location = 2;
@@ -282,17 +282,11 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 //
 // -- start (align: 4)
 // IDC
-// -- pos: sizeof(IDC) 
+// -- pos: sizeof(IDC)
 // position data (vec2f)
 // -- pos: align(IDC + 2/3.f * (buf.size - sizeof(IDC)), 4u)
 // color data [if any] (vec4u8)
 // -- end
-//
-// We use the buffer this way to avoid the need for rerecording just
-// because the point count changes. The align before the color
-// data is probably not needed by spec but it seems there is a bug
-// on the amd windows driver that requires it (or i oversaw something
-// in the spec).
 
 bool Polygon::updateDevice(const Context& ctx, bool hide) {
 	bool rerecord = false;
@@ -422,18 +416,18 @@ void Shape::stroke(const DrawInstance& di) const {
 
 // Rect
 RectShape::RectShape(const Context& ctx, Vec2f p, Vec2f s,
-		const DrawMode& d, bool h) : pos(p), size(s), draw(d), hide(h) {
+		const DrawMode& d, bool h) : position(p), size(s), draw(d), hide(h) {
 	update();
 	updateDevice(ctx);
 }
 
 void RectShape::update() {
 	auto points = {
-		pos,
-		pos + Vec {size.x, 0.f},
-		pos + size,
-		pos + Vec {0.f, size.y},
-		pos
+		position,
+		position + Vec {size.x, 0.f},
+		position + size,
+		position + Vec {0.f, size.y},
+		position
 	};
 	polygon_.update(points, draw);
 }
@@ -698,6 +692,7 @@ void Text::draw(const DrawInstance& ini) const {
 	vk::cmdDrawIndirect(cmdb, buf_.buffer(), buf_.offset(), 1, 0);
 }
 
+// TODO: somewhat hacky at the moment
 Text::CharAt Text::charAt(float x) const {
 	auto lastEnd = posCache_.empty() ? -1.f : posCache_[vertIndex0].x;
 	x += pos.x;
@@ -724,12 +719,24 @@ Text::CharAt Text::charAt(float x) const {
 }
 
 Rect2f Text::ithBounds(unsigned n) const {
-	if(posCache_.size() <= n * 6) {
+	if(posCache_.size() <= n * 6 || text.size() <= n) {
 		throw std::out_of_range("Text::ithBounds");
 	}
 
 	auto start = posCache_[n * 6 + vertIndex0];
-	return {start - pos, posCache_[n * 6 + vertIndex2] - start};
+	auto rect = Rect2f {start - pos, posCache_[n * 6 + vertIndex2] - start};
+
+	if(rect.size.x == 0) {
+		auto pglyph = nk_font_find_glyph(font->nkFont(), text[n]);
+		if(!pglyph) {
+			dlg_error("nk_font_find_glyph returned null for {}", text[n]);
+			return rect;
+		}
+
+		rect.size.x = pglyph->xadvance;
+	}
+
+	return rect;
 }
 
 // Transform

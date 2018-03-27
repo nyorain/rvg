@@ -122,7 +122,7 @@ int main() {
 	translate(transform.matrix, {-1.f, -1.f, 0.f});
 	transform.updateDevice();
 
-	vgv::Shape shape(ctx, {}, {false, 50.f});
+	vgv::Shape shape(ctx, {}, {false, 5.f});
 	vgv::Paint paint(ctx, vgv::colorPaint({vgv::norm, 0.1f, .6f, .3f}));
 
 	auto fontHeight = 14;
@@ -150,6 +150,7 @@ int main() {
 	auto normal = vgv::colorPaint({vgv::norm, 0.02f, 0.02f, 0.02f});
 	auto hovered = vgv::colorPaint({vgv::norm, 0.08f, 0.08f, 0.08f});
 	auto pressed = vgv::colorPaint({vgv::norm, 0.12f, 0.12f, 0.12f});
+	auto windowBg = vgv::colorPaint({20, 20, 20, 230});
 
 	Gui::Styles styles {
 		{ // button
@@ -166,24 +167,38 @@ int main() {
 		}, { // textfield
 			label,
 			normal,
+		}, { // window
+			windowBg,
+			label
 		}
 	};
 
 	Gui gui(ctx, lsFont, std::move(styles));
 
-	auto& button = gui.create<Button>(Vec {100.f, 100.f}, "Click me");
-	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
-	gui.create<Button>(Vec {100.f, 250.f}, "Button Number Two");
-	gui.create<Textfield>(Vec {100.f, 400.f}, 200);
-
 	Paint svgPaint;
-	auto& cp = gui.create<ColorPicker>(Vec {100.f, 550.f}, Vec {230.f, 200.f});
+
+	auto pad = Vec {20.f, 20.f};
+	auto px = 100.f;
+
+	auto& win = gui.create<Window>(Vec {px, 100.f}, Vec {500.f, 880.f});
+	auto& cp = win.create<ColorPicker>(win.position() + pad,
+		Vec {230.f, 200.f});
 	cp.onPick = [&](auto& cp) {
 		svgPaint.paint = vgv::colorPaint(cp.picked);
 		if(svgPaint.updateDevice(ctx)) {
 			dlg_warn("Unexpected rerecord");
 		}
 	};
+
+	auto py = cp.position().y + cp.size().y + pad.y;
+	auto& button = win.create<Button>(Vec {px + pad.x, py}, "Click me");
+	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
+
+	py = button.position().y + button.size().y + pad.y;
+	auto& b2 = win.create<Button>(Vec {px + pad.x, py}, "Button Number Two");
+
+	py = b2.position().y + b2.size().y + pad.y;
+	win.create<Textfield>(Vec {px + pad.x, py}, 200);
 
 	svgPaint = {ctx, vgv::colorPaint(cp.picked)};
 	gui.updateDevice();
@@ -277,16 +292,17 @@ int main() {
 	};
 
 	vgv::Subpath subpath;
-	bool first = true;
+	// bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
+		auto p = static_cast<nytl::Vec2f>(ev.position);
 		if(gui.mouseButton({ev.pressed,
-				static_cast<vui::MouseButton>(ev.button),
-				static_cast<Vec2f>(ev.position)}) || !ev.pressed) {
+				static_cast<vui::MouseButton>(ev.button), p}) ||
+				!ev.pressed) {
 			return;
 		}
 
-		auto p = static_cast<nytl::Vec2f>(ev.position);
+		/*
 		if(first) {
 			first = false;
 			subpath.start = p;
@@ -299,6 +315,9 @@ int main() {
 				renderer.invalidate();
 			}
 		}
+		*/
+
+		cp.position(p);
 	};
 
 	window.onMouseMove = [&](const auto& ev) {
@@ -327,6 +346,7 @@ int main() {
 		gui.update(deltaCount);
 
 		if(gui.updateDevice()) {
+			dlg_info("gui rerecord");
 			renderer.invalidate();
 		}
 

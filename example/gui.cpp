@@ -12,20 +12,15 @@ GuiListener& GuiListener::nop() {
 	return listener;
 }
 
-// Gui
-Gui::Gui(Context& ctx, const Font& font, Styles&& s, GuiListener& listener)
-	: styles(std::move(s)), context_(ctx), font_(font), listener_(listener) {
-}
-
-void Gui::mouseMove(const MouseMoveEvent& ev) {
+// WidgetContainer
+void WidgetContainer::mouseMove(const MouseMoveEvent& ev) {
 	for(auto& w : widgets_) {
-		if(contains(w->bounds, ev.position)) {
+		if(contains(w->bounds(), ev.position)) {
 			if(w.get() != mouseOver_) {
 				if(mouseOver_) {
 					mouseOver_->mouseOver(false);
 				}
 
-				listener().mouseOver(mouseOver_, w.get());
 				mouseOver_ = w.get();
 				w->mouseOver(true);
 			}
@@ -38,66 +33,144 @@ void Gui::mouseMove(const MouseMoveEvent& ev) {
 
 	if(mouseOver_) {
 		mouseOver_->mouseOver(false);
-		listener().mouseOver(mouseOver_, nullptr);
 		mouseOver_ = nullptr;
 	}
 }
-bool Gui::mouseButton(const MouseButtonEvent& ev) {
-	if(!ev.pressed && buttonGrab_.first && ev.button == buttonGrab_.second) {
-		buttonGrab_.first->mouseButton(ev);
-		buttonGrab_ = {};
-	} else {
-		if(mouseOver_ != focus_) {
-			if(focus_) {
-				focus_->focus(false);
-				listener().focus(focus_, mouseOver_);
-			}
 
-			focus_ = mouseOver_;
-			if(focus_) {
-				focus_->focus(true);
-			}
+bool WidgetContainer::mouseButton(const MouseButtonEvent& ev) {
+	if(mouseOver_ != focus_) {
+		if(focus_) {
+			focus_->focus(false);
 		}
 
-		if(mouseOver_) {
-			if(ev.pressed) {
-				// TODO: send release to old buttonGrab_?
-				//   or use multiple button grabs?
-				buttonGrab_ = {mouseOver_, ev.button};
-			}
-
-			mouseOver_->mouseButton(ev);
+		focus_ = mouseOver_;
+		if(focus_) {
+			focus_->focus(true);
 		}
+	}
+
+	if(mouseOver_) {
+		mouseOver_->mouseButton(ev);
 	}
 
 	return mouseOver_;
 }
-bool Gui::key(const KeyEvent& ev) {
+void WidgetContainer::mouseWheel(const MouseWheelEvent& ev) {
+	if(mouseOver_) {
+		mouseOver_->mouseWheel(ev);
+	}
+}
+bool WidgetContainer::key(const KeyEvent& ev) {
 	if(focus_) {
 		focus_->key(ev);
 	}
 
 	return focus_;
 }
-bool Gui::textInput(const TextInputEvent& ev) {
+bool WidgetContainer::textInput(const TextInputEvent& ev) {
 	if(focus_) {
 		focus_->textInput(ev);
 	}
 
 	return focus_;
 }
-void Gui::focus(bool gained) {
+void WidgetContainer::focus(bool gained) {
 	if(!gained && focus_) {
 		focus_->focus(false);
-		listener().focus(focus_, nullptr);
 		focus_ = nullptr;
 	}
 }
-void Gui::mouseOver(bool gained) {
+void WidgetContainer::mouseOver(bool gained) {
 	if(!gained && mouseOver_) {
 		mouseOver_->mouseOver(false);
-		listener().mouseOver(mouseOver_, nullptr);
 		mouseOver_ = nullptr;
+	}
+}
+
+Widget* WidgetContainer::mouseOver() const {
+	if(!mouseOver_) {
+		return nullptr;
+	}
+
+	auto traversed = mouseOver_->mouseOver();
+	return traversed ? traversed : mouseOver_;
+}
+
+Widget* WidgetContainer::focus() const {
+	if(!focus_) {
+		return nullptr;
+	}
+
+	auto traversed = focus_->focus();
+	return traversed ? traversed : focus_;
+}
+
+void WidgetContainer::draw(const DrawInstance& di) const {
+	for(auto& widget : widgets_) {
+		dlg_assert(widget);
+		widget->draw(di);
+	}
+}
+
+Widget& WidgetContainer::add(std::unique_ptr<Widget> widget) {
+	dlg_assert(widget);
+	widgets_.push_back(std::move(widget));
+	return *widgets_.back();
+}
+
+// Gui
+Gui::Gui(Context& ctx, const Font& font, Styles&& s, GuiListener& listener)
+	: WidgetContainer(*this), styles(std::move(s)), context_(ctx),
+		font_(font), listener_(listener) {
+}
+
+void Gui::mouseMove(const MouseMoveEvent& ev) {
+	auto o = WidgetContainer::mouseOver();
+	WidgetContainer::mouseMove(ev);
+	auto n = WidgetContainer::mouseOver();
+	if(o != n) {
+		listener().mouseOver(o, n);
+	}
+}
+
+bool Gui::mouseButton(const MouseButtonEvent& ev) {
+	if(!ev.pressed && buttonGrab_.first && ev.button == buttonGrab_.second) {
+		buttonGrab_.first->mouseButton(ev);
+		buttonGrab_ = {};
+		return true;
+	} else {
+		auto o = WidgetContainer::focus();
+		WidgetContainer::mouseButton(ev);
+		auto n = WidgetContainer::focus();
+		if(o != n) {
+			listener().focus(o, n);
+		}
+
+		if(ev.pressed && n) {
+			// TODO: send release to old buttonGrab_?
+			//   or use multiple button grabs?
+			buttonGrab_ = {n, ev.button};
+		}
+
+		return n;
+	}
+}
+
+void Gui::focus(bool gained) {
+	auto o = WidgetContainer::focus();
+	WidgetContainer::focus(gained);
+	auto n = WidgetContainer::focus();
+	if(o != n) {
+		listener().focus(o, n);
+	}
+}
+
+void Gui::mouseOver(bool gained) {
+	auto o = WidgetContainer::mouseOver();
+	WidgetContainer::mouseOver(gained);
+	auto n = WidgetContainer::mouseOver();
+	if(o != n) {
+		listener().mouseOver(o, n);
 	}
 }
 
@@ -122,18 +195,6 @@ bool Gui::updateDevice() {
 	rerecord_ = false;
 	return rerecord;
 }
-void Gui::draw(const DrawInstance& di) {
-	for(auto& widget : widgets_) {
-		dlg_assert(widget);
-		widget->draw(di);
-	}
-}
-
-Widget& Gui::add(std::unique_ptr<Widget> widget) {
-	dlg_assert(widget);
-	widgets_.push_back(std::move(widget));
-	return *widgets_.back();
-}
 
 void Gui::addUpdate(Widget& widget) {
 	update_.insert(&widget);
@@ -143,9 +204,26 @@ void Gui::addUpdateDevice(Widget& widget) {
 }
 
 // Widget
+bool Widget::contains(Vec2f point) const {
+	return nytl::contains(bounds(), point);
+}
+
+void Widget::bounds(const Rect2f& newBounds) {
+	bounds_ = newBounds;
+}
+
+void Widget::position(Vec2f pos) {
+	bounds({pos, size()});
+}
+
+void Widget::size(Vec2f size) {
+	bounds({position(), size});
+}
+
 void Widget::registerUpdate() {
 	gui.addUpdate(*this);
 }
+
 void Widget::registerUpdateDevice() {
 	gui.addUpdateDevice(*this);
 }
@@ -162,9 +240,15 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 	draw_.bg.shape = {ctx, pos, size, DrawMode {true, 2.f}};
 	draw_.bg.paint = {ctx, gui.styles.button.normal.bg};
 
-	bounds = {pos, size};
+	bounds_ = {pos, size};
 	draw_.label.text.updateDevice(ctx);
 	draw_.bg.shape.updateDevice(ctx);
+}
+
+void Button::bounds(const Rect2f& bounds) {
+	Widget::bounds(bounds);
+
+	// TODO
 }
 
 void Button::mouseButton(const MouseButtonEvent& event) {
@@ -186,7 +270,6 @@ void Button::mouseButton(const MouseButtonEvent& event) {
 void Button::mouseOver(bool gained) {
 	if(gained != hovered_) {
 		registerUpdateDevice();
-		gui.rerecord();
 	}
 	hovered_ = gained;
 }
@@ -213,6 +296,10 @@ bool Button::updateDevice() {
 	draw_.label.paint.paint = draw.label;
 	re |= draw_.label.paint.updateDevice(ctx);
 
+	// TODO(performance): make optional
+	re |= draw_.bg.shape.updateDevice(ctx);
+	re |= draw_.label.text.updateDevice(ctx);
+
 	return re;
 }
 
@@ -233,14 +320,20 @@ Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 	draw_.label.text = {ctx, "", font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.textfield.label};
 
-	this->bounds = {pos, {width, height}};
+	bounds_ = {pos, {width, height}};
+}
+
+void Textfield::bounds(const Rect2f& bounds) {
+	Widget::bounds(bounds);
+
+	// TODO
 }
 
 void Textfield::mouseButton(const MouseButtonEvent& ev) {
 	auto& text = draw_.label.text;
 	auto ca = text.charAt(ev.position.x - text.pos.x);
 	cursor_ = ca.last;
-	draw_.cursor.shape.pos.x = text.pos.x + ca.nearestBoundary;
+	draw_.cursor.shape.position.x = text.pos.x + ca.nearestBoundary;
 	draw_.cursor.shape.update();
 	registerUpdateDevice();
 	dlg_assert(cursor_ <= text.text.length());
@@ -261,7 +354,6 @@ void Textfield::textInput(const TextInputEvent& ev) {
 	updateCursorPosition();
 	dlg_assert(cursor_ <= str.length());
 	cursor(true, true);
-	dlg_info("cursor: {}", cursor_);
 }
 
 void Textfield::key(const KeyEvent& ev) {
@@ -290,7 +382,6 @@ void Textfield::key(const KeyEvent& ev) {
 	}
 
 	dlg_assert(cursor_ <= str.length());
-	dlg_info("cursor: {}", cursor_);
 }
 
 void Textfield::draw(const DrawInstance& di) const {
@@ -328,10 +419,9 @@ void Textfield::update(double delta) {
 void Textfield::updateCursorPosition() {
 	auto len = draw_.label.text.text.size();
 	dlg_assert(cursor_ <= len);
-	auto x = bounds.position.x + 10.f; // padding
+	auto x = position().x + 10.f; // padding
 	if(cursor_ > 0) {
 		if(cursor_ == len) {
-			dlg_info("last");
 			auto b = draw_.label.text.ithBounds(cursor_ - 1);
 			x += b.position.x + b.size.x;
 		} else {
@@ -339,7 +429,7 @@ void Textfield::updateCursorPosition() {
 		}
 	}
 
-	draw_.cursor.shape.pos.x = x;
+	draw_.cursor.shape.position.x = x;
 	draw_.cursor.shape.update();
 
 	registerUpdateDevice();
@@ -354,52 +444,86 @@ void Textfield::cursor(bool show, bool resetBlink) {
 }
 
 // ColorPicker
-ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) : Widget(gui) {
+ColorPicker::ColorPicker(Gui& gui, Vec2f pos, Vec2f size) :
+		Widget(gui, {pos, size}) {
 	auto& ctx = gui.context();
-	bounds = {pos, size};
 
-	auto hueWidth = 20.f;
-	auto huePad = 10.f;
-
-	selector_ = {ctx, pos, size - Vec {hueWidth + huePad, 0}, {true, 2.f}};
 	stroke_ = {ctx, vgv::colorPaint({0, 0, 0})};
+	selector_.draw = {true, 2.f};
+
+	auto drawMode = DrawMode {false, hueWidth_};
+	drawMode.color.fill = false;
+	drawMode.color.stroke = true;
+
+	for(auto i = 0u; i < hueSteps_ + 1; ++i) {
+		auto col = hsvNorm(i / float(hueSteps_), 1.f, 1.f);
+		drawMode.color.points.push_back(col.rgba());
+	}
+
+	hue_.draw = drawMode;
+
+	picked = hsv(currentHue_, 255.f * selected_.x, 255.f * selected_.y);
+	basePaint_ = {ctx, vgv::colorPaint(picked)};
+
+	hueMarker_.draw = {false, hueMarkerThickness_};
+	colorMarker_.draw = {false, colorMarkerThickness_};
+	colorMarker_.points = 6u;
+
+	layout(pos, size);
+	updateDevice();
+}
+
+void ColorPicker::layout(Vec2f pos, Vec2f size) {
+	constexpr auto hueWidth = 20.f;
+	constexpr auto huePad = 10.f;
 
 	xBegHue_ = pos.x + size.x - hueWidth;
 	xEndSel_ = xBegHue_ - huePad;
 
-	std::vector<Vec2f> points;
-	std::vector<Vec4u8> colors;
+	// selector
+	selector_.position = pos;
+	selector_.size = size - Vec {hueWidth + huePad, 0};
+	selector_.update();
+	ud_.selector = true;
 
-	auto steps = 6u;
-	auto ystep = size.y / float(steps);
+	// hue
+	hue_.points.clear();
+
+	auto ystep = size.y / float(hueSteps_);
 	auto x = pos.x + size.x - hueWidth / 2;
-	for(auto i = 0u; i < steps + 1; ++i) {
-		points.push_back({x, pos.y + ystep * i});
-		colors.push_back(hsvNorm(i / float(steps), 1.f, 1.f).rgba());
+	for(auto i = 0u; i < hueSteps_ + 1; ++i) {
+		hue_.points.push_back({x, pos.y + ystep * i});
 	}
 
-	auto drawMode = DrawMode {false, hueWidth};
-	drawMode.color.fill = false;
-	drawMode.color.stroke = true;
-	drawMode.color.points = std::move(colors);
-	hue_ = {ctx, std::move(points), drawMode};
+	hue_.update();
+	ud_.hue = true;
 
-	picked = hsv(currentHue_, 255, 255);
-	basePaint_ = {ctx, vgv::colorPaint(picked)};
+	// selector grads
+	sGrad_.paint = vgv::linearGradient(pos, Vec {xEndSel_, pos.y},
+		hsv(0, 0, 255), hsv(0, 0, 255, 0));
+	vGrad_.paint = vgv::linearGradient(pos, pos + Vec {0, size.y},
+		hsv(0, 255, 0, 0), hsv(0, 255, 0));
+	ud_.grads = true;
 
-	sGrad_ = {ctx, vgv::linearGradient(pos, Vec {xEndSel_, pos.y},
-		hsv(0, 0, 255), hsv(0, 0, 255, 0))};
-	vGrad_ = {ctx, vgv::linearGradient(pos, pos + Vec {0, size.y},
-		hsv(0, 255, 0, 0), hsv(0, 255, 0))};
+	// hue marker
+	hueMarker_.position = {xBegHue_, pos.y - hueMarkerThickness_ / 2},
+	hueMarker_.size = {hueWidth, hueMarkerHeight_};
+	hueMarker_.update();
+	ud_.hueMarker = true;
 
-	auto hmwidth = 5.f;
-	auto hmheight = 10.f;
-	hueMarker_ = {ctx, {xBegHue_, pos.y - hmheight / 2},
-		{hueWidth, hmheight}, {false, hmwidth}};
+	// color marker
+	using namespace nytl::vec::cw::operators;
+	auto cpos = selector_.position + selected_ * selector_.size;
+	colorMarker_.center = cpos;
+	colorMarker_.radius = {colorMarkerRadius_, colorMarkerRadius_};
+	colorMarker_.update();
+	ud_.colorMarker = true;
+}
 
-	auto cmradius = 3.f;
-	colorMarker_ = {ctx, Vec {xEndSel_, pos.y}, cmradius, {false, 1.5f},
-		false, 6};
+void ColorPicker::bounds(const Rect2f& bounds) {
+	Widget::bounds(bounds);
+	layout(position(), size());
+	registerUpdateDevice();
 }
 
 void ColorPicker::mouseButton(const MouseButtonEvent& ev) {
@@ -438,10 +562,15 @@ void ColorPicker::draw(const DrawInstance& di) const {
 
 bool ColorPicker::updateDevice() {
 	auto& ctx = gui.context();
-	return selector_.updateDevice(ctx) |
-		basePaint_.updateDevice(ctx) |
-		hueMarker_.updateDevice(ctx) |
-		colorMarker_.updateDevice(ctx);
+	auto ret = false;
+	ret |= (ud_.hue && hue_.updateDevice(ctx));
+	ret |= (ud_.hueMarker && hueMarker_.updateDevice(ctx));
+	ret |= (ud_.selector && selector_.updateDevice(ctx));
+	ret |= (ud_.colorMarker && colorMarker_.updateDevice(ctx));
+	ret |= (ud_.basePaint && basePaint_.updateDevice(ctx));
+	ret |= (ud_.grads && (sGrad_.updateDevice(ctx) | vGrad_.updateDevice(ctx)));
+	ud_ = {};
+	return ret;
 }
 
 void ColorPicker::pick(Vec2f f) {
@@ -452,11 +581,12 @@ void ColorPicker::pick(Vec2f f) {
 void ColorPicker::click(Vec2f pos) {
 	if(pos.x < xEndSel_) {
 		using namespace nytl::vec::cw::operators;
-		selected_ = (pos - selector_.pos) / selector_.size;
+		selected_ = (pos - selector_.position) / selector_.size;
 		pick(selected_);
 
 		colorMarker_.center = pos;
 		colorMarker_.update();
+		ud_.colorMarker = true;
 		registerUpdateDevice();
 	} else if(pos.x > xBegHue_) {
 		auto y = (pos.y - hue_.points[0].y) / selector_.size.y;
@@ -464,11 +594,84 @@ void ColorPicker::click(Vec2f pos) {
 		pick(selected_);
 
 		basePaint_.paint.data.frag.inner = hsvNorm(currentHue_, 1.f, 1.f);
+		ud_.basePaint = true;
 
-		hueMarker_.pos.y = pos.y - hueMarker_.size.y / 2.f;
+		hueMarker_.position.y = pos.y - hueMarker_.size.y / 2.f;
 		hueMarker_.update();
+		ud_.hueMarker = true;
 		registerUpdateDevice();
 	}
+}
+
+// Window
+Window::Window(Gui& gui, Vec2f pos, Vec2f size) :
+		Widget(gui, {pos, size}), WidgetContainer(gui) {
+
+	bg_ = {gui.context(), pos, size, {true, 2.f}};
+	bgPaint_ = {gui.context(), gui.styles.window.bg};
+	borderPaint_ = {gui.context(), gui.styles.window.border};
+}
+
+void Window::bounds(const Rect2f& bounds) {
+	Widget::bounds(bounds);
+
+	bg_.position = bounds.position;
+	bg_.size = bounds.size;
+	registerUpdateDevice();
+
+	// TODO: move/update widgets? layout?
+	// at least move their relative position for now
+}
+
+void Window::mouseMove(const MouseMoveEvent& ev) {
+	WidgetContainer::mouseMove(ev);
+}
+
+void Window::mouseButton(const MouseButtonEvent& ev) {
+	WidgetContainer::mouseButton(ev);
+}
+
+void Window::mouseWheel(const MouseWheelEvent& ev) {
+	WidgetContainer::mouseWheel(ev);
+}
+
+void Window::key(const KeyEvent& ev) {
+	WidgetContainer::key(ev);
+}
+
+void Window::textInput(const TextInputEvent& ev) {
+	WidgetContainer::textInput(ev);
+}
+
+void Window::focus(bool gained) {
+	return WidgetContainer::focus(gained);
+}
+
+void Window::mouseOver(bool gained) {
+	return WidgetContainer::mouseOver(gained);
+}
+
+bool Window::updateDevice() {
+	auto& ctx = gui().context();
+	return bg_.updateDevice(ctx);
+}
+
+void Window::draw(const DrawInstance& di) const {
+	bgPaint_.bind(di);
+	bg_.fill(di);
+
+	borderPaint_.bind(di);
+	bg_.stroke(di);
+
+	WidgetContainer::draw(di);
+}
+
+Widget* Window::focus() const {
+	return WidgetContainer::focus();
+}
+
+Widget* Window::mouseOver() const {
+	return WidgetContainer::mouseOver();
 }
 
 } // namespace vui

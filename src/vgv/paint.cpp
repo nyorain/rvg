@@ -319,8 +319,23 @@ void Paint::bind(const DrawInstance& di) const {
 }
 
 bool Paint::updateDevice(const Context& ctx) {
+	auto re = false;
 	if(!paint.texture) {
 		paint.texture = ctx.emptyImage().vkImageView();
+	}
+
+	if(!ds_ || !ubo_.size()) {
+		ubo_ = ctx.device().bufferAllocator().alloc(true,
+			paintUboSize, vk::BufferUsageBits::uniformBuffer);
+		ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
+
+		vpp::DescriptorSetUpdate update(ds_);
+		auto m4 = sizeof(nytl::Mat4f);
+		update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});
+		update.uniform({{ubo_.buffer(), ubo_.offset() + m4, ubo_.size() - m4}});
+		update.imageSampler({{{}, paint.texture, vk::ImageLayout::general}});
+
+		re = true;
 	}
 
 	auto map = ubo_.memoryMap();
@@ -332,10 +347,10 @@ bool Paint::updateDevice(const Context& ctx) {
 		update.skip(2);
 		update.imageSampler({{{}, paint.texture, vk::ImageLayout::general}});
 		oldView_ = paint.texture;
-		return true;
+		re = true;
 	}
 
-	return false;
+	return re;
 }
 
 } // namespace vgv
