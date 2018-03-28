@@ -5,6 +5,19 @@
 #include <cmath>
 
 namespace vui {
+namespace {
+
+template<typename T>
+Vec2<T> rb(const Rect2<T>& r) { // right bottom
+	return r.position + r.size;
+}
+
+template<typename T>
+Vec2<T> rt(const Rect2<T>& r) { // right bottom
+	return r.position + Vec {r.size.x, 0.f};
+}
+
+} // anon namespace
 
 // GuiListener
 GuiListener& GuiListener::nop() {
@@ -228,12 +241,60 @@ void Widget::registerUpdateDevice() {
 	gui.addUpdateDevice(*this);
 }
 
+// ContainerWidget
+ContainerWidget::ContainerWidget(Gui& gui)
+	: Widget(gui), WidgetContainer(gui) {
+}
+
+ContainerWidget::ContainerWidget(Gui& gui, const Rect2f& bounds)
+	: Widget(gui, bounds), WidgetContainer(gui) {
+}
+
+void ContainerWidget::mouseMove(const MouseMoveEvent& ev) {
+	WidgetContainer::mouseMove(ev);
+}
+
+void ContainerWidget::mouseButton(const MouseButtonEvent& ev) {
+	WidgetContainer::mouseButton(ev);
+}
+
+void ContainerWidget::mouseWheel(const MouseWheelEvent& ev) {
+	WidgetContainer::mouseWheel(ev);
+}
+
+void ContainerWidget::key(const KeyEvent& ev) {
+	WidgetContainer::key(ev);
+}
+
+void ContainerWidget::textInput(const TextInputEvent& ev) {
+	WidgetContainer::textInput(ev);
+}
+
+void ContainerWidget::focus(bool gained) {
+	return WidgetContainer::focus(gained);
+}
+
+void ContainerWidget::mouseOver(bool gained) {
+	return WidgetContainer::mouseOver(gained);
+}
+
+void ContainerWidget::draw(const DrawInstance& di) const {
+	WidgetContainer::draw(di);
+}
+
+Widget* ContainerWidget::focus() const {
+	return WidgetContainer::focus();
+}
+
+Widget* ContainerWidget::mouseOver() const {
+	return WidgetContainer::mouseOver();
+}
+
 // Button
 Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 
 	auto& ctx = gui.context();
 	auto& font = gui.font();
-	auto padding = Vec {40, 15};
 	draw_.label.text = {ctx, label, font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.button.normal.label};
 	auto size = 2 * padding + Vec {font.width(label), font.height()};
@@ -248,7 +309,11 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 void Button::bounds(const Rect2f& bounds) {
 	Widget::bounds(bounds);
 
-	// TODO
+	draw_.label.text.position = position() + padding;
+	draw_.label.text.update();
+	draw_.bg.shape.position = position();
+	draw_.bg.shape.update();
+	registerUpdateDevice();
 }
 
 void Button::mouseButton(const MouseButtonEvent& event) {
@@ -306,15 +371,14 @@ bool Button::updateDevice() {
 // Textfield
 Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 	auto& ctx = gui.context();
-	auto padding = Vec {10.f, 10.f};
 
 	auto& font = gui.font();
 	auto height = font.height() + 2 * padding.y;
 	draw_.bg.shape = {ctx, pos, {width, height}, {true, 2.f}};
 	draw_.bg.paint = {ctx, gui.styles.textfield.bg};
 
-	auto cursorSize = Vec {1.f, font.height() + padding.y};
-	auto cursorPos = pos + Vec {padding.x, 0.5f * padding.y};
+	auto cursorSize = Vec {1.f, font.height()};
+	auto cursorPos = pos + Vec {padding.x, padding.y};
 	draw_.cursor.shape = {ctx, cursorPos, cursorSize, {true, 0.f}, true};
 
 	draw_.label.text = {ctx, "", font, pos + padding};
@@ -326,14 +390,19 @@ Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 void Textfield::bounds(const Rect2f& bounds) {
 	Widget::bounds(bounds);
 
-	// TODO
+	draw_.bg.shape.position = position();
+	draw_.bg.shape.update();
+	draw_.label.text.position = position() + padding;
+	draw_.label.text.update();
+	draw_.cursor.shape.position.y = position().y + padding.y;
+	updateCursorPosition(); // calls registerUpdateDevice
 }
 
 void Textfield::mouseButton(const MouseButtonEvent& ev) {
 	auto& text = draw_.label.text;
-	auto ca = text.charAt(ev.position.x - text.pos.x);
+	auto ca = text.charAt(ev.position.x - text.position.x);
 	cursor_ = ca.last;
-	draw_.cursor.shape.position.x = text.pos.x + ca.nearestBoundary;
+	draw_.cursor.shape.position.x = text.position.x + ca.nearestBoundary;
 	draw_.cursor.shape.update();
 	registerUpdateDevice();
 	dlg_assert(cursor_ <= text.text.length());
@@ -398,8 +467,14 @@ void Textfield::draw(const DrawInstance& di) const {
 
 bool Textfield::updateDevice() {
 	auto& ctx = gui.context();
-	return draw_.label.text.updateDevice(ctx) |
-		draw_.cursor.shape.updateDevice(ctx);
+	auto re = false;
+
+	// TODO(performance): only update what is needed (see color picker, flags)
+	re |= draw_.label.text.updateDevice(ctx);
+	re |= draw_.bg.shape.updateDevice(ctx);
+	re |= draw_.cursor.shape.updateDevice(ctx);
+
+	return re;
 }
 
 void Textfield::update(double delta) {
@@ -419,7 +494,7 @@ void Textfield::update(double delta) {
 void Textfield::updateCursorPosition() {
 	auto len = draw_.label.text.text.size();
 	dlg_assert(cursor_ <= len);
-	auto x = position().x + 10.f; // padding
+	auto x = position().x + padding.x;
 	if(cursor_ > 0) {
 		if(cursor_ == len) {
 			auto b = draw_.label.text.ithBounds(cursor_ - 1);
@@ -605,7 +680,7 @@ void ColorPicker::click(Vec2f pos) {
 
 // Window
 Window::Window(Gui& gui, Vec2f pos, Vec2f size) :
-		Widget(gui, {pos, size}), WidgetContainer(gui) {
+		ContainerWidget(gui, {pos, size}) {
 
 	bg_ = {gui.context(), pos, size, {true, 2.f}};
 	bgPaint_ = {gui.context(), gui.styles.window.bg};
@@ -613,42 +688,31 @@ Window::Window(Gui& gui, Vec2f pos, Vec2f size) :
 }
 
 void Window::bounds(const Rect2f& bounds) {
+	if(bounds.position != position()) {
+		auto pos = bounds.position + outerPadding;
+		for(auto& w : widgets_) {
+			w->position(pos);
+			pos.y += w->size().y + innerPadding;
+		}
+	}
+
 	Widget::bounds(bounds);
 
 	bg_.position = bounds.position;
 	bg_.size = bounds.size;
+	bg_.update();
 	registerUpdateDevice();
-
-	// TODO: move/update widgets? layout?
-	// at least move their relative position for now
 }
 
-void Window::mouseMove(const MouseMoveEvent& ev) {
-	WidgetContainer::mouseMove(ev);
-}
+Widget& Window::add(std::unique_ptr<Widget> w) {
+	auto pos = position() + outerPadding;
+	if(!widgets_.empty()) {
+		auto b = widgets_.back()->bounds();
+		pos.y = b.position.y + b.size.y + innerPadding;
+	}
 
-void Window::mouseButton(const MouseButtonEvent& ev) {
-	WidgetContainer::mouseButton(ev);
-}
-
-void Window::mouseWheel(const MouseWheelEvent& ev) {
-	WidgetContainer::mouseWheel(ev);
-}
-
-void Window::key(const KeyEvent& ev) {
-	WidgetContainer::key(ev);
-}
-
-void Window::textInput(const TextInputEvent& ev) {
-	WidgetContainer::textInput(ev);
-}
-
-void Window::focus(bool gained) {
-	return WidgetContainer::focus(gained);
-}
-
-void Window::mouseOver(bool gained) {
-	return WidgetContainer::mouseOver(gained);
+	w->position(pos);
+	return ContainerWidget::add(std::move(w));
 }
 
 bool Window::updateDevice() {
@@ -663,15 +727,48 @@ void Window::draw(const DrawInstance& di) const {
 	borderPaint_.bind(di);
 	bg_.stroke(di);
 
-	WidgetContainer::draw(di);
+	ContainerWidget::draw(di);
 }
 
-Widget* Window::focus() const {
-	return WidgetContainer::focus();
+// Row
+Row::Row(Gui& gui, Vec2f pos, float height, float widgetWidth)
+	: ContainerWidget(gui, {pos, {autoSize, height}}), height_(height),
+		widgetWidth_(widgetWidth) {
 }
 
-Widget* Window::mouseOver() const {
-	return WidgetContainer::mouseOver();
+void Row::bounds(const Rect2f& bounds) {
+	if(bounds.position != position()) {
+		auto pos = bounds.position + outerPadding;
+		for(auto& w : widgets_) {
+			w->position(pos);
+			pos.x += w->size().x + innerPadding;
+		}
+	}
+
+	Widget::bounds(bounds);
+}
+
+Widget& Row::add(std::unique_ptr<Widget> w) {
+	auto pos = position() + outerPadding;
+	if(!widgets_.empty()) {
+		pos = rt(widgets_.back()->bounds());
+		pos.x += innerPadding;
+	}
+
+	auto size = w->size();
+	if(height_ != autoSize) {
+		size.y = height_;
+	}
+
+	if(widgetWidth_ != autoSize) {
+		size.x = widgetWidth_;
+	}
+
+	w->bounds({pos, size});
+	bounds_.size.y = std::max(bounds_.size.y, w->size().y);
+	bounds_.size.x = rt(w->bounds()).x - position().x;
+
+	return ContainerWidget::add(std::move(w));
 }
 
 } // namespace vui

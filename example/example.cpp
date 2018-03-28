@@ -177,12 +177,11 @@ int main() {
 
 	Paint svgPaint;
 
-	auto pad = Vec {20.f, 20.f};
+	// auto pad = Vec {20.f, 20.f};
 	auto px = 100.f;
 
 	auto& win = gui.create<Window>(Vec {px, 100.f}, Vec {500.f, 880.f});
-	auto& cp = win.create<ColorPicker>(win.position() + pad,
-		Vec {230.f, 200.f});
+	auto& cp = win.create<ColorPicker>(Vec2f {}, Vec {230.f, 200.f});
 	cp.onPick = [&](auto& cp) {
 		svgPaint.paint = vgv::colorPaint(cp.picked);
 		if(svgPaint.updateDevice(ctx)) {
@@ -190,15 +189,14 @@ int main() {
 		}
 	};
 
-	auto py = cp.position().y + cp.size().y + pad.y;
-	auto& button = win.create<Button>(Vec {px + pad.x, py}, "Click me");
+	auto& button = win.create<Button>(Vec2f {}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
+	win.create<Button>(Vec2f {}, "Button Number Two");
+	win.create<Textfield>(Vec2f {}, 200);
 
-	py = button.position().y + button.size().y + pad.y;
-	auto& b2 = win.create<Button>(Vec {px + pad.x, py}, "Button Number Two");
-
-	py = b2.position().y + b2.size().y + pad.y;
-	win.create<Textfield>(Vec {px + pad.x, py}, 200);
+	auto& row = win.create<Row>(Vec2f{});
+	row.create<Button>(Vec2f {}, "Row Button #1");
+	row.create<Button>(Vec2f {}, "Row Button #2");
 
 	svgPaint = {ctx, vgv::colorPaint(cp.picked)};
 	gui.updateDevice();
@@ -277,8 +275,8 @@ int main() {
 	window.onResize = [&](const auto& ev) {
 		renderer.resize(ev.size);
 
-		text.pos.x = (ev.size[0] - textWidth) / 2;
-		text.pos.y = ev.size[1] - fontHeight - 20;
+		text.position.x = (ev.size[0] - textWidth) / 2;
+		text.position.y = ev.size[1] - fontHeight - 20;
 		text.update();
 		if(text.updateDevice(ctx)) {
 			dlg_warn("unexpected text rerecord");
@@ -317,7 +315,8 @@ int main() {
 		}
 		*/
 
-		cp.position(p);
+		// cp.position(p);
+		win.position(p);
 	};
 
 	window.onMouseMove = [&](const auto& ev) {

@@ -87,10 +87,10 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
-	poolSizes[0].descriptorCount = 100;
+	poolSizes[0].descriptorCount = 500;
 	poolSizes[0].type = vk::DescriptorType::uniformBuffer;
 
-	poolSizes[1].descriptorCount = 20;
+	poolSizes[1].descriptorCount = 500;
 	poolSizes[1].type = vk::DescriptorType::combinedImageSampler;
 
 	vk::DescriptorPoolCreateInfo poolInfo;
@@ -580,7 +580,7 @@ Text::Text(const Context& ctx, std::string xtext, const Font& f, Vec2f xpos) :
 }
 
 Text::Text(const Context& ctx, std::u32string txt, const Font& f, Vec2f xpos) :
-		text(std::move(txt)), font(&f), pos(xpos) {
+		text(std::move(txt)), font(&f), position(xpos) {
 	update();
 	updateDevice(ctx);
 }
@@ -600,14 +600,14 @@ void Text::update() {
 	posCache_.reserve(text.size());
 	uvCache_.reserve(text.size());
 
-	auto x = pos.x;
+	auto x = position.x;
 	auto addVert = [&](const nk_font_glyph& glyph, unsigned i) {
 		auto left = i == 0 || i == 3;
 		auto top = i == 0 || i == 1;
 
 		posCache_.push_back({
 			x + (left ? glyph.x0 : glyph.x1),
-			pos.y + (top ? glyph.y0 : glyph.y1)});
+			position.y + (top ? glyph.y0 : glyph.y1)});
 		uvCache_.push_back({
 			left ? glyph.u0 : glyph.u1,
 			top ? glyph.v0 : glyph.v1});
@@ -695,24 +695,26 @@ void Text::draw(const DrawInstance& ini) const {
 // TODO: somewhat hacky at the moment
 Text::CharAt Text::charAt(float x) const {
 	auto lastEnd = posCache_.empty() ? -1.f : posCache_[vertIndex0].x;
-	x += pos.x;
+	x += position.x;
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
 		auto start = posCache_[i + vertIndex0].x;
 		auto end = posCache_[i + vertIndex2].x;
 		dlg_assert(end >= start);
 
 		if(x < start) {
-			auto nearest = (i == 0) ? posCache_[vertIndex0].x - pos.x : lastEnd;
+			auto nearest = (i == 0) ?
+				posCache_[vertIndex0].x - position.x :
+				lastEnd;
 			return {i / 6, -1.f, nearest};
 		}
 
 		if(x < end) {
 			auto fac = (end - start) / (x - start);
-			auto nearest = (fac > 0.5f ? end - pos.x : lastEnd);
+			auto nearest = fac > 0.5f ? end - position.x : lastEnd;
 			return {i / 6 + 1, fac, nearest};
 		}
 
-		lastEnd = end - pos.x;
+		lastEnd = end - position.x;
 	}
 
 	return {unsigned(posCache_.size() / 6), -1.f, lastEnd};
@@ -724,19 +726,19 @@ Rect2f Text::ithBounds(unsigned n) const {
 	}
 
 	auto start = posCache_[n * 6 + vertIndex0];
-	auto rect = Rect2f {start - pos, posCache_[n * 6 + vertIndex2] - start};
+	auto r = Rect2f {start - position, posCache_[n * 6 + vertIndex2] - start};
 
-	if(rect.size.x == 0) {
+	if(r.size.x == 0) {
 		auto pglyph = nk_font_find_glyph(font->nkFont(), text[n]);
 		if(!pglyph) {
 			dlg_error("nk_font_find_glyph returned null for {}", text[n]);
-			return rect;
+			return r;
 		}
 
-		rect.size.x = pglyph->xadvance;
+		r.size.x = pglyph->xadvance;
 	}
 
-	return rect;
+	return r;
 }
 
 // Transform

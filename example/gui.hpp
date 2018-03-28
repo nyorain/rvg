@@ -12,6 +12,8 @@ namespace vui {
 using namespace nytl;
 using namespace vgv;
 
+constexpr float autoSize = -1.f;
+
 enum class MouseButton {
 	left = 2,
 	right,
@@ -93,8 +95,7 @@ public:
 	Widget* mouseOver() const;
 	Widget* focus() const;
 
-	Widget& add(std::unique_ptr<Widget>);
-
+	virtual Widget& add(std::unique_ptr<Widget>);
 	template<typename W, typename... Args>
 	W& create(Args&&... args) {
 		static_assert(std::is_base_of_v<Widget, W>, "Can only create widgets");
@@ -231,6 +232,8 @@ public:
 	bool updateDevice() override;
 
 protected:
+	static constexpr auto padding = Vec {40.f, 15.f};
+
 	struct {
 		struct {
 			RectShape shape;
@@ -268,6 +271,8 @@ protected:
 	void cursor(bool show, bool resetBlink = true);
 
 protected:
+	static constexpr auto padding = Vec {10.f, 10.f};
+
 	struct {
 		struct {
 			RectShape shape;
@@ -348,11 +353,11 @@ protected:
 	} ud_ {}; // updateDevice
 };
 
-class Window : public Widget, public WidgetContainer {
+class ContainerWidget : public Widget, public WidgetContainer {
 public:
-	Window(Gui& gui, Vec2f pos, Vec2f size);
+	ContainerWidget(Gui& gui);
+	ContainerWidget(Gui& gui, const Rect2f& bounds);
 
-	void bounds(const Rect2f& bounds) override;
 	using Widget::bounds;
 
 	void mouseMove(const MouseMoveEvent&) override;
@@ -368,14 +373,41 @@ public:
 	Widget* mouseOver() const override;
 
 	void draw(const DrawInstance&) const override;
+	const auto& gui() const { return Widget::gui; }
+};
+
+class Window : public ContainerWidget {
+public:
+	Window(Gui& gui, Vec2f pos, Vec2f size);
+
+	Widget& add(std::unique_ptr<Widget>) override;
+	void bounds(const Rect2f& bounds) override;
+	void draw(const DrawInstance&) const override;
 	bool updateDevice() override;
 
-	const auto& gui() const { return Widget::gui; }
-
 protected:
+	static constexpr auto outerPadding = Vec {20.f, 20.f};
+	static constexpr auto innerPadding = 10.f;
+
 	RectShape bg_;
 	Paint bgPaint_;
 	Paint borderPaint_;
+};
+
+class Row : public ContainerWidget {
+public:
+	Row(Gui& gui, Vec2f pos, float height = autoSize,
+		float widgetWidth = autoSize);
+
+	Widget& add(std::unique_ptr<Widget>) override;
+	void bounds(const Rect2f& bounds) override;
+
+protected:
+	static constexpr auto outerPadding = Vec {0.f, 0.f};
+	static constexpr auto innerPadding = 10.f;
+
+	float height_ {autoSize};
+	float widgetWidth_ {autoSize};
 };
 
 } // namespace oui

@@ -407,7 +407,7 @@ class Text {
 public:
 	std::u32string text {};
 	const Font* font {};
-	Vec2f pos {};
+	Vec2f position {};
 
 public:
 	Text() = default;

@@ -33,3 +33,20 @@ NOTE: also completely forgot about stop spacing... won't work!
 
 nope, we would need a for loop here due to variable stop spacing...
 guess a texture with waste is the way to go...
+
+## ssbo try #2
+
+```glsl
+	float fac = clamp(..., 0, 1) - gradient.stops[0].offset;
+	if(fac <= 0) {
+		return gradient.stop[0].color;
+	}
+
+	for(uint i = 1; i < gradient.stops.length(); ++i) {
+		fac -= gradients.stops[i].offset;
+		if(fac <= 0) {
+			return mix(gradient.stops[i - 1].color, gradient.stops[i].color,
+				-fac / gradients.stops[i].offset);
+		}
+	}
+```

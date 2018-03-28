@@ -1,7 +1,9 @@
 # Roadmap
 
 - [x] windows (basic panes, no operations)
-- [ ] row layouts
+- [x] widget sizing options, Window::create auto sizing
+  - [ ] auto sizing on construction
+- [x] row layouts
 - [ ] slider
 - [ ] vgv: antialiasing
 - [ ] vgv: sanity checking (with asserts/logs)
@@ -18,6 +20,7 @@
   - [ ] enter/escape
   - [ ] selection
   - [ ] some basic shortcuts like ctrl-a
+- [ ] advanced widget sizing hints, min/max size (?)
 - [ ] split vgv and gui library
 - [ ] clipboard support
 - [ ] widget styles, also spacings etc
@@ -26,6 +29,7 @@
 - [ ] tooltip
 - [ ] tabs
 - [ ] benchmark alternative pipelines, optimize default use cases
+  - [ ] performance optimizations, resolve performance todos
   - [ ] vgv: better with more (but also more optimized) pipelines?
 - [ ] beautiful demos with screenshots
 - [ ] release public version
