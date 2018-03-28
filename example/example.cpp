@@ -170,6 +170,9 @@ int main() {
 		}, { // window
 			windowBg,
 			label
+		}, { // slider
+			vgv::colorPaint({200, 200, 200}), // left
+			vgv::colorPaint({80, 80, 80}) // right
 		}
 	};
 
@@ -182,12 +185,6 @@ int main() {
 
 	auto& win = gui.create<Window>(Vec {px, 100.f}, Vec {500.f, 880.f});
 	auto& cp = win.create<ColorPicker>(Vec2f {}, Vec {230.f, 200.f});
-	cp.onPick = [&](auto& cp) {
-		svgPaint.paint = vgv::colorPaint(cp.picked);
-		if(svgPaint.updateDevice(ctx)) {
-			dlg_warn("Unexpected rerecord");
-		}
-	};
 
 	auto& button = win.create<Button>(Vec2f {}, "Click me");
 	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
@@ -197,6 +194,38 @@ int main() {
 	auto& row = win.create<Row>(Vec2f{});
 	row.create<Button>(Vec2f {}, "Row Button #1");
 	row.create<Button>(Vec2f {}, "Row Button #2");
+
+	auto colChangeFunc = [&](auto component) {
+		return [&, component](float val) {
+			auto col = svgPaint.paint.data.frag.inner;
+			col.*component = 255.f * val;
+			svgPaint.paint = vgv::colorPaint(col);
+			if(svgPaint.updateDevice(ctx)) {
+				dlg_warn("Unexpected rerecord");
+			}
+
+			cp.pick(col);
+		};
+	};
+
+	auto& rslider = win.create<Slider>(Vec2f {}, 200);
+	auto& gslider = win.create<Slider>(Vec2f {}, 200);
+	auto& bslider = win.create<Slider>(Vec2f {}, 200);
+
+	rslider.onChange = colChangeFunc(&vgv::Color::r);
+	gslider.onChange = colChangeFunc(&vgv::Color::g);
+	bslider.onChange = colChangeFunc(&vgv::Color::b);
+
+	cp.onPick = [&](auto& cp) {
+		svgPaint.paint = vgv::colorPaint(cp.picked);
+		if(svgPaint.updateDevice(ctx)) {
+			dlg_warn("Unexpected rerecord");
+		}
+
+		rslider.current(cp.picked.r / 255.f);
+		gslider.current(cp.picked.g / 255.f);
+		bslider.current(cp.picked.b / 255.f);
+	};
 
 	svgPaint = {ctx, vgv::colorPaint(cp.picked)};
 	gui.updateDevice();

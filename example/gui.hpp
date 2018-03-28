@@ -135,10 +135,16 @@ public:
 		vgv::PaintData border;
 	};
 
+	struct SliderStyle {
+		vgv::PaintData left;
+		vgv::PaintData right;
+	};
+
 	struct Styles {
 		ButtonStyle button;
 		TextfieldStyle textfield;
 		WindowStyle window;
+		SliderStyle slider;
 	} styles;
 
 public:
@@ -310,6 +316,8 @@ public:
 	void draw(const DrawInstance&) const override;
 	bool updateDevice() override;
 
+	void pick(const vgv::Color&);
+
 protected:
 	void layout(Vec2f pos, Vec2f size);
 	void click(Vec2f pos);
@@ -408,6 +416,45 @@ protected:
 
 	float height_ {autoSize};
 	float widgetWidth_ {autoSize};
+};
+
+class Slider : public Widget {
+public:
+	Callback<void(float)> onChange;
+	Callback<void(float)> onSet;
+
+public:
+	Slider(Gui& gui, Vec2f pos, float width, float current = 0.5f);
+
+	void bounds(const Rect2f& bounds) override;
+
+	void mouseButton(const MouseButtonEvent& ev) override;
+	void mouseMove(const MouseMoveEvent& ev) override;
+
+	void draw(const DrawInstance&) const override;
+	bool updateDevice() override;
+
+	float current() const { return current_; }
+	float current(float set);
+
+protected:
+	void updateCurrent(float xpos);
+	void updatePositions();
+
+protected:
+	static constexpr auto circleRadius = 9.f;
+	static constexpr auto padding = Vec {10.f, 20.f + circleRadius};
+	static constexpr auto circlePoints = 16u;
+	static constexpr auto lineHeight = 4.f;
+
+	float current_ {};
+	bool moving_ {};
+
+	RectShape lineLeft_;
+	RectShape lineRight_;
+	Paint paintLeft_;
+	Paint paintRight_;
+	CircleShape circle_;
 };
 
 } // namespace oui

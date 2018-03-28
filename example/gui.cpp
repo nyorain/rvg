@@ -309,6 +309,7 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 void Button::bounds(const Rect2f& bounds) {
 	Widget::bounds(bounds);
 
+	// TODO: also handle for size change
 	draw_.label.text.position = position() + padding;
 	draw_.label.text.update();
 	draw_.bg.shape.position = position();
@@ -390,6 +391,7 @@ Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 void Textfield::bounds(const Rect2f& bounds) {
 	Widget::bounds(bounds);
 
+	// TODO: handle size changes
 	draw_.bg.shape.position = position();
 	draw_.bg.shape.update();
 	draw_.label.text.position = position() + padding;
@@ -618,6 +620,31 @@ void ColorPicker::mouseMove(const MouseMoveEvent& ev) {
 	}
 }
 
+void ColorPicker::pick(const Color& color) {
+	picked = color;
+	auto hsv = hsvNorm(color);
+
+	currentHue_ = hsv[0];
+	selected_ = {hsv[1], hsv[2]};
+
+	// update paints/shapes
+	basePaint_.paint.data.frag.inner = hsvNorm(currentHue_, 1.f, 1.f);
+	ud_.basePaint = true;
+
+	hueMarker_.position.y = position().y + currentHue_ * size().y;
+	hueMarker_.position.y -= hueMarker_.size.y / 2.f;
+	hueMarker_.update();
+	ud_.hueMarker = true;
+
+	using namespace nytl::vec::cw::operators;
+	colorMarker_.center = selector_.position +
+		Vec {selected_.x, 1.f - selected_.y} * selector_.size;
+	colorMarker_.update();
+	ud_.colorMarker = true;
+
+	registerUpdateDevice();
+}
+
 void ColorPicker::draw(const DrawInstance& di) const {
 	auto& ctx = gui.context();
 
@@ -769,6 +796,104 @@ Widget& Row::add(std::unique_ptr<Widget> w) {
 	bounds_.size.x = rt(w->bounds()).x - position().x;
 
 	return ContainerWidget::add(std::move(w));
+}
+
+// Slider
+Slider::Slider(Gui& gui, Vec2f pos, float width, float current) :
+		Widget(gui, {pos, {width, 2 * padding.y + lineHeight}}),
+		current_(current) {
+
+	auto& ctx = gui.context();
+	auto dm = DrawMode {true, false};
+	auto w = width - 2 * padding.x;
+
+	lineLeft_ = {ctx, pos + padding, {current * w, lineHeight}, dm};
+	lineRight_ = {ctx, pos + padding + Vec {current * w, 0.5f},
+		{(1 - current) * w, lineHeight}, dm};
+	circle_ = {ctx, pos + padding + Vec {width * current, lineHeight * 0.5f},
+		circleRadius, dm, false, circlePoints};
+
+	paintLeft_ = {ctx, gui.styles.slider.left};
+	paintRight_ = {ctx, gui.styles.slider.right};
+}
+
+void Slider::bounds(const Rect2f& bounds) {
+	Widget::bounds(bounds);
+
+	// TODO: handle size change
+	lineLeft_.position = position() + padding;
+	lineRight_.position.y = position().y + padding.y;
+	circle_.center.y = position().y + padding.y + lineHeight * 0.5f;
+	updatePositions();
+}
+
+void Slider::mouseButton(const MouseButtonEvent& ev) {
+	if(ev.button != MouseButton::left) {
+		return;
+	}
+
+	moving_ = ev.pressed;
+
+	if(moving_) {
+		updateCurrent(ev.position.x);
+		onChange(current_);
+	} else {
+		onSet(current_);
+	}
+}
+
+void Slider::mouseMove(const MouseMoveEvent& ev) {
+	if(moving_) {
+		updateCurrent(ev.position.x);
+		onChange(current_);
+	}
+}
+
+float Slider::current(float set) {
+	std::swap(current_, set);
+	updatePositions();
+	return set;
+}
+
+void Slider::updateCurrent(float xpos) {
+	auto w = size().x - 2 * padding.x;
+	current_ = std::clamp((xpos - (position().x + padding.x)) / w, 0.f, 1.f);
+	updatePositions();
+}
+
+void Slider::updatePositions() {
+	auto w = size().x - 2 * padding.x;
+
+	lineLeft_.size.x = current_ * w;
+	lineLeft_.update();
+
+	lineRight_.position = position() + padding + Vec {current_ * w, 0.f};
+	lineRight_.size.x = (1 - current_) * w;
+	lineRight_.update();
+
+	circle_.center.x = position().x + padding.x + current_ * w;
+	circle_.update();
+
+	registerUpdateDevice();
+}
+
+void Slider::draw(const DrawInstance& di) const {
+	paintRight_.bind(di);
+	lineRight_.fill(di);
+
+	paintLeft_.bind(di);
+	lineLeft_.fill(di);
+	circle_.fill(di);
+}
+
+bool Slider::updateDevice() {
+	// TODO(performance)
+	auto& ctx = gui.context();
+	auto re = false;
+	re |= lineRight_.updateDevice(ctx);
+	re |= lineLeft_.updateDevice(ctx);
+	re |= circle_.updateDevice(ctx);
+	return re;
 }
 
 } // namespace vui

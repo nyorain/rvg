@@ -4,26 +4,29 @@
 - [x] widget sizing options, Window::create auto sizing
   - [ ] auto sizing on construction
 - [x] row layouts
-- [ ] slider
-- [ ] vgv: antialiasing
-- [ ] vgv: sanity checking (with asserts/logs)
-  - [ ] color functions, conversion
-  - [ ] shape drawing functions
-- [ ] multistop gradients (?), using small 1d textures
-  - [ ] see discussion https://github.com/memononen/nanovg/pull/430
+- [x] slider
 - [ ] vgv: rounded rect
-- [ ] vgv: reorganize/split header/sources
-  - [ ] also make nk/font.h public header
-  - [ ] separate path.hpp in separate library/utility
 - [ ] more advanced textfield
   - [ ] scrolling, clipping
   - [ ] enter/escape
   - [ ] selection
   - [ ] some basic shortcuts like ctrl-a
+- [ ] fix widget resizing todos
+- [ ] vgv: sanity checking (with asserts/logs)
+  - [ ] color functions, conversion
+  - [ ] shape drawing functions
+- [ ] vgv: antialiasing
+- [ ] vgv: reorganize/split header/sources
+  - [ ] also make nk/font.h public header
+  - [ ] separate path.hpp in separate library/utility
+- [ ] multistop gradients (?), using small 1d textures
+  - [ ] see discussion https://github.com/memononen/nanovg/pull/430
 - [ ] advanced widget sizing hints, min/max size (?)
 - [ ] split vgv and gui library
-- [ ] clipboard support
-- [ ] widget styles, also spacings etc
+- [ ] clipboard support (probably over Gui/GuiListener)
+- [ ] don't use that much paints and descriptors for widgets
+  -> advanced styling/themes
+- [ ] widget styles, also spacings/paddings/margins/borders etc
 - [ ] popups (needed for dropdown menu, tooltip)
 - [ ] dropdown menu
 - [ ] tooltip
