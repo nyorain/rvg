@@ -416,20 +416,94 @@ void Shape::stroke(const DrawInstance& di) const {
 
 // Rect
 RectShape::RectShape(const Context& ctx, Vec2f p, Vec2f s,
-		const DrawMode& d, bool h) : position(p), size(s), draw(d), hide(h) {
+		const DrawMode& d, bool h, std::array<float, 4> round) :
+			position(p), size(s), draw(d), hide(h), rounding(round) {
+
 	update();
 	updateDevice(ctx);
 }
 
 void RectShape::update() {
-	auto points = {
-		position,
-		position + Vec {size.x, 0.f},
-		position + size,
-		position + Vec {0.f, size.y},
-		position
-	};
-	polygon_.update(points, draw);
+	if(rounding == std::array<float, 4>{}) {
+		auto points = {
+			position,
+			position + Vec {size.x, 0.f},
+			position + size,
+			position + Vec {0.f, size.y},
+			position
+		};
+		polygon_.update(points, draw);
+	} else {
+		constexpr auto steps = 12u;
+		std::vector<Vec2f> points;
+
+		// topRight
+		if(rounding[0] != 0.f) {
+			dlg_assert(rounding[0] > 0.f);
+			points.push_back(position + Vec {0.f, rounding[0]});
+			auto a1 = CenterArc {
+				position + Vec{rounding[0], rounding[0]},
+				{rounding[0], rounding[0]},
+				nytl::constants::pi,
+				nytl::constants::pi * 1.5f
+			};
+			bake(a1, points, steps);
+		} else {
+			points.push_back(position);
+		}
+
+		// topLeft
+		if(rounding[1] != 0.f) {
+			dlg_assert(rounding[1] > 0.f);
+			auto x = position.x + size.x - rounding[1];
+			points.push_back({x, position.y});
+			auto a1 = CenterArc {
+				{x, position.y + rounding[1]},
+				{rounding[1], rounding[1]},
+				nytl::constants::pi * 1.5f,
+				nytl::constants::pi * 2.f
+			};
+			bake(a1, points, steps);
+		} else {
+			points.push_back(position + Vec {size.x, 0.f});
+		}
+
+		// bottomRight
+		if(rounding[2] != 0.f) {
+			dlg_assert(rounding[2] > 0.f);
+			auto y = position.y + size.y - rounding[2];
+			points.push_back({position.x + size.x, y});
+			auto a1 = CenterArc {
+				{position.x + size.x - rounding[2], y},
+				{rounding[2], rounding[2]},
+				0.f,
+				nytl::constants::pi * 0.5f
+			};
+			bake(a1, points, steps);
+		} else {
+			points.push_back(position + size);
+		}
+
+		// bottomLeft
+		if(rounding[3] != 0.f) {
+			dlg_assert(rounding[3] > 0.f);
+			points.push_back({position.x + rounding[3], position.y + size.y});
+			auto y = position.y + size.y - rounding[3];
+			auto a1 = CenterArc {
+				{position.x + rounding[3], y},
+				{rounding[3], rounding[3]},
+				nytl::constants::pi * 0.5f,
+				nytl::constants::pi * 1.f,
+			};
+			bake(a1, points, steps);
+		} else {
+			points.push_back(position + Vec {0.f, size.y});
+		}
+
+		// close it
+		points.push_back(points[0]);
+		polygon_.update(points, draw);
+	}
 }
 
 bool RectShape::updateDevice(const Context& ctx) {

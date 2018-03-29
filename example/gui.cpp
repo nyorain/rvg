@@ -298,7 +298,7 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 	draw_.label.text = {ctx, label, font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.button.normal.label};
 	auto size = 2 * padding + Vec {font.width(label), font.height()};
-	draw_.bg.shape = {ctx, pos, size, DrawMode {true, 2.f}};
+	draw_.bg.shape = {ctx, pos, size, DrawMode {true, 1.f}};
 	draw_.bg.paint = {ctx, gui.styles.button.normal.bg};
 
 	bounds_ = {pos, size};
@@ -313,6 +313,7 @@ void Button::bounds(const Rect2f& bounds) {
 	draw_.label.text.position = position() + padding;
 	draw_.label.text.update();
 	draw_.bg.shape.position = position();
+	draw_.bg.shape.rounding = {10.f, 10.f, 10.f, 10.f}; // TODO
 	draw_.bg.shape.update();
 	registerUpdateDevice();
 }

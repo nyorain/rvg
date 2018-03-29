@@ -313,17 +313,19 @@ protected:
 };
 
 /// Rectangle shape that can be filled to stroked.
+/// Can also have rounded corners.
 class RectShape {
 public:
 	Vec2f position;
 	Vec2f size;
 	DrawMode draw;
 	bool hide {false};
+	std::array<float, 4> rounding {};
 
 public:
 	RectShape() = default;
 	RectShape(const Context&, Vec2f pos, Vec2f size, const DrawMode&,
-		bool hide = false);
+		bool hide = false, std::array<float, 4> round = {});
 
 	void update();
 	bool updateDevice(const Context&);

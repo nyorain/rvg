@@ -5,7 +5,7 @@
   - [ ] auto sizing on construction
 - [x] row layouts
 - [x] slider
-- [ ] vgv: rounded rect
+- [x] vgv: rounded rect
 - [ ] more advanced textfield
   - [ ] scrolling, clipping
   - [ ] enter/escape

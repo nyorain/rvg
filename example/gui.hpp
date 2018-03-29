@@ -442,10 +442,10 @@ protected:
 	void updatePositions();
 
 protected:
-	static constexpr auto circleRadius = 9.f;
-	static constexpr auto padding = Vec {10.f, 20.f + circleRadius};
-	static constexpr auto circlePoints = 16u;
-	static constexpr auto lineHeight = 4.f;
+	static constexpr auto circleRadius = 6.f;
+	static constexpr auto lineHeight = 3.f;
+	static constexpr auto padding = Vec {5.f, 5.f + circleRadius - lineHeight};
+	static constexpr auto circlePoints = 12u;
 
 	float current_ {};
 	bool moving_ {};
