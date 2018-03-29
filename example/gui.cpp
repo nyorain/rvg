@@ -2,6 +2,7 @@
 #include <dlg/dlg.hpp>
 #include <nytl/rectOps.hpp>
 #include <nytl/utf.hpp>
+#include <vpp/vk.hpp>
 #include <cmath>
 
 namespace vui {
@@ -313,7 +314,7 @@ void Button::bounds(const Rect2f& bounds) {
 	draw_.label.text.position = position() + padding;
 	draw_.label.text.update();
 	draw_.bg.shape.position = position();
-	draw_.bg.shape.rounding = {10.f, 10.f, 10.f, 10.f}; // TODO
+	draw_.bg.shape.rounding = {4.f, 4.f, 4.f, 4.f}; // TODO
 	draw_.bg.shape.update();
 	registerUpdateDevice();
 }
@@ -457,6 +458,13 @@ void Textfield::key(const KeyEvent& ev) {
 }
 
 void Textfield::draw(const DrawInstance& di) const {
+	vk::Rect2D rect;
+	rect.extent.width = size().x;
+	rect.extent.height = size().y;
+	rect.offset.x = position().x;
+	rect.offset.y = position().y;
+	vk::cmdSetScissor(di.cmdBuf, 0, {rect});
+
 	draw_.bg.paint.bind(di);
 	draw_.bg.shape.fill(di);
 
@@ -466,6 +474,11 @@ void Textfield::draw(const DrawInstance& di) const {
 	draw_.cursor.shape.fill(di);
 
 	draw_.bg.shape.stroke(di);
+
+	// TODO: dummy scissor
+	rect.extent = {100000, 100000};
+	rect.offset = {0, 0};
+	vk::cmdSetScissor(di.cmdBuf, 0, {rect});
 }
 
 bool Textfield::updateDevice() {
@@ -505,6 +518,17 @@ void Textfield::updateCursorPosition() {
 		} else {
 			x += draw_.label.text.ithBounds(cursor_).position.x;
 		}
+	}
+
+	auto xbeg = position().x + padding.x;
+	auto xend = position().x + size().x - padding.x;
+	if(x >= xend) {
+		draw_.label.text.position.x = xbeg - (x - xend);
+		draw_.label.text.update();
+		x = xend;
+	} else if(draw_.label.text.position.x != xbeg) {
+		draw_.label.text.position.x = xbeg;
+		draw_.label.text.update();
 	}
 
 	draw_.cursor.shape.position.x = x;

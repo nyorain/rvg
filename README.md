@@ -7,7 +7,7 @@
 - [x] slider
 - [x] vgv: rounded rect
 - [ ] more advanced textfield
-  - [ ] scrolling, clipping
+  - [x] scrolling, clipping
   - [ ] enter/escape
   - [ ] selection
   - [ ] some basic shortcuts like ctrl-a

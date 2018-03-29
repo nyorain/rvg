@@ -50,3 +50,28 @@ guess a texture with waste is the way to go...
 		}
 	}
 ```
+
+# scissor
+
+```
+// TODO
+/// Represents a scissor region that limits the drawing region.
+class Scissor {
+public:
+	nytl::Rect2f scissor;
+
+public:
+	bool updateDevice(const Context& ctx);
+	void bind(const DrawInstance& di);
+
+protected:
+	vpp::BufferRange ubo_;
+};
+```
+
+```
+layout(set = 3, binding = 0) uniform Scissor {
+	vec2 off;
+	vec2 extent;
+} scissor;
+```

@@ -38,7 +38,7 @@ constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
-constexpr auto vsync = true;
+constexpr auto vsync = false;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
 // TODO: move to nytl
@@ -145,6 +145,19 @@ int main() {
 
 	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
 
+	// image stuff
+	vgv::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
+	auto foxTex = vgv::createTexture(device, "../../example/fox.jpg",
+		vgv::TextureType::rgba32);
+	auto iv = foxTex.vkImageView();
+
+	auto mat = nytl::identity<4, float>();
+	mat[0][0] = 1 / 300.f;
+	mat[1][1] = 1 / 200.f;
+	mat[0][3] = -500.f / 300.f;
+	mat[1][3] = -100.f / 200.f;
+	vgv::Paint foxPaint = {ctx, vgv::texturePaintRGBA(mat, iv)};
+
 	// gui
 	auto label = vgv::colorPaint({240, 240, 240});
 	auto normal = vgv::colorPaint({vgv::norm, 0.02f, 0.02f, 0.02f});
@@ -239,6 +252,9 @@ int main() {
 		svgPaint.bind(di);
 		svgShape.fill(di);
 
+		foxPaint.bind(di);
+		foxRect.fill(di);
+
 		paint.bind(di);
 		shape.stroke(di);
 		text.draw(di);
@@ -319,7 +335,7 @@ int main() {
 	};
 
 	vgv::Subpath subpath;
-	// bool first = true;
+	bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
 		auto p = static_cast<nytl::Vec2f>(ev.position);
@@ -329,23 +345,22 @@ int main() {
 			return;
 		}
 
-		/*
-		if(first) {
-			first = false;
-			subpath.start = p;
-		} else {
-			subpath.commands.push_back({p, vgv::SQBezierParams {}});
-			shape.points = vgv::bake(subpath);
-			shape.update();
-			if(shape.updateDevice(ctx)) {
-				dlg_info("rerecord");
-				renderer.invalidate();
+		if(ev.button == ny::MouseButton::left) {
+			if(first) {
+				first = false;
+				subpath.start = p;
+			} else {
+				subpath.commands.push_back({p, vgv::SQBezierParams {}});
+				shape.points = vgv::bake(subpath);
+				shape.update();
+				if(shape.updateDevice(ctx)) {
+					dlg_info("rerecord");
+					renderer.invalidate();
+				}
 			}
+		} else if(ev.button == ny::MouseButton::right) {
+			win.position(p);
 		}
-		*/
-
-		// cp.position(p);
-		win.position(p);
 	};
 
 	window.onMouseMove = [&](const auto& ev) {

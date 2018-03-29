@@ -271,6 +271,7 @@ PaintData texturePaintRGBA(const nytl::Mat4f& transform, vk::ImageView iv) {
 	PaintData ret;
 	ret.texture = iv;
 	ret.data.transform = transform;
+	ret.data.frag.inner = Color::white;
 	ret.data.frag.type = PaintType::textureRGBA;
 	return ret;
 }
@@ -280,6 +281,7 @@ PaintData texturePaintA(const nytl::Mat4f& transform, vk::ImageView iv) {
 	ret.texture = iv;
 	ret.data.transform = transform;
 	ret.data.frag.type = PaintType::textureA;
+	ret.data.frag.inner = Color::white;
 	return ret;
 }
 

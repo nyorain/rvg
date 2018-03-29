@@ -298,6 +298,11 @@ protected:
 	unsigned cursor_ {};
 	bool focus_ {false};
 	double blinkAccum_ {};
+
+	struct {
+		int start;
+		unsigned count;
+	} selection_;
 };
 
 class ColorPicker : public Widget {
