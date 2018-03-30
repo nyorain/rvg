@@ -128,6 +128,7 @@ public:
 	struct TextfieldStyle {
 		vgv::PaintData label;
 		vgv::PaintData bg;
+		vgv::PaintData selection;
 	};
 
 	struct WindowStyle {
@@ -264,6 +265,7 @@ public:
 	using Widget::bounds;
 
 	void mouseButton(const MouseButtonEvent&) override;
+	void mouseMove(const MouseMoveEvent&) override;
 	void focus(bool gained) override;
 	void textInput(const TextInputEvent&) override;
 	void key(const KeyEvent&) override;
@@ -274,9 +276,12 @@ public:
 
 protected:
 	void updateCursorPosition();
-	void cursor(bool show, bool resetBlink = true);
+	void updateSelectionDraw();
+	void cursor(bool show, bool resetBlink = true, bool blink = true);
+	unsigned charAt(float x);
 
 protected:
+	static constexpr auto cursorWidth = 1.f;
 	static constexpr auto padding = Vec {10.f, 10.f};
 
 	struct {
@@ -293,16 +298,23 @@ protected:
 			Text text;
 			Paint paint;
 		} label;
+
+		struct {
+			RectShape shape;
+			Paint paint;
+		} selection;
 	} draw_;
 
 	unsigned cursor_ {};
 	bool focus_ {false};
 	double blinkAccum_ {};
+	bool selecting_ {};
+	bool blink_ {true};
 
 	struct {
-		int start;
+		unsigned start;
 		unsigned count;
-	} selection_;
+	} selection_ {};
 };
 
 class ColorPicker : public Widget {
@@ -450,7 +462,7 @@ protected:
 	static constexpr auto circleRadius = 6.f;
 	static constexpr auto lineHeight = 3.f;
 	static constexpr auto padding = Vec {5.f, 5.f + circleRadius - lineHeight};
-	static constexpr auto circlePoints = 12u;
+	static constexpr auto circlePoints = 4u;
 
 	float current_ {};
 	bool moving_ {};

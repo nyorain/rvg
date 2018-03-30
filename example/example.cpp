@@ -38,7 +38,7 @@ constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
-constexpr auto vsync = false;
+constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
 // TODO: move to nytl
@@ -125,7 +125,7 @@ int main() {
 	vgv::Shape shape(ctx, {}, {false, 5.f});
 	vgv::Paint paint(ctx, vgv::colorPaint({vgv::norm, 0.1f, .6f, .3f}));
 
-	auto fontHeight = 14;
+	auto fontHeight = 16;
 	vgv::FontAtlas atlas(ctx);
 	vgv::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
 	vgv::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
@@ -180,6 +180,7 @@ int main() {
 		}, { // textfield
 			label,
 			normal,
+			vgv::colorPaint({20, 20, 170}), // selection
 		}, { // window
 			windowBg,
 			label

@@ -54,18 +54,20 @@ guess a texture with waste is the way to go...
 # scissor
 
 ```
-// TODO
 /// Represents a scissor region that limits the drawing region.
+/// The scissor is applied AFTER the bound transform.
+/// Depending on the settings in Context, this will either be recorded
+/// statically and therefore require a rerecord on every change, or
+/// computed dynamically or
 class Scissor {
 public:
-	nytl::Rect2f scissor;
-
-public:
-	bool updateDevice(const Context& ctx);
+	Scissor(Context&, nytl::Rect2f = {0, 0, 1e5, 1e5});
+	bool updateDevice(const Context& ctx, nytl::Rect2f scissor);
 	void bind(const DrawInstance& di);
 
 protected:
 	vpp::BufferRange ubo_;
+	nytl::Rect2f scissor;
 };
 ```
 

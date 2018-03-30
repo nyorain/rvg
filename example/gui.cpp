@@ -314,7 +314,6 @@ void Button::bounds(const Rect2f& bounds) {
 	draw_.label.text.position = position() + padding;
 	draw_.label.text.update();
 	draw_.bg.shape.position = position();
-	draw_.bg.shape.rounding = {4.f, 4.f, 4.f, 4.f}; // TODO
 	draw_.bg.shape.update();
 	registerUpdateDevice();
 }
@@ -376,16 +375,20 @@ Textfield::Textfield(Gui& gui, Vec2f pos, float width) : Widget(gui) {
 	auto& ctx = gui.context();
 
 	auto& font = gui.font();
-	auto height = font.height() + 2 * padding.y;
-	draw_.bg.shape = {ctx, pos, {width, height}, {true, 2.f}};
+	auto height = font.height() + 2 * padding.y + 2.f;
+	auto bgpos = pos + Vec {1.f, 1.f}; // outline
+	draw_.bg.shape = {ctx, bgpos, {width - 2.f, height - 2.f}, {true, 2.f}};
 	draw_.bg.paint = {ctx, gui.styles.textfield.bg};
 
-	auto cursorSize = Vec {1.f, font.height()};
+	auto cursorSize = Vec {cursorWidth, font.height()};
 	auto cursorPos = pos + Vec {padding.x, padding.y};
 	draw_.cursor.shape = {ctx, cursorPos, cursorSize, {true, 0.f}, true};
 
 	draw_.label.text = {ctx, "", font, pos + padding};
 	draw_.label.paint = {ctx, gui.styles.textfield.label};
+
+	draw_.selection.shape = {ctx, {}, {}, {true, 0.f} , true};
+	draw_.selection.paint = {ctx, gui.styles.textfield.selection};
 
 	bounds_ = {pos, {width, height}};
 }
@@ -394,28 +397,84 @@ void Textfield::bounds(const Rect2f& bounds) {
 	Widget::bounds(bounds);
 
 	// TODO: handle size changes
-	draw_.bg.shape.position = position();
+	// draw_.bg.shape.position = position();
+	draw_.bg.shape.position = position() + Vec {1.f, 1.f}; // outline
 	draw_.bg.shape.update();
 	draw_.label.text.position = position() + padding;
 	draw_.label.text.update();
 	draw_.cursor.shape.position.y = position().y + padding.y;
 	updateCursorPosition(); // calls registerUpdateDevice
+
+	// due to scissor
+	gui.rerecord();
 }
 
 void Textfield::mouseButton(const MouseButtonEvent& ev) {
+	if(ev.button != MouseButton::left) {
+		return;
+	}
+
+	selecting_ = ev.pressed;
+	if(ev.pressed) {
+		if(selection_.count) {
+			selection_ = {};
+			updateSelectionDraw();
+		}
+
+		auto& text = draw_.label.text;
+		auto ex = ev.position.x - text.position.x;;
+		cursor_ = charAt(ex);
+
+		cursor(true, true, false);
+		updateCursorPosition();
+		dlg_assert(cursor_ <= text.text.length());
+	} else if(!selection_.count) {
+		cursor(true, true, true);
+	}
+}
+
+void Textfield::mouseMove(const MouseMoveEvent& ev) {
+	if(selecting_) {
+		auto& text = draw_.label.text;
+		auto c1 = cursor_;
+		auto c2 = charAt(ev.position.x - text.position.x);
+		selection_.start = std::min(c1, c2);
+		selection_.count = std::abs(int(c1) - int(c2));
+		updateSelectionDraw();
+	}
+}
+
+void Textfield::updateSelectionDraw() {
+	if(!selection_.count) {
+		draw_.selection.shape.hide = true;
+		cursor(true);
+		registerUpdateDevice();
+		return;
+	}
+
+	cursor(false, true, false);
 	auto& text = draw_.label.text;
-	auto ca = text.charAt(ev.position.x - text.position.x);
-	cursor_ = ca.last;
-	draw_.cursor.shape.position.x = text.position.x + ca.nearestBoundary;
-	draw_.cursor.shape.update();
+	auto end = selection_.start + selection_.count - 1;
+
+	auto b1 = text.ithBounds(selection_.start);
+	auto b2 = text.ithBounds(end);
+
+	b1.position += draw_.label.text.position;
+	b2.position += draw_.label.text.position;
+
+	draw_.selection.shape.position.x = b1.position.x;
+	draw_.selection.shape.position.y = text.position.y - 1.f;
+	draw_.selection.shape.size.x = b2.position.x + b2.size.x - b1.position.x;
+	draw_.selection.shape.size.y = text.font->height() + 2.f;
+	draw_.selection.shape.hide = false;
+	draw_.selection.shape.update();
+
 	registerUpdateDevice();
-	dlg_assert(cursor_ <= text.text.length());
 }
 
 void Textfield::focus(bool gained) {
 	focus_ = gained;
-	cursor(focus_, true);
-	registerUpdate();
+	cursor(focus_);
 }
 void Textfield::textInput(const TextInputEvent& ev) {
 	auto utf32 = toUtf32(ev.utf8);
@@ -435,22 +494,54 @@ void Textfield::key(const KeyEvent& ev) {
 
 	if(ev.pressed) {
 		if(ev.key == Key::backspace && cursor_ > 0) {
-			cursor_ -= 1;
-			str.erase(cursor_, 1);
-			draw_.label.text.update();
-			updateCursorPosition();
-		} else if(ev.key == Key::left && cursor_ > 0) {
-			cursor_ -= 1;
+			if(selection_.count) {
+				str.erase(selection_.start, selection_.count);
+				cursor_ = selection_.start;
+				updateCursorPosition();
+				selection_ = {};
+				updateSelectionDraw();
+				draw_.label.text.update();
+			} else {
+				cursor_ -= 1;
+				str.erase(cursor_, 1);
+				draw_.label.text.update();
+				updateCursorPosition();
+			}
+		} else if(ev.key == Key::left) {
+			if(selection_.count) {
+				cursor_ = selection_.start;
+				selection_ = {};
+				updateSelectionDraw();
+			} else if(cursor_ > 0) {
+				cursor_ -= 1;
+			}
+
 			updateCursorPosition();
 			cursor(true, true);
-		} else if(ev.key == Key::right && cursor_ < str.length()) {
-			cursor_ += 1;
+		} else if(ev.key == Key::right) {
+			if(selection_.count) {
+				cursor_ = selection_.start + selection_.count;
+				selection_ = {};
+				updateSelectionDraw();
+			} else if(cursor_ < str.length()) {
+				cursor_ += 1;
+			}
+
 			updateCursorPosition();
 			cursor(true, true);
 		} else if(ev.key == Key::del && cursor_ < str.length()) {
-			str.erase(cursor_, 1);
-			draw_.label.text.update();
-			registerUpdateDevice();
+			if(selection_.count) {
+				str.erase(selection_.start, selection_.count);
+				cursor_ = selection_.start;
+				updateCursorPosition();
+				selection_ = {};
+				updateSelectionDraw();
+				draw_.label.text.update();
+			} else {
+				str.erase(cursor_, 1);
+				draw_.label.text.update();
+				registerUpdateDevice();
+			}
 		}
 	}
 
@@ -467,6 +558,9 @@ void Textfield::draw(const DrawInstance& di) const {
 
 	draw_.bg.paint.bind(di);
 	draw_.bg.shape.fill(di);
+
+	draw_.selection.paint.bind(di);
+	draw_.selection.shape.fill(di);
 
 	draw_.label.paint.bind(di);
 	draw_.label.text.draw(di);
@@ -489,11 +583,16 @@ bool Textfield::updateDevice() {
 	re |= draw_.label.text.updateDevice(ctx);
 	re |= draw_.bg.shape.updateDevice(ctx);
 	re |= draw_.cursor.shape.updateDevice(ctx);
+	re |= draw_.selection.shape.updateDevice(ctx);
 
 	return re;
 }
 
 void Textfield::update(double delta) {
+	if(!blink_) {
+		return;
+	}
+
 	constexpr auto blinkTime = 0.5;
 	blinkAccum_ = blinkAccum_ + delta;
 	if(blinkAccum_ > blinkTime) {
@@ -502,47 +601,65 @@ void Textfield::update(double delta) {
 		registerUpdateDevice();
 	}
 
-	if(focus_) {
-		registerUpdate();
-	}
+	registerUpdate();
 }
 
 void Textfield::updateCursorPosition() {
-	auto len = draw_.label.text.text.size();
-	dlg_assert(cursor_ <= len);
-	auto x = position().x + padding.x;
+	auto& text = draw_.label.text;
+	dlg_assert(cursor_ <= text.text.length());
+	auto x = 0.f;
+
 	if(cursor_ > 0) {
-		if(cursor_ == len) {
-			auto b = draw_.label.text.ithBounds(cursor_ - 1);
-			x += b.position.x + b.size.x;
-		} else {
-			x += draw_.label.text.ithBounds(cursor_).position.x;
-		}
+		auto b = draw_.label.text.ithBounds(cursor_ - 1);
+		x += b.position.x + b.size.x;
 	}
 
+	// scrolling
 	auto xbeg = position().x + padding.x;
-	auto xend = position().x + size().x - padding.x;
-	if(x >= xend) {
-		draw_.label.text.position.x = xbeg - (x - xend);
-		draw_.label.text.update();
-		x = xend;
-	} else if(draw_.label.text.position.x != xbeg) {
-		draw_.label.text.position.x = xbeg;
-		draw_.label.text.update();
-	}
+	auto xend = position().x + size().x - 2 * padding.x;
 
-	draw_.cursor.shape.position.x = x;
+	auto abs = text.position.x + x;
+	auto clamped = std::clamp(abs, xbeg, xend);
+
+	text.position.x += clamped - abs;
+	abs += clamped - abs;
+
+	draw_.label.text.update();
+
+	draw_.cursor.shape.position.x = abs;
 	draw_.cursor.shape.update();
 
 	registerUpdateDevice();
 }
 
-void Textfield::cursor(bool show, bool resetBlink) {
-	draw_.cursor.shape.hide = !show;
-	registerUpdateDevice();
+void Textfield::cursor(bool show, bool resetBlink, bool blink) {
+	blink_ = blink;
+	if(draw_.cursor.shape.hide == show) {
+		draw_.cursor.shape.hide = !show;
+		registerUpdateDevice();
+	}
+
 	if(resetBlink) {
 		blinkAccum_ = 0.f;
 	}
+
+	if(blink_) {
+		registerUpdate();
+	}
+}
+
+unsigned Textfield::charAt(float x) {
+	auto& text = draw_.label.text;
+	auto ca = text.charAt(x);
+	if(ca < text.text.length()) {
+		auto bounds = text.ithBounds(ca);
+		auto into = (x - bounds.position.x) / bounds.size.x;
+		if(into >= 0.5f) {
+			++ca;
+		}
+	}
+
+	return ca;
 }
 
 // ColorPicker

@@ -766,32 +766,16 @@ void Text::draw(const DrawInstance& ini) const {
 	vk::cmdDrawIndirect(cmdb, buf_.buffer(), buf_.offset(), 1, 0);
 }
 
-// TODO: somewhat hacky at the moment
-Text::CharAt Text::charAt(float x) const {
-	auto lastEnd = posCache_.empty() ? -1.f : posCache_[vertIndex0].x;
+unsigned Text::charAt(float x) const {
 	x += position.x;
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
-		auto start = posCache_[i + vertIndex0].x;
 		auto end = posCache_[i + vertIndex2].x;
-		dlg_assert(end >= start);
-
-		if(x < start) {
-			auto nearest = (i == 0) ?
-				posCache_[vertIndex0].x - position.x :
-				lastEnd;
-			return {i / 6, -1.f, nearest};
-		}
-
 		if(x < end) {
-			auto fac = (end - start) / (x - start);
-			auto nearest = fac > 0.5f ? end - position.x : lastEnd;
-			return {i / 6 + 1, fac, nearest};
+			return i / 6;
 		}
-
-		lastEnd = end - position.x;
 	}
 
-	return {unsigned(posCache_.size() / 6), -1.f, lastEnd};
+	return unsigned(posCache_.size() / 6);
 }
 
 Rect2f Text::ithBounds(unsigned n) const {
@@ -802,7 +786,7 @@ Rect2f Text::ithBounds(unsigned n) const {
 	auto start = posCache_[n * 6 + vertIndex0];
 	auto r = Rect2f {start - position, posCache_[n * 6 + vertIndex2] - start};
 
-	if(r.size.x == 0) {
+	if(r.size.x <= 0.f) {
 		auto pglyph = nk_font_find_glyph(font->nkFont(), text[n]);
 		if(!pglyph) {
 			dlg_error("nk_font_find_glyph returned null for {}", text[n]);

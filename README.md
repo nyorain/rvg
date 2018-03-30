@@ -9,7 +9,7 @@
 - [ ] more advanced textfield
   - [x] scrolling, clipping
   - [ ] enter/escape
-  - [ ] selection
+  - [x] selection
   - [ ] some basic shortcuts like ctrl-a
 - [ ] fix widget resizing todos
 - [ ] vgv: sanity checking (with asserts/logs)
