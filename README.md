@@ -18,9 +18,7 @@
 - [ ] vgv: antialiasing
 - [ ] vgv: reorganize/split header/sources
   - [ ] also make nk/font.h public header
-  - [ ] separate path.hpp in separate library/utility
-- [ ] multistop gradients (?), using small 1d textures
-  - [ ] see discussion https://github.com/memononen/nanovg/pull/430
+  - [x] separate path.hpp in separate library/utility
 - [ ] advanced widget sizing hints, min/max size (?)
 - [ ] split vgv and gui library
 - [ ] clipboard support (probably over Gui/GuiListener)
@@ -31,10 +29,13 @@
 - [ ] dropdown menu
 - [ ] tooltip
 - [ ] tabs
+- [ ] think about dynamic scissor, avoiding rerecording on Widget::bounds
 - [ ] benchmark alternative pipelines, optimize default use cases
   - [ ] performance optimizations, resolve performance todos
   - [ ] vgv: better with more (but also more optimized) pipelines?
 - [ ] beautiful demos with screenshots
+- [ ] multistop gradients (?), using small 1d textures
+  - [ ] see discussion https://github.com/memononen/nanovg/pull/430
 - [ ] release public version
 - [ ] vgv: more stroke settings: linecap/linejoin
 - [ ] animations

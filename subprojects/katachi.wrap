@@ -1,0 +1,4 @@
+[wrap-git]
+directory=katachi
+url=https://github.com/nyorain/katachi.git
+revision=master

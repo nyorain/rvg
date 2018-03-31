@@ -4,6 +4,7 @@
 -I./subprojects/nytl
 -I./subprojects/dlg/include
 -I./subprojects/vkpp/include
+-I./subprojects/katachi/include
 -I./build/linux/subprojects/vkpp/include
 -I./build/linux/subprojects/ny/include
 -I./build/linux/subprojects/vpp/include

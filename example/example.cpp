@@ -7,7 +7,8 @@
 #include "gui.hpp"
 
 #include <vgv/vgv.hpp>
-#include <vgv/path.hpp>
+#include <katachi/path.hpp>
+#include <katachi/svg.hpp>
 
 #include <ny/backend.hpp>
 #include <ny/appContext.hpp>
@@ -18,6 +19,7 @@
 #include <vpp/instance.hpp>
 #include <vpp/debug.hpp>
 #include <vpp/formats.hpp>
+#include <vpp/physicalDevice.hpp>
 
 #include <nytl/vecOps.hpp>
 #include <nytl/matOps.hpp>
@@ -104,18 +106,43 @@ int main() {
 	MainWindow window(*appContext, instance);
 	auto vkSurf = window.vkSurface();
 
-	const vpp::Queue* presentQueue {};
-	auto device = vpp::Device(instance, vkSurf, presentQueue);
+	// create device
+	// enable some extra features
+	float priorities[1] = {0.0};
+
+	auto phdevs = vk::enumeratePhysicalDevices(instance);
+	auto phdev = vpp::choose(phdevs, instance, vkSurf);
+
+	auto queueFlags = vk::QueueBits::compute | vk::QueueBits::graphics;
+	int queueFam = vpp::findQueueFamily(phdev, instance, vkSurf, queueFlags);
+
+	vk::DeviceCreateInfo devInfo;
+	vk::DeviceQueueCreateInfo queueInfo({}, queueFam, 1, priorities);
+
+	auto exts = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+	devInfo.pQueueCreateInfos = &queueInfo;
+	devInfo.queueCreateInfoCount = 1u;
+	devInfo.ppEnabledExtensionNames = exts.begin();
+	devInfo.enabledExtensionCount = 1u;
+
+	auto features = vk::PhysicalDeviceFeatures {};
+	features.shaderClipDistance = true;
+	devInfo.pEnabledFeatures = &features;
+
+	auto device = vpp::Device(instance, phdev, devInfo);
+	auto presentQueue = device.queue(queueFam);
 
 	auto renderInfo = RendererCreateInfo {
 		device, vkSurf, window.size(), *presentQueue,
 		startMsaa, vsync, clearColor
 	};
+
 	auto renderer = Renderer(renderInfo);
 
-
 	// vgv
-	vgv::Context ctx(device, renderer.renderPass(), 0);
+	vgv::Context ctx(device, {renderer.renderPass(), 0, true});
+
+	vgv::Scissor scissor(ctx, {10, 10, 1900, 1060});
 
 	vgv::Transform transform(ctx);
 	scale(transform.matrix, {2.f / window.size().x, 2.f / window.size().y, 1});
@@ -140,10 +167,9 @@ int main() {
 	// svg path
 	// auto svgSubpath = vgv::parseSvgSubpath({300, 200},
 		// "h -150 a150 150 0 1 0 150 -150 z");
-	auto svgSubpath = vgv::parseSvgSubpath({0, 0},
-		"h 1920 v 1080 h -1920 z");
+	auto svgSubpath = ktc::parseSvgSubpath("h 1920 v 1080 h -1920 z");
 
-	vgv::Shape svgShape(ctx, vgv::bake(svgSubpath), {true, 0.f});
+	vgv::Shape svgShape(ctx, ktc::flatten(svgSubpath), {true, 0.f});
 
 	// image stuff
 	vgv::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
@@ -249,6 +275,7 @@ int main() {
 		auto di = ctx.record(buf);
 
 		transform.bind(di);
+		scissor.bind(di);
 
 		svgPaint.bind(di);
 		svgShape.fill(di);
@@ -335,7 +362,7 @@ int main() {
 		transform.updateDevice();
 	};
 
-	vgv::Subpath subpath;
+	ktc::Subpath subpath;
 	bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
@@ -351,8 +378,8 @@ int main() {
 				first = false;
 				subpath.start = p;
 			} else {
-				subpath.commands.push_back({p, vgv::SQBezierParams {}});
-				shape.points = vgv::bake(subpath);
+				subpath.sqBezier(p);
+				shape.points = ktc::flatten(subpath);
 				shape.update();
 				if(shape.updateDevice(ctx)) {
 					dlg_info("rerecord");

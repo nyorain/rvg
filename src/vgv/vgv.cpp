@@ -1,5 +1,7 @@
 #include <vgv/vgv.hpp>
-#include <vgv/path.hpp>
+#include <katachi/path.hpp>
+#include <katachi/stroke.hpp>
+#include <katachi/curves.hpp>
 
 #include <vpp/vk.hpp>
 #include <vpp/formats.hpp>
@@ -13,8 +15,11 @@
 
 #include <vgv/nk_font/font.h>
 
-#include <shaders/fill.vert.h>
-#include <shaders/fill.frag.h>
+#include <shaders/fill.vert.frag_scissor.h>
+#include <shaders/fill.frag.frag_scissor.h>
+
+#include <shaders/fill.vert.plane_scissor.h>
+#include <shaders/fill.frag.plane_scissor.h>
 
 // TODO(performance): optionally create (static) Polygons in deviceLocal memory.
 // TODO(performance): cache points vec in *Shape::update
@@ -33,7 +38,7 @@ void write(std::byte*& ptr, T&& data) {
 } // anon namespace
 
 // Context
-Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
+Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	device_(dev)
 {
 	constexpr auto sampleCount = vk::SampleCountBits::e1;
@@ -75,15 +80,29 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 			vk::ShaderStageBits::fragment, -1, 1, &fontSampler_.vkHandle()),
 	};
 
+	auto clipDistance = settings.clipDistanceEnable;
+	auto scissorStage = clipDistance ?
+		vk::ShaderStageBits::vertex :
+		vk::ShaderStageBits::fragment;
+
+	auto scissorDSB = {
+		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer, scissorStage),
+	};
+
 	dsLayoutTransform_ = {dev, transformDSB};
 	dsLayoutPaint_ = {dev, paintDSB};
 	dsLayoutFontAtlas_ = {dev, fontAtlasDSB};
+	dsLayoutScissor_ = {dev, scissorDSB};
 
 	pipeLayout_ = {dev, {
 		dsLayoutTransform_,
 		dsLayoutPaint_,
-		dsLayoutFontAtlas_
-	}, {{vk::ShaderStageBits::fragment, 0, 4}}};
+		dsLayoutFontAtlas_,
+		dsLayoutScissor_
+	}, {
+		// is.text push constants for font texture usage
+		{vk::ShaderStageBits::fragment, 0, 4}
+	}};
 
 	// pool
 	vk::DescriptorPoolSize poolSizes[2] = {};
@@ -100,8 +119,17 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	dsPool_ = {dev, poolInfo};
 
 	// pipeline
-	auto fillVertex = vpp::ShaderModule(dev, fill_vert_data);
-	auto fillFragment = vpp::ShaderModule(dev, fill_frag_data);
+	using ShaderData = nytl::Span<const std::uint32_t>;
+	auto vertData = ShaderData(fill_vert_frag_scissor_data);
+	auto fragData = ShaderData(fill_frag_frag_scissor_data);
+
+	if(clipDistance) {
+		vertData = fill_vert_plane_scissor_data;
+		fragData = fill_frag_plane_scissor_data;
+	}
+
+	auto fillVertex = vpp::ShaderModule(dev, vertData);
+	auto fillFragment = vpp::ShaderModule(dev, fragData);
 
 	vpp::ShaderProgram fillStages({
 		{fillVertex, vk::ShaderStageBits::vertex},
@@ -110,8 +138,8 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 
 	vk::GraphicsPipelineCreateInfo fanPipeInfo;
 
-	fanPipeInfo.renderPass = rp;
-	fanPipeInfo.subpass = subpass;
+	fanPipeInfo.renderPass = settings.renderPass;
+	fanPipeInfo.subpass = settings.subpass;
 	fanPipeInfo.layout = pipeLayout_;
 	fanPipeInfo.stageCount = fillStages.vkStageInfos().size();
 	fanPipeInfo.pStages = fillStages.vkStageInfos().data();
@@ -125,16 +153,7 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 	vertexAttribs[1].location = 1;
 	vertexAttribs[1].binding = 1;
 
-	// NOTE: we would naturally use r8g8b8a8Unorm here and then simply
-	// forward 'out_color = in_color' in the vertex shader but it
-	// seems the amd vulkan driver on windows has a bug there currently
-	// so we use this as a temporary workaround.
-	// e: It's probably not a driver bug, not sure what though. Works on
-	// linux (amdgpu radv), since the workaround has the same issue
-	// vertexAttribs[2].format = vk::Format::r32Uint;
-
 	vertexAttribs[2].format = vk::Format::r8g8b8a8Unorm;
-	// vertexAttribs[2].format = vk::Format::r8g8b8a8Uint;
 	vertexAttribs[2].location = 2;
 	vertexAttribs[2].binding = 2;
 
@@ -241,11 +260,13 @@ Context::Context(vpp::Device& dev, vk::RenderPass rp, unsigned int subpass) :
 
 	identityTransform_ = {*this};
 	pointColorPaint_ = {*this, ::vgv::pointColorPaint()};
+	defaultScissor_ = {*this, Scissor::reset};
 }
 
 DrawInstance Context::record(vk::CommandBuffer cmdb) {
 	DrawInstance ret { *this, cmdb };
 	identityTransform_.bind(ret);
+	defaultScissor_.bind(ret);
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		pipeLayout(), fontBindSet, {dummyTex_}, {});
 	return ret;
@@ -270,10 +291,10 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 	if(mode.stroke > 0.f) {
 		if(mode.color.stroke) {
 			dlg_assert(mode.color.points.size() == points.size());
-			bakeColoredStroke(points, mode.color.points, {mode.stroke},
+			ktc::bakeColoredStroke(points, mode.color.points, {mode.stroke},
 				strokeCache_, strokeColorCache_);
 		} else {
-			bakeStroke(points, {mode.stroke}, strokeCache_);
+			ktc::bakeStroke(points, {mode.stroke}, strokeCache_);
 		}
 	}
 }
@@ -441,13 +462,13 @@ void RectShape::update() {
 		if(rounding[0] != 0.f) {
 			dlg_assert(rounding[0] > 0.f);
 			points.push_back(position + Vec {0.f, rounding[0]});
-			auto a1 = CenterArc {
+			auto a1 = ktc::CenterArc {
 				position + Vec{rounding[0], rounding[0]},
 				{rounding[0], rounding[0]},
 				nytl::constants::pi,
 				nytl::constants::pi * 1.5f
 			};
-			bake(a1, points, steps);
+			ktc::flatten(a1, points, steps);
 		} else {
 			points.push_back(position);
 		}
@@ -457,13 +478,13 @@ void RectShape::update() {
 			dlg_assert(rounding[1] > 0.f);
 			auto x = position.x + size.x - rounding[1];
 			points.push_back({x, position.y});
-			auto a1 = CenterArc {
+			auto a1 = ktc::CenterArc {
 				{x, position.y + rounding[1]},
 				{rounding[1], rounding[1]},
 				nytl::constants::pi * 1.5f,
 				nytl::constants::pi * 2.f
 			};
-			bake(a1, points, steps);
+			ktc::flatten(a1, points, steps);
 		} else {
 			points.push_back(position + Vec {size.x, 0.f});
 		}
@@ -473,13 +494,13 @@ void RectShape::update() {
 			dlg_assert(rounding[2] > 0.f);
 			auto y = position.y + size.y - rounding[2];
 			points.push_back({position.x + size.x, y});
-			auto a1 = CenterArc {
+			auto a1 = ktc::CenterArc {
 				{position.x + size.x - rounding[2], y},
 				{rounding[2], rounding[2]},
 				0.f,
 				nytl::constants::pi * 0.5f
 			};
-			bake(a1, points, steps);
+			ktc::flatten(a1, points, steps);
 		} else {
 			points.push_back(position + size);
 		}
@@ -489,13 +510,13 @@ void RectShape::update() {
 			dlg_assert(rounding[3] > 0.f);
 			points.push_back({position.x + rounding[3], position.y + size.y});
 			auto y = position.y + size.y - rounding[3];
-			auto a1 = CenterArc {
+			auto a1 = ktc::CenterArc {
 				{position.x + rounding[3], y},
 				{rounding[3], rounding[3]},
 				nytl::constants::pi * 0.5f,
 				nytl::constants::pi * 1.f,
 			};
-			bake(a1, points, steps);
+			ktc::flatten(a1, points, steps);
 		} else {
 			points.push_back(position + Vec {0.f, size.y});
 		}
@@ -824,6 +845,35 @@ void Transform::bind(const DrawInstance& di) {
 	dlg_assert(ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
 		di.context.pipeLayout(), transformBindSet, {ds_}, {});
+}
+
+// Scissor
+constexpr auto scissorUboSize = sizeof(Vec2f) * 2;
+Scissor::Scissor(const Context& ctx) : Scissor(ctx, reset) {
+}
+
+Scissor::Scissor(const Context& ctx, const Rect2f& r) : rect(r) {
+	ubo_ = ctx.device().bufferAllocator().alloc(true, scissorUboSize,
+		vk::BufferUsageBits::uniformBuffer);
+	ds_ = {ctx.dsLayoutScissor(), ctx.dsPool()};
+
+	updateDevice();
+	vpp::DescriptorSetUpdate update(ds_);
+	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
+}
+
+void Scissor::updateDevice() {
+	dlg_assert(ubo_.size() && ds_);
+	auto map = ubo_.memoryMap();
+	auto ptr = map.ptr();
+	write(ptr, rect.position);
+	write(ptr, rect.size);
+}
+
+void Scissor::bind(const DrawInstance& di) {
+	dlg_assert(ubo_.size() && ds_);
+	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
+		di.context.pipeLayout(), scissorBindSet, {ds_}, {});
 }
 
 } // namespace vgv

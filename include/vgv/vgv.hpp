@@ -179,11 +179,42 @@ protected:
 	vpp::DescriptorSet ds_;
 };
 
+/// Limits the area in which can be drawn.
+/// Scissor is applied before the transformation.
+class Scissor {
+public:
+	static constexpr Rect2f reset = {-1e6, -1e6, 2e6, 2e6};
+	Rect2f rect = reset;
+
+public:
+	Scissor() = default;
+	Scissor(const Context&);
+	Scissor(const Context&, const Rect2f&);
+
+	void updateDevice();
+	void bind(const DrawInstance&);
+
+protected:
+	vpp::BufferRange ubo_;
+	vpp::DescriptorSet ds_;
+};
+
+struct ContextSettings {
+	/// The renderpass and subpass in which it will be used.
+	/// Must be specified for pipeline creation.
+	vk::RenderPass renderPass;
+	unsigned subpass {0};
+
+	/// Whether the device has the clipDistance feature enabled.
+	/// Can increase scissor performance significantly.
+	bool clipDistanceEnable {false};
+};
+
 /// Drawing context. Manages all pipelines and layouts needed to
 /// draw any shapes.
 class Context {
 public:
-	Context(vpp::Device& dev, vk::RenderPass, unsigned int subpass);
+	Context(vpp::Device&, const ContextSettings&);
 
 	const vpp::Device& device() const { return device_; };
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
@@ -194,13 +225,16 @@ public:
 	vk::Pipeline stripPipe() const { return stripPipe_; }
 
 	const auto& dsLayoutTransform() const { return dsLayoutTransform_; }
+	const auto& dsLayoutScissor() const { return dsLayoutScissor_; }
 	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
 	const auto& dsLayoutFontAtlas() const { return dsLayoutFontAtlas_; }
 
 	const auto& emptyImage() const { return emptyImage_; };
-	const auto& dummyTex() const { return dummyTex_; };
 
+	const auto& dummyTex() const { return dummyTex_; };
 	const auto& pointColorPaint() const { return pointColorPaint_; }
+	const auto& identityTransform() const { return identityTransform_; }
+	const auto& defaultScissor() const { return defaultScissor_; }
 
 private:
 	const vpp::Device& device_;
@@ -208,6 +242,7 @@ private:
 	vpp::Pipeline stripPipe_;
 	vpp::PipelineLayout pipeLayout_;
 	vpp::DescriptorSetLayout dsLayoutTransform_;
+	vpp::DescriptorSetLayout dsLayoutScissor_;
 	vpp::DescriptorSetLayout dsLayoutPaint_;
 	vpp::DescriptorSetLayout dsLayoutFontAtlas_;
 	vpp::DescriptorPool dsPool_;
@@ -217,6 +252,8 @@ private:
 
 	vpp::ViewableImage emptyImage_;
 	vpp::DescriptorSet dummyTex_;
+
+	Scissor defaultScissor_;
 	Transform identityTransform_;
 	Paint pointColorPaint_;
 };
@@ -442,5 +479,6 @@ protected:
 constexpr auto transformBindSet = 0u;
 constexpr auto paintBindSet = 1u;
 constexpr auto fontBindSet = 2u;
+constexpr auto scissorBindSet = 3u;
 
 } // namespace vgv

@@ -45,6 +45,7 @@ add_project_arguments('-DDLG_BASE_PATH="' + '/'.join(source_root) + '/"', langua
 dep_vpp = dependency('vpp', fallback: ['vpp', 'vpp_dep'])
 dep_nytl = dependency('nytl MASTER', fallback: ['nytl', 'nytl_dep'])
 dep_dlg = dependency('dlg', fallback: ['dlg', 'dlg_dep'])
+dep_katachi = dependency('katachi', fallback: ['katachi', 'katachi_dep'])
 dep_vulkan = dependency('vulkan')
 
 src_inc = include_directories('src') # for shaders, internal headers
@@ -54,6 +55,7 @@ vgv_deps = [
   dep_vpp,
   dep_nytl,
   dep_dlg,
+  dep_katachi,
   dep_vulkan
 ]
 

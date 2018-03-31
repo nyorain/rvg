@@ -596,3 +596,76 @@ protected:
 };
 
 
+
+
+
+
+
+
+
+
+
+class Widget : public nytl::NonMovable {
+public:
+	Gui& gui;
+
+public:
+	Widget(Gui& xgui) : gui(xgui) {}
+	Widget(Gui& xgui, Rect2f bounds) : gui(xgui), bounds_{bounds} {}
+	virtual ~Widget() = default;
+
+	// virtual void bounds(const Rect2f&) = 0;
+
+	/// Resizes this widget. Note that not all widgets are resizable.
+	/// Some might throw when an invalid size is given or just display
+	/// their content incorrectly.
+	virtual void size(const Vec2f&) = 0;
+
+	/// Advises the widget to draw its contents using this offset.
+	virtual void position(const Vec2f&) = 0;
+
+	/// Called when the Widget has registered itself for update.
+	/// Gets the delta time since the last frame in seconds.
+	/// Must not touch resources used for rendering.
+	virtual void update(double) {}
+
+	/// Called when the Widget has registered itsefl for updateDevice.
+	/// Called when no rendering is currently done, so the widget might
+	/// update rendering resources.
+	virtual bool updateDevice() { return false; }
+
+	/// Called during a drawing instance.
+	/// The widget should draw itself.
+	/// The default implementation handles the scissor and transform stuff
+	/// automatically and excepts the derived class to implement the protected
+	/// doDraw method.
+	virtual void draw(const DrawInstance&) const;
+
+	virtual bool contains(Vec2f point) const;
+	virtual void position(Vec2f pos);
+	virtual void size(Vec2f pos);
+
+	const Rect2f& bounds() const { return bounds_; }
+	Vec2f position() const { return bounds_.position; }
+	Vec2f size() const { return bounds_.size; }
+
+	// - input processing -
+	// all positions are given relative to the widget
+	// return the Widget that processed the event
+	virtual Widget* mouseMove(const MouseMoveEvent&) { return nullptr; }
+	virtual Widget* mouseButton(const MouseButtonEvent&) { return nullptr; }
+	virtual Widget* mouseWheel(const MouseWheelEvent&) { return nullptr; }
+	virtual Widget* key(const KeyEvent&) { return nullptr; }
+	virtual Widget* textInput(const TextInputEvent&) { return nullptr; }
+
+	virtual void focus(bool) {}
+	virtual void mouseOver(bool) {}
+
+protected:
+	virtual void doDraw(const DrawInstance&) const {}
+	void registerUpdate();
+	void registerUpdateDevice();
+
+private:
+	Rect2f bounds_ {};
+};

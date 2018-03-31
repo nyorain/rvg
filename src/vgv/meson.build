@@ -1,7 +1,6 @@
 vgv_src = [
 	'vgv.cpp',
 	'texture.cpp',
-	'path.cpp',
 	'paint.cpp',
 	'nk_font/font.c',
 	shaders

@@ -77,3 +77,43 @@ layout(set = 3, binding = 0) uniform Scissor {
 	vec2 extent;
 } scissor;
 ```
+
+/// Scissor that is applied before any transform, in polygon coordinates.
+/// Don't confuse those coordinates with final window coordinates and a
+/// conventional scissor, although they are in simple cases the same.
+
+
+/// Defines how scissor works for a context.
+/// Not hard coded since this is a trade off between functionality,
+/// availability and performance. Defaults to fragment but trying
+/// to enable shaderClipDistance and then using that can bring
+/// real improvements.
+enum class ScissorMode {
+	/// Dynamically computes the scissor bounds in the fragment shader.
+	/// Default mode.
+	/// + always available
+	/// + no rerecord required on scissor change
+	/// + can be applied before transform
+	/// - impact on performance
+	fragment = 0,
+
+	/// Requires the shaderClipDistance vulkan feature to be enabled.
+	/// Uses clipping planes in the vertex shader.
+	/// + should be pretty performant on most hardware/drivers
+	/// + feature avilable on most implementations
+	/// + no rerecord required on scissor change
+	/// + can be applied before transform
+	/// - requires an optional feature that may not be enabled in the device,
+	///   so not always available
+	clipDistance,
+
+	/// Relies on vkCmdSetScissor.
+	/// NOTE: this mode actually modifies the behaviour of Scissor and
+	/// should only be used if you know what you are doing.
+	/// + the most performant option, zero overhead
+	/// + always available
+	/// - can only be applied in window coordinates, not before transformation
+	///   so the resulting scissor rect will always be axis aligned
+	/// - command buffers have to be rerecorded on every scissor change
+	cmd,
+};
