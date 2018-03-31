@@ -305,6 +305,9 @@ Button::Button(Gui& gui, Vec2f pos, std::string label) : Widget(gui) {
 	bounds_ = {pos, size};
 	draw_.label.text.updateDevice(ctx);
 	draw_.bg.shape.updateDevice(ctx);
+
+	hint_ = &gui.create<Hint>(Vec2f {}, "Click this shit", gui.styles.hint);
+	hint_->show(false);
 }
 
 void Button::bounds(const Rect2f& bounds) {
@@ -316,6 +319,20 @@ void Button::bounds(const Rect2f& bounds) {
 	draw_.bg.shape.position = position();
 	draw_.bg.shape.update();
 	registerUpdateDevice();
+}
+
+void Button::update(double delta) {
+	if(!hovered_) {
+		hoverAccum_ = 0.0;
+		return;
+	}
+
+	hoverAccum_ += delta;
+	if(hoverAccum_ >= hintDelay) {
+		hint_->show(true);
+	} else {
+		registerUpdate();
+	}
 }
 
 void Button::mouseButton(const MouseButtonEvent& event) {
@@ -334,11 +351,23 @@ void Button::mouseButton(const MouseButtonEvent& event) {
 
 	registerUpdateDevice();
 }
+
+void Button::mouseMove(const MouseMoveEvent& ev) {
+	hint_->position(ev.position + hintOffset);
+}
+
 void Button::mouseOver(bool gained) {
 	if(gained != hovered_) {
 		registerUpdateDevice();
 	}
+
 	hovered_ = gained;
+	if(!hovered_) {
+		hint_->show(false);
+		hoverAccum_ = 0;
+	} else {
+		registerUpdate();
+	}
 }
 
 void Button::draw(const DrawInstance& di) const {
@@ -1036,6 +1065,53 @@ bool Slider::updateDevice() {
 	re |= lineLeft_.updateDevice(ctx);
 	re |= circle_.updateDevice(ctx);
 	return re;
+}
+
+// Hint
+Hint::Hint(Gui& gui, Vec2f pos, std::string text, const HintStyle& style) :
+		Widget(gui), style_(style) {
+
+	auto& ctx = gui.context();
+	auto size = Vec {gui.font().width(text), gui.font().height()};
+	text_ = {ctx, std::move(text), gui.font(), pos + padding};
+
+	auto stroke = style.bgStroke ? 2.f : 0.f;
+	bg_ = {ctx, pos, 2 * padding + size, {true, stroke}};
+}
+
+void Hint::draw(const DrawInstance& di) const {
+	style_.bg.bind(di);
+	bg_.fill(di);
+
+	if(style_.bgStroke) {
+		style_.bgStroke->bind(di);
+		bg_.stroke(di);
+	}
+
+	style_.text.bind(di);
+	text_.draw(di);
+}
+
+void Hint::show(bool show) {
+	bg_.hide = !show;
+	text_.hide = !show;
+	registerUpdateDevice();
+}
+
+bool Hint::updateDevice() {
+	auto& ctx = gui.context();
+	return bg_.updateDevice(ctx) || text_.updateDevice(ctx);
+}
+
+void Hint::bounds(const Rect2f& bounds) {
+	Widget::bounds(bounds);
+	bg_.position = position();
+	bg_.update();
+
+	text_.position = position() + padding;
+	text_.update();
+
+	registerUpdateDevice();
 }
 
 } // namespace vui

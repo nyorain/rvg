@@ -29,7 +29,7 @@
 - [ ] dropdown menu
 - [ ] tooltip
 - [ ] tabs
-- [ ] think about dynamic scissor, avoiding rerecording on Widget::bounds
+- [x] think about dynamic scissor, avoiding rerecording on Widget::bounds
 - [ ] benchmark alternative pipelines, optimize default use cases
   - [ ] performance optimizations, resolve performance todos
   - [ ] vgv: better with more (but also more optimized) pipelines?

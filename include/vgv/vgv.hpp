@@ -447,6 +447,7 @@ public:
 	std::u32string text {};
 	const Font* font {};
 	Vec2f position {};
+	bool hide {false};
 
 public:
 	Text() = default;

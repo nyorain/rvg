@@ -213,6 +213,10 @@ int main() {
 		}, { // slider
 			vgv::colorPaint({200, 200, 200}), // left
 			vgv::colorPaint({80, 80, 80}) // right
+		}, { // hint
+			{ctx, normal},
+			{ctx, label},
+			{}
 		}
 	};
 

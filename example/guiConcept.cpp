@@ -603,26 +603,24 @@ protected:
 
 
 
-
-
+/// Interface for an control on the screen that potentially handles input
+/// events and can draw itself. Typical implementations of this interface
+/// are Button, Textfield or ColorPicker.
 class Widget : public nytl::NonMovable {
 public:
-	Gui& gui;
-
-public:
-	Widget(Gui& xgui) : gui(xgui) {}
-	Widget(Gui& xgui, Rect2f bounds) : gui(xgui), bounds_{bounds} {}
+	Widget(Gui& gui) : gui_(gui) {}
 	virtual ~Widget() = default;
 
-	// virtual void bounds(const Rect2f&) = 0;
-
-	/// Resizes this widget. Note that not all widgets are resizable.
+	/// Resizes this widget. Note that not all widgets are resizable equally.
 	/// Some might throw when an invalid size is given or just display
 	/// their content incorrectly.
 	virtual void size(const Vec2f&) = 0;
 
-	/// Advises the widget to draw its contents using this offset.
-	virtual void position(const Vec2f&) = 0;
+	/// Returns whether the widget contains the given point.
+	virtual bool contains(Vec2f point) const = 0;
+
+	/// Changes the widgets transform for drawing and events.
+	virtual void transform(const nytl::Mat4f& transform);
 
 	/// Called when the Widget has registered itself for update.
 	/// Gets the delta time since the last frame in seconds.
@@ -641,17 +639,10 @@ public:
 	/// doDraw method.
 	virtual void draw(const DrawInstance&) const;
 
-	virtual bool contains(Vec2f point) const;
-	virtual void position(Vec2f pos);
-	virtual void size(Vec2f pos);
-
-	const Rect2f& bounds() const { return bounds_; }
-	Vec2f position() const { return bounds_.position; }
-	Vec2f size() const { return bounds_.size; }
-
 	// - input processing -
 	// all positions are given relative to the widget
-	// return the Widget that processed the event
+	// return the Widget that processed the event which might be itself
+	// or a child widget or none (nullptr).
 	virtual Widget* mouseMove(const MouseMoveEvent&) { return nullptr; }
 	virtual Widget* mouseButton(const MouseButtonEvent&) { return nullptr; }
 	virtual Widget* mouseWheel(const MouseWheelEvent&) { return nullptr; }
@@ -661,11 +652,21 @@ public:
 	virtual void focus(bool) {}
 	virtual void mouseOver(bool) {}
 
+	/// Returns the associated gui object.
+	Gui& gui() const { return gui_; }
+
 protected:
+	/// If the Widget does not override draw, this method will be called
+	/// from it, with the transform and scissor correctly in place.
 	virtual void doDraw(const DrawInstance&) const {}
+
+	/// Registers this widgets for an update/updateDevice callback as soon
+	/// as possible.
 	void registerUpdate();
 	void registerUpdateDevice();
 
-private:
-	Rect2f bounds_ {};
+protected:
+	Gui& gui_;
+	Transform transform_;
+	Scissor scissor_;
 };

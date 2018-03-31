@@ -5,12 +5,16 @@
 #include <nytl/rect.hpp>
 #include <nytl/callback.hpp>
 #include <nytl/stringParam.hpp>
+
 #include <unordered_set>
+#include <optional>
 
 namespace vui {
 
 using namespace nytl;
 using namespace vgv;
+
+class Hint;
 
 constexpr float autoSize = -1.f;
 
@@ -112,6 +116,12 @@ protected:
 	Widget* mouseOver_ {};
 };
 
+struct HintStyle {
+	Paint bg;
+	Paint text;
+	std::optional<Paint> bgStroke;
+};
+
 class Gui : public WidgetContainer {
 public:
 	struct ButtonDraw {
@@ -146,6 +156,7 @@ public:
 		TextfieldStyle textfield;
 		WindowStyle window;
 		SliderStyle slider;
+		HintStyle hint;
 	} styles;
 
 public:
@@ -233,12 +244,16 @@ public:
 	using Widget::bounds;
 
 	void mouseButton(const MouseButtonEvent&) override;
+	void mouseMove(const MouseMoveEvent&) override;
 	void mouseOver(bool gained) override;
 
+	void update(double delta) override;
 	void draw(const DrawInstance&) const override;
 	bool updateDevice() override;
 
 protected:
+	static constexpr auto hintDelay = 1.0;
+	static constexpr auto hintOffset = Vec {20.f, 20.f};
 	static constexpr auto padding = Vec {40.f, 15.f};
 
 	struct {
@@ -255,6 +270,9 @@ protected:
 
 	bool hovered_ {};
 	bool pressed_ {};
+	double hoverAccum_ {};
+
+	Hint* hint_;
 };
 
 class Textfield : public Widget {
@@ -472,6 +490,24 @@ protected:
 	Paint paintLeft_;
 	Paint paintRight_;
 	CircleShape circle_;
+};
+
+class Hint : public Widget {
+public:
+	Hint(Gui& gui, Vec2f pos, std::string text, const HintStyle& style);
+
+	void bounds(const Rect2f&) override;
+	void draw(const DrawInstance&) const override;
+	bool updateDevice() override;
+
+	void show(bool);
+
+protected:
+	static constexpr auto padding = Vec2f {5, 5};
+
+	const HintStyle& style_;
+	RectShape bg_;
+	Text text_;
 };
 
 } // namespace oui

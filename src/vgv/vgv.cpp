@@ -750,7 +750,7 @@ bool Text::updateDevice(const Context& ctx) {
 
 	// the positionBuf contains the indirect draw command, if there is any
 	vk::DrawIndirectCommand cmd {};
-	cmd.vertexCount = posCache_.size();
+	cmd.vertexCount = !hide * posCache_.size();
 	cmd.instanceCount = 1;
 	write(ptr, cmd);
 
