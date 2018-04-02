@@ -19,6 +19,12 @@ void write(std::byte*& ptr, T&& data) {
 	ptr += sizeof(data);
 }
 
+void assertNorm(std::initializer_list<float> args) {
+	for(auto a : args) {
+		dlg_assert(a >= 0.f && a <= 1.f);
+	}
+}
+
 float hue2rgb(float p, float q, float t) {
 	if(t < 0) t += 1;
 	if(t > 1) t -= 1;
@@ -56,14 +62,17 @@ Color::Color(Vec4u8 rgba) : r(rgba[0]), g(rgba[1]), b(rgba[2]), a(rgba[3]) {
 
 Color::Color(Norm, float r, float g, float b, float a)
 	: r(255.f * r), g(255.f * g), b(255.f * b), a(255.f * a) {
+	assertNorm({r, g, b, a});
 }
 
 Color::Color(Norm, Vec3f rgb, float a)
 	: Color(norm, rgb[0], rgb[1], rgb[2], a) {
+	assertNorm({rgb[0], rgb[1], rgb[2], a});
 }
 
 Color::Color(Norm, Vec4f rgba)
 	: Color(norm, rgba[0], rgba[1], rgba[2], rgba[3]) {
+	assertNorm({rgba[0], rgba[1], rgba[2], rgba[3]});
 }
 
 Vec3f Color::rgbNorm() const {
@@ -80,6 +89,7 @@ Color hsl(u8 h, u8 s, u8 l, u8 a) {
 }
 
 Color hslNorm(float h, float s, float l, float a) {
+	assertNorm({h, s, l, a});
 	if(s == 0.f) {
 		return {norm, l, l, l, a};
 	}
@@ -138,6 +148,7 @@ Color hsv(u8 h, u8 s, u8 v, u8 a) {
 }
 
 Color hsvNorm(float h, float s, float v, float a) {
+	assertNorm({h, s, v, a});
 	if(s == 0) {
 		return {norm, v, v, v, a};
 	}
@@ -199,6 +210,7 @@ Vec4f hsvaNorm(const Color& c) {
 
 // - hsv/hsl conversion -
 Vec3f hsl2hsv(Vec3f hsl) {
+	assertNorm({hsl.x, hsl.y, hsl.z});
 	auto t = hsl[1] * 0.5f * (1 - std::abs(2 * hsl[2] - 1));
 	auto v = hsl[2] + t;
   	auto s = hsl[2] > 0 ? 2 * t / v : 0.f;
@@ -207,6 +219,7 @@ Vec3f hsl2hsv(Vec3f hsl) {
 }
 
 Vec3f hsv2hsl(Vec3f hsv) {
+	assertNorm({hsv.x, hsv.y, hsv.z});
 	auto l = 0.5f * hsv.z * (2 - hsv.z);
 	auto s = hsv[1];
 	if(l > 0 && l < 1) {
@@ -293,62 +306,56 @@ PaintData pointColorPaint() {
 
 // Paint
 constexpr auto paintUboSize = sizeof(nytl::Mat4f) + sizeof(Vec4f) * 3 + 4;
-Paint::Paint(Context& ctx, const PaintData& xpaint) : paint(xpaint) {
-	if(!paint.texture) {
-		paint.texture = ctx.emptyImage().vkImageView();
+Paint::Paint(Context& ctx, const PaintData& xpaint) :
+		DeviceObject(ctx), paint_(xpaint) {
+
+	if(!paint_.texture) {
+		paint_.texture = ctx.emptyImage().vkImageView();
 	}
 
-	oldView_ = paint.texture;
+	oldView_ = paint_.texture;
 	ubo_ = ctx.device().bufferAllocator().alloc(true,
 		paintUboSize, vk::BufferUsageBits::uniformBuffer);
 
 	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
 	auto map = ubo_.memoryMap();
 	auto ptr = map.ptr();
-	uploadPaint(ptr, paint.data);
+	uploadPaint(ptr, paint_.data);
 
 	vpp::DescriptorSetUpdate update(ds_);
 	auto m4 = sizeof(nytl::Mat4f);
 	update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});
 	update.uniform({{ubo_.buffer(), ubo_.offset() + m4, ubo_.size() - m4}});
-	update.imageSampler({{{}, paint.texture, vk::ImageLayout::general}});
+	update.imageSampler({{{}, paint_.texture, vk::ImageLayout::general}});
+}
+
+void Paint::update() {
+	dlg_assert(valid() && ds_ && ubo_.size());
+	context().registerUpdateDevice(this);
 }
 
 void Paint::bind(const DrawInstance& di) const {
-	dlg_assert(ds_);
+	dlg_assert(valid() && ds_ && ubo_.size());
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
 		di.context.pipeLayout(), paintBindSet, {ds_}, {});
 }
 
-bool Paint::updateDevice(const Context& ctx) {
+bool Paint::updateDevice() {
+	dlg_assert(valid() && ds_ && ubo_.size());
 	auto re = false;
-	if(!paint.texture) {
-		paint.texture = ctx.emptyImage().vkImageView();
-	}
-
-	if(!ds_ || !ubo_.size()) {
-		ubo_ = ctx.device().bufferAllocator().alloc(true,
-			paintUboSize, vk::BufferUsageBits::uniformBuffer);
-		ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
-
-		vpp::DescriptorSetUpdate update(ds_);
-		auto m4 = sizeof(nytl::Mat4f);
-		update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});
-		update.uniform({{ubo_.buffer(), ubo_.offset() + m4, ubo_.size() - m4}});
-		update.imageSampler({{{}, paint.texture, vk::ImageLayout::general}});
-
-		re = true;
+	if(!paint_.texture) {
+		paint_.texture = context().emptyImage().vkImageView();
 	}
 
 	auto map = ubo_.memoryMap();
 	auto ptr = map.ptr();
-	uploadPaint(ptr, paint.data);
+	uploadPaint(ptr, paint_.data);
 
-	if(oldView_ != paint.texture) {
+	if(oldView_ != paint_.texture) {
 		vpp::DescriptorSetUpdate update(ds_);
 		update.skip(2);
-		update.imageSampler({{{}, paint.texture, vk::ImageLayout::general}});
-		oldView_ = paint.texture;
+		update.imageSampler({{{}, paint_.texture, vk::ImageLayout::general}});
+		oldView_ = paint_.texture;
 		re = true;
 	}
 

@@ -13,11 +13,12 @@
   - [ ] some basic shortcuts like ctrl-a
 - [ ] fix widget resizing todos
 - [ ] vgv: sanity checking (with asserts/logs)
-  - [ ] color functions, conversion
-  - [ ] shape drawing functions
+  - [x] color functions, conversion
+  - [x] shape drawing functions
 - [ ] vgv: antialiasing
 - [ ] vgv: reorganize/split header/sources
-  - [ ] also make nk/font.h public header
+  - [ ] shapes/context/texture/transform/scissor headers
+  - [ ] also make nk/font.h public header (sure? probably not good idea)
   - [x] separate path.hpp in separate library/utility
 - [ ] advanced widget sizing hints, min/max size (?)
 - [ ] split vgv and gui library
@@ -26,9 +27,11 @@
   -> advanced styling/themes
 - [ ] widget styles, also spacings/paddings/margins/borders etc
 - [ ] popups (needed for dropdown menu, tooltip)
+- [ ] z widget ordering
 - [ ] dropdown menu
 - [ ] tooltip
 - [ ] tabs
+- [ ] better mouse/keyboard grabs
 - [x] think about dynamic scissor, avoiding rerecording on Widget::bounds
 - [ ] benchmark alternative pipelines, optimize default use cases
   - [ ] performance optimizations, resolve performance todos

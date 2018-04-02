@@ -14,6 +14,7 @@
 #include <vector>
 #include <string>
 #include <variant>
+#include <unordered_set>
 
 // fwd decls from nk_font
 struct nk_font;
@@ -23,6 +24,55 @@ namespace vgv {
 
 using namespace nytl;
 class Context;
+class Polygon;
+class Transform;
+class Scissor;
+class Text;
+
+/// Small RAII wrapper around changing a DeviceObjects contents.
+/// As long as the object is alived, the state can be changed. When
+/// it gets destructed, the update function of the original object will
+/// be called, i.e. the changed state will be applied.
+template<typename T, typename S>
+class StateChange {
+public:
+	T& object;
+	S& state;
+
+public:
+	// TODO: catch all exception from object.update()?
+	// might be problematic otherwise since this might throw from
+	// destructor. Or only catch exceptions if destructor is called
+	// due to unrolling (nytl/scope like)?
+	// TODO: somehow assure that there is only ever one StateChange for one
+	// object at a time?
+	~StateChange() { object.update(); }
+
+	S* operator->() { return &state; }
+	S& operator*() { return state; }
+};
+
+template<typename T, typename S>
+StateChange(T&, S&) -> StateChange<T, S>;
+
+/// Simple base class for objects that register themself for
+/// updateDevice callbacks at their associated Context.
+class DeviceObject {
+public:
+	DeviceObject() = default;
+	DeviceObject(Context& ctx) : context_(&ctx) {}
+	~DeviceObject();
+
+	DeviceObject(DeviceObject&& rhs) noexcept;
+	DeviceObject& operator=(DeviceObject&& rhs) noexcept;
+
+	Context& context() const { return *context_; }
+	bool valid() const { return context_; }
+	void update();
+
+private:
+	Context* context_ {};
+};
 
 /// Represents a render pass instance using a context.
 struct DrawInstance {
@@ -98,6 +148,8 @@ Vec3f hsv2hsl(Vec3f hsv);
 Color u32rgba(std::uint32_t);
 std::uint32_t u32rgba(const Color&);
 
+/// Returns (fac * a + (1 - fac) * b), i.e. mixes the given colors
+/// with the given factor (which should be in range [0,1]).
 Color mix(const Color& a, const Color& b, float fac);
 
 
@@ -123,6 +175,7 @@ struct DevicePaintData {
 	FragPaintData frag;
 };
 
+/// Host representation of a paint.
 struct PaintData {
 	vk::ImageView texture {};
 	DevicePaintData data;
@@ -139,62 +192,89 @@ PaintData pointColorPaint();
 
 /// Defines how shapes are drawn.
 /// For a more fine-grained control see PaintBinding and PaintBuffer.
-class Paint {
-public:
-	PaintData paint;
-
+class Paint : public DeviceObject {
 public:
 	Paint() = default;
 	Paint(Context&, const PaintData& data);
 
+	/// Binds the Paint object in the given DrawInstance.
+	/// Following calls to fill/stroke of a polygon-based shape
+	/// or Text::draw will use this bound paint until another
+	/// Paint is bound.
 	void bind(const DrawInstance&) const;
-	bool updateDevice(const Context&);
+
+	auto change() { return StateChange {*this, paint_}; }
+	void paint(const PaintData& data) { *change() = data; }
+	const auto& paint() const { return paint_; }
 
 	const auto& ubo() const { return ubo_; }
 	const auto& ds() const { return ds_; }
 
+	void update();
+	bool updateDevice();
+
 protected:
-	vk::ImageView oldView_;
+	PaintData paint_ {};
 	vpp::BufferRange ubo_;
 	vpp::DescriptorSet ds_;
+	vk::ImageView oldView_ {};
 };
 
 /// Matrix-based transform used to specify how shape coordinates
 /// are mapped to the output.
-class Transform {
-public:
-	Mat4f matrix;
-
+class Transform : public DeviceObject {
 public:
 	Transform() = default;
-	Transform(Context& ctx);
+	Transform(Context& ctx); // uses identity matrix
 	Transform(Context& ctx, const Mat4f&);
 
+	/// Binds the transform in the given DrawInstance.
+	/// All following stroke/fill calls are affected by this transform object,
+	/// until another transform is bound.
+	void bind(const DrawInstance&) const;
+
+	auto change() { return StateChange {*this, matrix_}; }
+	auto& matrix() const { return matrix_; }
+	void matrix(const Mat4f& matrix) { *change() = matrix; }
+
 	auto& ubo() const { return ubo_; }
-	void updateDevice();
-	void bind(const DrawInstance&);
+	auto& ds() const { return ds_; }
+
+	void update();
+	bool updateDevice();
 
 protected:
+	Mat4f matrix_;
 	vpp::BufferRange ubo_;
 	vpp::DescriptorSet ds_;
 };
 
 /// Limits the area in which can be drawn.
 /// Scissor is applied before the transformation.
-class Scissor {
+class Scissor : public DeviceObject {
 public:
 	static constexpr Rect2f reset = {-1e6, -1e6, 2e6, 2e6};
-	Rect2f rect = reset;
 
 public:
 	Scissor() = default;
-	Scissor(const Context&);
-	Scissor(const Context&, const Rect2f&);
+	Scissor(Context&, const Rect2f& = reset);
 
-	void updateDevice();
-	void bind(const DrawInstance&);
+	/// Binds the scissor in the given DrawInstance.
+	/// All following stroke/fill calls are affected by this scissor object,
+	/// until another scissor is bound.
+	void bind(const DrawInstance&) const;
+
+	auto change() { return StateChange {*this, rect_}; }
+	void rect(const Rect2f& rect) { *change() = rect; }
+	auto& rect() const { return rect_; }
+
+	auto& ubo() const { return ubo_; }
+	auto& ds() const { return ds_; }
+	void update();
+	bool updateDevice();
 
 protected:
+	Rect2f rect_ = reset;
 	vpp::BufferRange ubo_;
 	vpp::DescriptorSet ds_;
 };
@@ -214,12 +294,24 @@ struct ContextSettings {
 /// draw any shapes.
 class Context {
 public:
+	using DeviceObject = std::variant<
+		Polygon*,
+		Text*,
+		Paint*,
+		Transform*,
+		Scissor*>;
+
+public:
 	Context(vpp::Device&, const ContextSettings&);
+
+	bool updateDevice();
+	DrawInstance record(vk::CommandBuffer);
+
+	void rerecord() { rerecord_ = true; }
 
 	const vpp::Device& device() const { return device_; };
 	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
 	const auto& dsPool() const { return dsPool_; }
-	DrawInstance record(vk::CommandBuffer);
 
 	vk::Pipeline fanPipe() const { return fanPipe_; }
 	vk::Pipeline stripPipe() const { return stripPipe_; }
@@ -235,6 +327,10 @@ public:
 	const auto& pointColorPaint() const { return pointColorPaint_; }
 	const auto& identityTransform() const { return identityTransform_; }
 	const auto& defaultScissor() const { return defaultScissor_; }
+
+	void registerUpdateDevice(DeviceObject);
+	bool deviceObjectDestroyed(::vgv::DeviceObject&) noexcept;
+	void deviceObjectMoved(::vgv::DeviceObject&, ::vgv::DeviceObject&) noexcept;
 
 private:
 	const vpp::Device& device_;
@@ -256,6 +352,9 @@ private:
 	Scissor defaultScissor_;
 	Transform identityTransform_;
 	Paint pointColorPaint_;
+
+	std::unordered_set<DeviceObject> updateDevice_;
+	bool rerecord_;
 };
 
 /// Type (format) of a texture.
@@ -276,29 +375,43 @@ vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
 
 /// Specifies in which way a polygon can be drawn.
 struct DrawMode {
-	bool fill {};
-	float stroke {};
+	bool fill {}; /// Whether it can be filled
+	float stroke {}; /// Whether it can be stroked
 
+	/// Defines per-point color values.
+	/// If the polygon is then filled/stroked with a pointColorPaint,
+	/// will use those points.
 	struct {
-		std::vector<Vec4u8> points {};
-		bool fill {};
-		bool stroke {};
+		std::vector<Vec4u8> points {}; /// the per-point color values
+		bool fill {}; /// whether they can be used when filling
+		bool stroke {}; /// whether they can be used when stroking
 	} color {};
 };
 
+enum class DrawType {
+	stroke,
+	fill,
+	strokeFill
+};
+
 /// A shape defined by points that can be stroked or filled.
-class Polygon {
+class Polygon : public DeviceObject {
 public:
-	/// Returns whether a rerecord is needed.
+	Polygon() = default;
+	Polygon(Context&);
+
 	/// Can be called at any time, computes the polygon from the given
 	/// points and draw mode. The DrawMode specifies whether this polygon
 	/// can be used for filling or stroking and their properties.
+	/// Automatically registers this object for the next updateDevice call.
 	void update(Span<const Vec2f> points, const DrawMode&);
 
-	/// Uploads data to the device. Must not be called while a command
-	/// buffer drawing the Polygon is executing.
-	/// Returns whether a command buffer rerecord is needed.
-	bool updateDevice(const Context&, bool disable = false);
+	/// Changes the disable state of this polygon.
+	/// Cheap way to hide/unhide the polygon, can be called at any
+	/// time and will never trigger a rerecord.
+	/// Automatically registers this object for the next updateDevice call.
+	void disable(bool, DrawType = DrawType::strokeFill);
+	bool disabled(DrawType = DrawType::strokeFill) const;
 
 	/// Records commands to fill this polygon into the given DrawInstance.
 	/// Undefined behaviour if it was updates without fill support.
@@ -308,13 +421,19 @@ public:
 	/// Undefined behaviour if it was updates without stroke support.
 	void stroke(const DrawInstance&) const;
 
-protected:
-	enum class State {
-		fillColor = 1u,
-		strokeColor = 2u,
-	};
+	/// Usually only automatically called from context.
+	/// Uploads data to the device. Must not be called while a command
+	/// buffer drawing the Polygon is executing.
+	/// Returns whether a command buffer rerecord is needed.
+	bool updateDevice();
 
-	nytl::Flags<State> state_ {};
+protected:
+	struct {
+		bool fillColor : 1;
+		bool strokeColor : 1;
+		bool disableFill : 1;
+		bool disableStroke : 1;
+	} flags_ {};
 
 	std::vector<Vec2f> fillCache_;
 	std::vector<Vec4u8> fillColorCache_;
@@ -329,79 +448,94 @@ protected:
 /// Can be filled or stroked.
 class Shape {
 public:
-	std::vector<Vec2f> points;
-	DrawMode draw;
-	bool hide {false};
-
-public:
 	Shape() = default;
-	Shape(const Context&, std::vector<Vec2f> points, const DrawMode&,
-		bool hide = false);
+	Shape(Context&, std::vector<Vec2f> points, const DrawMode&);
 
-	void update();
-	bool updateDevice(const Context&);
-	void fill(const DrawInstance&) const;
-	void stroke(const DrawInstance&) const;
+	auto change() { return StateChange {*this, state_}; }
 
+	void fill(const DrawInstance& di) const { return polygon_.fill(di); }
+	void stroke(const DrawInstance& di) const { return polygon_.stroke(di); }
+
+	auto& context() const { return polygon_.context(); }
+	void disable(bool d, DrawType t = DrawType::strokeFill);
+	bool disabled(DrawType t = DrawType::strokeFill) const;
+
+	const auto& state() const { return state_; }
 	const auto& polygon() const { return polygon_; }
+	void update();
 
 protected:
+	struct State {
+		std::vector<Vec2f> points;
+		DrawMode draw;
+	} state_;
+
 	Polygon polygon_;
 };
 
-/// Rectangle shape that can be filled to stroked.
+/// Rectangle shape that can be filled or stroked.
 /// Can also have rounded corners.
 class RectShape {
 public:
-	Vec2f position;
-	Vec2f size;
-	DrawMode draw;
-	bool hide {false};
-	std::array<float, 4> rounding {};
-
-public:
 	RectShape() = default;
-	RectShape(const Context&, Vec2f pos, Vec2f size, const DrawMode&,
-		bool hide = false, std::array<float, 4> round = {});
+	RectShape(Context&, Vec2f pos, Vec2f size, const DrawMode&,
+		std::array<float, 4> round = {});
 
-	void update();
-	bool updateDevice(const Context&);
+	auto change() { return StateChange {*this, state_}; }
 
-	void fill(const DrawInstance&) const;
-	void stroke(const DrawInstance&) const;
+	void fill(const DrawInstance& di) const { return polygon_.fill(di); }
+	void stroke(const DrawInstance& di) const { return polygon_.stroke(di); }
 
+	auto& context() const { return polygon_.context(); }
+	void disable(bool d, DrawType t = DrawType::strokeFill);
+	bool disabled(DrawType t = DrawType::strokeFill) const;
+
+	const auto& state() const { return state_; }
 	const auto& polygon() const { return polygon_; }
+	void update();
 
 protected:
+	struct {
+		Vec2f position;
+		Vec2f size;
+		DrawMode draw;
+		std::array<float, 4> rounding {};
+	} state_;
+
 	Polygon polygon_;
 };
 
 /// Circular shape that can be filled or stroked.
 class CircleShape {
 public:
-	Vec2f center;
-	Vec2f radius;
-	DrawMode draw;
-	bool hide {false};
-	unsigned points {16};
-	float startAngle {0.f};
-
-public:
 	CircleShape() = default;
-	CircleShape(const Context&, Vec2f center, Vec2f radius, const DrawMode&,
-		bool hide = false, unsigned points = 16, float startAngle = 0.f);
-	CircleShape(const Context&, Vec2f center, float radius, const DrawMode&,
-		bool hide = false, unsigned points = 16, float startAngle = 0.f);
+	CircleShape(Context&, Vec2f center, Vec2f radius, const DrawMode&,
+		unsigned points = 16, float startAngle = 0.f);
+	CircleShape(Context&, Vec2f center, float radius, const DrawMode&,
+		unsigned points = 16, float startAngle = 0.f);
 
-	void update();
-	bool updateDevice(const Context&);
+	auto change() { return StateChange {*this, state_}; }
 
-	void fill(const DrawInstance&) const;
-	void stroke(const DrawInstance&) const;
+	void fill(const DrawInstance& di) const { return polygon_.fill(di); }
+	void stroke(const DrawInstance& di) const { return polygon_.stroke(di); }
 
+	auto& context() const { return polygon_.context(); }
+	void disable(bool d, DrawType t = DrawType::strokeFill);
+	bool disabled(DrawType t = DrawType::strokeFill) const;
+
+	const auto& state() const { return state_; }
 	const auto& polygon() const { return polygon_; }
+	void update();
 
 protected:
+	struct {
+		Vec2f center;
+		Vec2f radius;
+		DrawMode draw;
+		unsigned points {16};
+		float startAngle {0.f};
+	} state_;
+
 	Polygon polygon_;
 };
 
@@ -430,7 +564,8 @@ public:
 	Font(FontAtlas&, const char* file, unsigned height);
 	Font(FontAtlas&, struct nk_font* font);
 
-	float width(StringParam text) const;
+	float width(std::string_view text) const;
+	float width(std::u32string_view text) const;
 	float height() const;
 
 	auto* nkFont() const { return font_; }
@@ -442,41 +577,58 @@ protected:
 };
 
 /// Represents text to be drawn.
-class Text {
-public:
-	std::u32string text {};
-	const Font* font {};
-	Vec2f position {};
-	bool hide {false};
-
+class Text : public DeviceObject {
 public:
 	Text() = default;
-	Text(const Context&, std::u32string text, const Font&, Vec2f pos);
-	Text(const Context&, std::string text, const Font&, Vec2f pos);
+	Text(Context&, std::u32string text, const Font&, Vec2f pos);
+	Text(Context&, std::string_view text, const Font&, Vec2f pos);
 
-	void update();
-	bool updateDevice(const Context&);
+	/// Draws this text with the bound draw resources (transform,
+	/// scissor, paint).
 	void draw(const DrawInstance&) const;
 
+	auto change() { return StateChange {*this, state_}; }
+	bool disable(bool);
+	bool disabled() const { return disable_; }
+
 	/// Computes which char index lies at the given relative x.
-	/// For this to work, update() has to have been called.
 	/// Returns the index of the char at the given x, or the index of
 	/// the next one if there isn't any. Returns text.length() if x is
 	/// after all chars.
 	unsigned charAt(float x) const;
 
 	/// Returns the bounds of the ith char in local coordinates.
-	/// For this to work, update() has to have been called.
 	/// For a char that has no x-size (e.g. space), returns xadvance
 	/// as x size.
 	Rect2f ithBounds(unsigned n) const;
 
+	const auto& font() const { return state_.font; }
+	const auto& utf32() const { return state_.utf32; }
+	const auto& position() const { return state_.position; }
+	auto utf8() const { return state_.utf8(); }
+	float width() const;
+
+	void update();
+	bool updateDevice();
+
 protected:
+	struct State {
+		std::u32string utf32 {};
+		const Font* font {};
+		Vec2f position {};
+
+		void utf8(StringParam);
+		std::string utf8() const;
+	} state_;
+
+	bool disable_ {};
 	std::vector<Vec2f> posCache_;
 	std::vector<Vec2f> uvCache_;
 	vpp::BufferRange buf_;
+	const Font* oldFont_ {};
 };
 
+// TODO: move as constants into Context
 constexpr auto transformBindSet = 0u;
 constexpr auto paintBindSet = 1u;
 constexpr auto fontBindSet = 2u;

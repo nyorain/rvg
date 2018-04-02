@@ -253,7 +253,7 @@ public:
 
 protected:
 	static constexpr auto hintDelay = 1.0;
-	static constexpr auto hintOffset = Vec {20.f, 20.f};
+	static constexpr auto hintOffset = Vec {20.f, 0.f};
 	static constexpr auto padding = Vec {40.f, 15.f};
 
 	struct {

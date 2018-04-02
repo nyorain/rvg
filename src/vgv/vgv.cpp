@@ -272,7 +272,72 @@ DrawInstance Context::record(vk::CommandBuffer cmdb) {
 	return ret;
 }
 
+bool Context::updateDevice() {
+	auto visitor = [&](auto* obj) {
+		dlg_assert(obj);
+		return obj->updateDevice();
+	};
+
+	for(auto& ud : updateDevice_) {
+		rerecord_ |= std::visit(visitor, ud);
+	}
+
+	updateDevice_.clear();
+	auto ret = rerecord_;
+	rerecord_ = false;
+	return ret;
+}
+
+void Context::registerUpdateDevice(DeviceObject obj) {
+	updateDevice_.insert(obj);
+}
+
+bool Context::deviceObjectDestroyed(::vgv::DeviceObject& obj) noexcept {
+	auto it = updateDevice_.begin();
+	auto visitor = [&](auto* ud) {
+		if(&obj == ud) {
+			updateDevice_.erase(it);
+			return true;
+		}
+
+		return false;
+	};
+
+	for(; it != updateDevice_.end(); ++it) {
+		if(std::visit(visitor, *it)) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+void Context::deviceObjectMoved(::vgv::DeviceObject& o,
+		::vgv::DeviceObject& n) noexcept {
+
+	auto it = updateDevice_.begin();
+	auto visitor = [&](auto* ud) {
+		if(&o == ud) {
+			updateDevice_.erase(it);
+			auto i = static_cast<decltype(ud)>(&n);
+			updateDevice_.insert(i);
+			return true;
+		}
+
+		return false;
+	};
+
+	for(; it != updateDevice_.end(); ++it) {
+		if(std::visit(visitor, *it)) {
+			return;
+		}
+	}
+}
+
 // Polygon
+Polygon::Polygon(Context& ctx) : DeviceObject(ctx) {
+}
+
 void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 	fillCache_.clear();
 	fillColorCache_.clear();
@@ -297,6 +362,33 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 			ktc::bakeStroke(points, {mode.stroke}, strokeCache_);
 		}
 	}
+
+	context().registerUpdateDevice(this);
+}
+
+void Polygon::disable(bool disable, DrawType type) {
+	if(type == DrawType::strokeFill || type == DrawType::fill) {
+		flags_.disableFill = disable;
+	}
+
+	if(type == DrawType::strokeFill || type == DrawType::stroke) {
+		flags_.disableStroke = disable;
+	}
+
+	context().registerUpdateDevice(this);
+}
+
+bool Polygon::disabled(DrawType type) const {
+	bool ret = true;
+	if(type == DrawType::strokeFill || type == DrawType::fill) {
+		ret &= flags_.disableFill;
+	}
+
+	if(type == DrawType::strokeFill || type == DrawType::stroke) {
+		ret &= flags_.disableStroke;
+	}
+
+	return ret;
 }
 
 // Buffer layouts (IDC = IndirectDrawCommand):
@@ -309,25 +401,33 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 // color data [if any] (vec4u8)
 // -- end
 
-bool Polygon::updateDevice(const Context& ctx, bool hide) {
+bool Polygon::updateDevice() {
+	// TODO: only create buffers if needed. When a Polygon is never stroked,
+	// don't ever create a stroke buffer. Probably needs additional flag
+
+	dlg_assert(valid());
+
 	bool rerecord = false;
-	auto upload = [&](auto& cache, auto& ccache, auto cstate, auto& buf) {
+	auto upload = [&](auto& cache, auto& colorCache, auto colorFlag,
+			auto disableFlag, auto& buf) {
+
 		auto neededSize = sizeof(vk::DrawIndirectCommand);
 		neededSize += sizeof(cache[0]) * cache.size();
-
-		if(!ccache.empty()) {
+		if(!colorCache.empty()) {
 			neededSize = vpp::align(neededSize, 4u);
-			neededSize += sizeof(ccache[0]) * ccache.size();
+			neededSize += sizeof(colorCache[0]) * colorCache.size();
 		}
 
-		if(ccache.empty() == (state_ & cstate)) {
-			state_ ^= cstate;
+		if(disableFlag) {
+			neededSize = sizeof(vk::DrawIndirectCommand);
+		} else if(colorCache.empty() == colorFlag) {
+			colorFlag ^= true;
 			rerecord = true;
 		}
 
 		if(buf.size() < neededSize) {
 			neededSize *= 2;
-			buf = ctx.device().bufferAllocator().alloc(true, neededSize,
+			buf = context().device().bufferAllocator().alloc(true, neededSize,
 				vk::BufferUsageBits::vertexBuffer, 4u);
 			rerecord = true;
 		}
@@ -336,28 +436,35 @@ bool Polygon::updateDevice(const Context& ctx, bool hide) {
 		auto ptr = map.ptr();
 
 		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = !hide * cache.size();
+		cmd.vertexCount = !disableFlag * cache.size();
 		cmd.instanceCount = 1;
 		write(ptr, cmd);
 
+		if(disableFlag) {
+			return;
+		}
+
 		std::memcpy(ptr, cache.data(), cache.size() * sizeof(cache[0]));
 
-		if(!ccache.empty()) {
+		if(!colorCache.empty()) {
 			auto off = 2/3.f * (buf.size() - sizeof(vk::DrawIndirectCommand));
 			off += sizeof(vk::DrawIndirectCommand);
 			auto uoff = vpp::align(vk::DeviceSize(off), 4u);
 			ptr = map.ptr() + uoff;
-			std::memcpy(ptr, ccache.data(), ccache.size() * sizeof(ccache[0]));
+			auto size = colorCache.size() * sizeof(colorCache[0]);
+			std::memcpy(ptr, colorCache.data(), size);
 		}
 	};
 
-	upload(fillCache_, fillColorCache_, State::fillColor, fillBuf_);
-	upload(strokeCache_, strokeColorCache_, State::strokeColor, strokeBuf_);
+	upload(fillCache_, fillColorCache_, flags_.fillColor,
+		flags_.disableFill, fillBuf_);
+	upload(strokeCache_, strokeColorCache_, flags_.strokeColor,
+		flags_.disableStroke, strokeBuf_);
 	return rerecord;
 }
 
 void Polygon::fill(const DrawInstance& ini) const {
-	dlg_assert(fillBuf_.size() > 0);
+	dlg_assert(valid() && fillBuf_.size() > 0);
 
 	auto& ctx = ini.context;
 	auto& cmdb = ini.cmdBuf;
@@ -373,7 +480,7 @@ void Polygon::fill(const DrawInstance& ini) const {
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
 
-	if(state_ & State::fillColor) {
+	if(flags_.fillColor) {
 		auto o = 2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand));
 		o += sizeof(vk::DrawIndirectCommand);
 		off = b.offset() + vpp::align(vk::DeviceSize(o), 4u);
@@ -385,7 +492,7 @@ void Polygon::fill(const DrawInstance& ini) const {
 }
 
 void Polygon::stroke(const DrawInstance& ini) const {
-	dlg_assert(strokeBuf_.size() > 0);
+	dlg_assert(valid() && strokeBuf_.size() > 0);
 
 	auto& ctx = ini.context;
 	auto& cmdb = ini.cmdBuf;
@@ -401,7 +508,7 @@ void Polygon::stroke(const DrawInstance& ini) const {
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
 
-	if(state_ & State::strokeColor) {
+	if(flags_.strokeColor) {
 		auto o = 2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand));
 		o += sizeof(vk::DrawIndirectCommand);
 		off = b.offset() + vpp::align(vk::DeviceSize(o), 4u);
@@ -413,50 +520,51 @@ void Polygon::stroke(const DrawInstance& ini) const {
 }
 
 // Shape
-Shape::Shape(const Context& ctx, std::vector<Vec2f> p, const DrawMode& d,
-		bool h) : points(std::move(p)), draw(d), hide(h) {
+Shape::Shape(Context& ctx, std::vector<Vec2f> p, const DrawMode& d) :
+		state_{std::move(p), std::move(d)}, polygon_(ctx) {
+
 	update();
-	updateDevice(ctx);
+	polygon_.updateDevice();
 }
 
 void Shape::update() {
-	polygon_.update(points, draw);
+	polygon_.update(state_.points, state_.draw);
 }
 
-bool Shape::updateDevice(const Context& ctx) {
-	return polygon_.updateDevice(ctx, hide);
+void Shape::disable(bool d, DrawType t) {
+	polygon_.disable(d, t);
 }
 
-void Shape::fill(const DrawInstance& di) const {
-	return polygon_.fill(di);
-}
-
-void Shape::stroke(const DrawInstance& di) const {
-	return polygon_.stroke(di);
+bool Shape::disabled(DrawType t) const {
+	return polygon_.disabled(t);
 }
 
 // Rect
-RectShape::RectShape(const Context& ctx, Vec2f p, Vec2f s,
-		const DrawMode& d, bool h, std::array<float, 4> round) :
-			position(p), size(s), draw(d), hide(h), rounding(round) {
+RectShape::RectShape(Context& ctx, Vec2f p, Vec2f s,
+	const DrawMode& d, std::array<float, 4> round) :
+		state_{p, s, std::move(d), round}, polygon_(ctx) {
 
 	update();
-	updateDevice(ctx);
+	polygon_.updateDevice();
 }
 
 void RectShape::update() {
-	if(rounding == std::array<float, 4>{}) {
+	if(state_.rounding == std::array<float, 4>{}) {
 		auto points = {
-			position,
-			position + Vec {size.x, 0.f},
-			position + size,
-			position + Vec {0.f, size.y},
-			position
+			state_.position,
+			state_.position + Vec {state_.size.x, 0.f},
+			state_.position + state_.size,
+			state_.position + Vec {0.f, state_.size.y},
+			state_.position
 		};
-		polygon_.update(points, draw);
+		polygon_.update(points, state_.draw);
 	} else {
 		constexpr auto steps = 12u;
 		std::vector<Vec2f> points;
+
+		auto& position = state_.position;
+		auto& size = state_.size;
+		auto& rounding = state_.rounding;
 
 		// topRight
 		if(rounding[0] != 0.f) {
@@ -523,67 +631,60 @@ void RectShape::update() {
 
 		// close it
 		points.push_back(points[0]);
-		polygon_.update(points, draw);
+		polygon_.update(points, state_.draw);
 	}
 }
 
-bool RectShape::updateDevice(const Context& ctx) {
-	return polygon_.updateDevice(ctx, hide);
+void RectShape::disable(bool d, DrawType t) {
+	polygon_.disable(d, t);
 }
 
-void RectShape::fill(const DrawInstance& di) const {
-	return polygon_.fill(di);
-}
-
-void RectShape::stroke(const DrawInstance& di) const {
-	return polygon_.stroke(di);
+bool RectShape::disabled(DrawType t) const {
+	return polygon_.disabled(t);
 }
 
 // CircleShape
-CircleShape::CircleShape(const Context& ctx,
-		Vec2f xcenter, Vec2f xradius, const DrawMode& xdraw,
-		bool xhide, unsigned xpoints, float xstartAngle)
-			: center(xcenter), radius(xradius), draw(xdraw), hide(xhide),
-				points(xpoints), startAngle(xstartAngle) {
+CircleShape::CircleShape(Context& ctx,
+	Vec2f xcenter, Vec2f xradius, const DrawMode& xdraw,
+	unsigned xpoints, float xstartAngle)
+		: state_{xcenter, xradius, std::move(xdraw), xpoints, xstartAngle},
+			polygon_(ctx) {
 
 	update();
-	updateDevice(ctx);
+	polygon_.updateDevice();
 }
 
-CircleShape::CircleShape(const Context& ctx,
-		Vec2f xcenter, float xradius, const DrawMode& xdraw,
-		bool xhide, unsigned xpoints, float xstartAngle)
-			: CircleShape(ctx, xcenter, {xradius, xradius},
-				xdraw, xhide, xpoints, xstartAngle) {
+CircleShape::CircleShape(Context& ctx,
+	Vec2f xcenter, float xradius, const DrawMode& xdraw,
+	unsigned xpoints, float xstartAngle)
+		: CircleShape(ctx, xcenter, {xradius, xradius},
+			xdraw, xpoints, xstartAngle) {
 }
 
 void CircleShape::update() {
-	dlg_assertl(dlg_level_warn, points > 2);
+	dlg_assertl(dlg_level_warn, state_.points > 2);
 
 	std::vector<Vec2f> pts;
-	pts.reserve(points);
+	pts.reserve(state_.points);
 
-	auto a = startAngle;
-	auto d = 2 * nytl::constants::pi / points;
-	for(auto i = 0u; i < points + 1; ++i) {
+	auto a = state_.startAngle;
+	auto d = 2 * nytl::constants::pi / state_.points;
+	for(auto i = 0u; i < state_.points + 1; ++i) {
 		using namespace nytl::vec::cw::operators;
-		pts.push_back(center + Vec {std::cos(a), std::sin(a)} * radius);
+		auto p = Vec {std::cos(a), std::sin(a)} * state_.radius;
+		pts.push_back(state_.center + p);
 		a += d;
 	}
 
-	polygon_.update(pts, draw);
+	polygon_.update(pts, state_.draw);
 }
 
-bool CircleShape::updateDevice(const Context& ctx) {
-	return polygon_.updateDevice(ctx, hide);
+void CircleShape::disable(bool d, DrawType t) {
+	polygon_.disable(d, t);
 }
 
-void CircleShape::fill(const DrawInstance& di) const {
-	return polygon_.fill(di);
-}
-
-void CircleShape::stroke(const DrawInstance& di) const {
-	return polygon_.stroke(di);
+bool CircleShape::disabled(DrawType t) const {
+	return polygon_.disabled(t);
 }
 
 // FontAtlas
@@ -654,11 +755,23 @@ Font::Font(FontAtlas& atlas, struct nk_font* font) :
 	atlas_(&atlas), font_(font) {
 }
 
-float Font::width(StringParam text) const {
+float Font::width(std::string_view text) const {
 	dlg_assert(font_);
 	auto& handle = font_->handle;
-	return handle.width(handle.userdata, handle.height, text.c_str(),
+	return handle.width(handle.userdata, handle.height, text.data(),
 		text.size());
+}
+
+float Font::width(std::u32string_view text) const {
+	dlg_assert(font_);
+	float w = 0.f;
+	for(auto c : text) {
+		auto g = nk_font_find_glyph(font_, c);
+		dlg_assert(g);
+		w += g->xadvance;
+	}
+
+	return w;
 }
 
 float Font::height() const {
@@ -670,20 +783,29 @@ float Font::height() const {
 constexpr auto vertIndex0 = 2;
 constexpr auto vertIndex2 = 3;
 
-Text::Text(const Context& ctx, std::string xtext, const Font& f, Vec2f xpos) :
+Text::Text(Context& ctx, std::string_view xtext, const Font& f, Vec2f xpos) :
 	Text(ctx, toUtf32(xtext), f, xpos) {
 }
 
-Text::Text(const Context& ctx, std::u32string txt, const Font& f, Vec2f xpos) :
-		text(std::move(txt)), font(&f), position(xpos) {
+Text::Text(Context& ctx, std::u32string txt, const Font& f, Vec2f xpos) :
+		DeviceObject(ctx), state_{std::move(txt), &f, xpos}, oldFont_(&f) {
+
 	update();
-	updateDevice(ctx);
+	updateDevice();
 }
+
 void Text::update() {
-	// TODO: should signal rerecord when font was changed to a font
-	// in a different atlas. Rework font (atlas) binding.
-	// Or (alternatively) make Font private and proviate an update overload
-	// taking a Font&
+	auto& font = state_.font;
+	auto& text = state_.utf32;
+	auto& position = state_.position;
+
+	if(font != oldFont_) {
+		if(&font->atlas() != &oldFont_->atlas()) {
+			context().rerecord();
+		}
+
+		oldFont_ = font;
+	}
 
 	dlg_assert(font && font->nkFont());
 	dlg_assert(posCache_.size() == uvCache_.size());
@@ -710,10 +832,7 @@ void Text::update() {
 
 	for(auto c : text) {
 		auto pglyph = nk_font_find_glyph(font->nkFont(), c);
-		if(!pglyph) {
-			dlg_error("nk_font_find_glyph return null for {}", c);
-			break;
-		}
+		dlg_assert(pglyph);
 
 		auto& glyph = *pglyph;
 
@@ -726,10 +845,11 @@ void Text::update() {
 		x += glyph.xadvance;
 	}
 
+	context().registerUpdateDevice(this);
 	dlg_assert(posCache_.size() == uvCache_.size());
 }
 
-bool Text::updateDevice(const Context& ctx) {
+bool Text::updateDevice() {
 	bool rerecord = false;
 
 	// now upload data to gpu
@@ -740,7 +860,7 @@ bool Text::updateDevice(const Context& ctx) {
 
 	if(buf_.size() < neededSize) {
 		neededSize *= 2;
-		buf_ = ctx.device().bufferAllocator().alloc(true,
+		buf_ = context().device().bufferAllocator().alloc(true,
 			neededSize, vk::BufferUsageBits::vertexBuffer);
 		rerecord = true;
 	}
@@ -750,7 +870,7 @@ bool Text::updateDevice(const Context& ctx) {
 
 	// the positionBuf contains the indirect draw command, if there is any
 	vk::DrawIndirectCommand cmd {};
-	cmd.vertexCount = !hide * posCache_.size();
+	cmd.vertexCount = !disable_ * posCache_.size();
 	cmd.instanceCount = 1;
 	write(ptr, cmd);
 
@@ -771,7 +891,7 @@ void Text::draw(const DrawInstance& ini) const {
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), fontBindSet, {font->atlas().ds()}, {});
+		ctx.pipeLayout(), fontBindSet, {state_.font->atlas().ds()}, {});
 
 	static constexpr auto isText = uint32_t(1);
 	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
@@ -788,7 +908,7 @@ void Text::draw(const DrawInstance& ini) const {
 }
 
 unsigned Text::charAt(float x) const {
-	x += position.x;
+	x += state_.position.x;
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
 		auto end = posCache_[i + vertIndex2].x;
 		if(x < end) {
@@ -800,19 +920,20 @@ unsigned Text::charAt(float x) const {
 }
 
 Rect2f Text::ithBounds(unsigned n) const {
+	auto& text = utf32();
+	auto& position = state_.position;
+
 	if(posCache_.size() <= n * 6 || text.size() <= n) {
 		throw std::out_of_range("Text::ithBounds");
 	}
 
+	// TODO: always use advance
 	auto start = posCache_[n * 6 + vertIndex0];
 	auto r = Rect2f {start - position, posCache_[n * 6 + vertIndex2] - start};
 
 	if(r.size.x <= 0.f) {
-		auto pglyph = nk_font_find_glyph(font->nkFont(), text[n]);
-		if(!pglyph) {
-			dlg_error("nk_font_find_glyph returned null for {}", text[n]);
-			return r;
-		}
+		auto pglyph = nk_font_find_glyph(state_.font->nkFont(), text[n]);
+		dlg_assert(pglyph);
 
 		r.size.x = pglyph->xadvance;
 	}
@@ -820,12 +941,39 @@ Rect2f Text::ithBounds(unsigned n) const {
 	return r;
 }
 
+void Text::State::utf8(StringParam utf8) {
+	utf32 = toUtf32(utf8);
+}
+
+std::string Text::State::utf8() const {
+	return toUtf8(utf32);
+}
+
+float Text::width() const {
+	if(utf32().empty()) {
+		return 0.f;
+	}
+
+	auto first = ithBounds(0);
+	auto last = ithBounds(utf32().length() - 1);
+	return last.position.x + last.size.x - first.position.x;
+}
+
+bool Text::disable(bool disable) {
+	auto ret = disable_;
+	disable_ = disable;
+	context().registerUpdateDevice(this);
+	return ret;
+}
+
 // Transform
 constexpr auto transformUboSize = sizeof(Mat4f);
 Transform::Transform(Context& ctx) : Transform(ctx, identity<4, float>()) {
 }
 
-Transform::Transform(Context& ctx, const Mat4f& m) : matrix(m) {
+Transform::Transform(Context& ctx, const Mat4f& m) :
+		DeviceObject(ctx), matrix_(m) {
+
 	ubo_ = ctx.device().bufferAllocator().alloc(true, transformUboSize,
 		vk::BufferUsageBits::uniformBuffer);
 	ds_ = {ctx.dsLayoutTransform(), ctx.dsPool()};
@@ -835,24 +983,29 @@ Transform::Transform(Context& ctx, const Mat4f& m) : matrix(m) {
 	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
 }
 
-void Transform::updateDevice() {
-	dlg_assert(ubo_.size() && ds_);
+bool Transform::updateDevice() {
+	dlg_assert(valid() && ubo_.size() && ds_);
 	auto map = ubo_.memoryMap();
-	std::memcpy(map.ptr(), &matrix, sizeof(Mat4f));
+	std::memcpy(map.ptr(), &matrix_, sizeof(Mat4f));
+	return false;
 }
 
-void Transform::bind(const DrawInstance& di) {
-	dlg_assert(ubo_.size() && ds_);
+void Transform::update() {
+	dlg_assert(valid() && ds_ && ubo_.size());
+	context().registerUpdateDevice(this);
+}
+
+void Transform::bind(const DrawInstance& di) const {
+	dlg_assert(valid() && ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
 		di.context.pipeLayout(), transformBindSet, {ds_}, {});
 }
 
 // Scissor
 constexpr auto scissorUboSize = sizeof(Vec2f) * 2;
-Scissor::Scissor(const Context& ctx) : Scissor(ctx, reset) {
-}
+Scissor::Scissor(Context& ctx, const Rect2f& r)
+		: DeviceObject(ctx), rect_(r) {
 
-Scissor::Scissor(const Context& ctx, const Rect2f& r) : rect(r) {
 	ubo_ = ctx.device().bufferAllocator().alloc(true, scissorUboSize,
 		vk::BufferUsageBits::uniformBuffer);
 	ds_ = {ctx.dsLayoutScissor(), ctx.dsPool()};
@@ -862,18 +1015,54 @@ Scissor::Scissor(const Context& ctx, const Rect2f& r) : rect(r) {
 	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
 }
 
-void Scissor::updateDevice() {
+void Scissor::update() {
+	dlg_assert(valid() && ds_ && ubo_.size());
+	context().registerUpdateDevice(this);
+}
+
+bool Scissor::updateDevice() {
 	dlg_assert(ubo_.size() && ds_);
 	auto map = ubo_.memoryMap();
 	auto ptr = map.ptr();
-	write(ptr, rect.position);
-	write(ptr, rect.size);
+	write(ptr, rect_.position);
+	write(ptr, rect_.size);
+	return false;
 }
 
-void Scissor::bind(const DrawInstance& di) {
+void Scissor::bind(const DrawInstance& di) const {
 	dlg_assert(ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
 		di.context.pipeLayout(), scissorBindSet, {ds_}, {});
+}
+
+// DeviceObject
+DeviceObject::DeviceObject(DeviceObject&& rhs) noexcept {
+	using std::swap;
+	swap(context_, rhs.context_);
+
+	if(context_) {
+		context_->deviceObjectMoved(rhs, *this);
+	}
+}
+
+DeviceObject& DeviceObject::operator=(DeviceObject&& rhs) noexcept {
+	if(context_) {
+		context_->deviceObjectDestroyed(*this);
+	}
+
+	if(rhs.context_) {
+		rhs.context_->deviceObjectMoved(rhs, *this);
+	}
+
+	context_ = rhs.context_;
+	rhs.context_ = {};
+	return *this;
+}
+
+DeviceObject::~DeviceObject() {
+	if(valid()) {
+		context().deviceObjectDestroyed(*this);
+	}
 }
 
 } // namespace vgv

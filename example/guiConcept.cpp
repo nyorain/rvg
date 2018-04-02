@@ -617,10 +617,14 @@ public:
 	virtual void size(const Vec2f&) = 0;
 
 	/// Returns whether the widget contains the given point.
-	virtual bool contains(Vec2f point) const = 0;
+	virtual bool contains(Vec2f point) const;
 
-	/// Changes the widgets transform for drawing and events.
-	virtual void transform(const nytl::Mat4f& transform);
+	/// Changes the widgets position.
+	virtual void position(Vec2f);
+
+	/// Instructs the widget to intersect its own scissor with the given rect.
+	/// Note that this resets any previous scissor intersections.
+	virtual void intersectScissor(const Rect2f&);
 
 	/// Called when the Widget has registered itself for update.
 	/// Gets the delta time since the last frame in seconds.
@@ -667,6 +671,7 @@ protected:
 
 protected:
 	Gui& gui_;
+	Rect2f bounds_;
 	Transform transform_;
 	Scissor scissor_;
 };

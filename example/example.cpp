@@ -4,7 +4,10 @@
 
 #include "render.hpp"
 #include "window.hpp"
-#include "gui.hpp"
+
+#include "vui/gui.hpp"
+#include "vui/button.hpp"
+#include "vui/window.hpp"
 
 #include <vgv/vgv.hpp>
 #include <katachi/path.hpp>
@@ -29,7 +32,7 @@
 #include <chrono>
 #include <array>
 
-using namespace vui;
+// using namespace vui;
 using namespace nytl::vec::operators;
 using namespace nytl::vec::cw::operators;
 
@@ -144,10 +147,10 @@ int main() {
 
 	vgv::Scissor scissor(ctx, {10, 10, 1900, 1060});
 
-	vgv::Transform transform(ctx);
-	scale(transform.matrix, {2.f / window.size().x, 2.f / window.size().y, 1});
-	translate(transform.matrix, {-1.f, -1.f, 0.f});
-	transform.updateDevice();
+	auto mat = nytl::identity<4, float>();
+	scale(mat, {2.f / window.size().x, 2.f / window.size().y, 1});
+	translate(mat, {-1.f, -1.f, 0.f});
+	vgv::Transform transform(ctx, mat);
 
 	vgv::Shape shape(ctx, {}, {false, 5.f});
 	vgv::Paint paint(ctx, vgv::colorPaint({vgv::norm, 0.1f, .6f, .3f}));
@@ -158,11 +161,12 @@ int main() {
 	vgv::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
 	atlas.bake(ctx);
 
+	vgv::Font lsSmall(atlas, "../../example/LiberationSans-Regular.ttf", 14);
+	atlas.bake(ctx);
+
 	auto string = "yo, whaddup";
 	vgv::Text text(ctx, string, lsFont, {0, 0});
 	auto textWidth = lsFont.width(string);
-
-	text.updateDevice(ctx);
 
 	// svg path
 	// auto svgSubpath = vgv::parseSvgSubpath({300, 200},
@@ -177,56 +181,49 @@ int main() {
 		vgv::TextureType::rgba32);
 	auto iv = foxTex.vkImageView();
 
-	auto mat = nytl::identity<4, float>();
+	mat = nytl::identity<4, float>();
 	mat[0][0] = 1 / 300.f;
 	mat[1][1] = 1 / 200.f;
 	mat[0][3] = -500.f / 300.f;
 	mat[1][3] = -100.f / 200.f;
 	vgv::Paint foxPaint = {ctx, vgv::texturePaintRGBA(mat, iv)};
 
+	vgv::Paint svgPaint {ctx, vgv::colorPaint({150, 230, 200})};
+
+	auto bgPaintData = vgv::colorPaint({5, 5, 5});
+	auto labelPaintData = vgv::colorPaint({240, 240, 240});
+
+	auto hintBgPaint = vgv::Paint(ctx, vgv::colorPaint({5, 5, 5, 200}));
+	auto hintTextPaint = vgv::Paint(ctx, labelPaintData);
+
+	vui::Styles styles;
+
+	// hint
+	styles.hint.bg = &hintBgPaint;
+	styles.hint.text = &hintTextPaint;
+	styles.hint.font = &lsSmall;
+
+	// button
+	styles.button.normal.label = labelPaintData;
+	styles.button.normal.bg = bgPaintData;
+
+	styles.button.hovered.label = labelPaintData;
+	styles.button.hovered.bg = vgv::colorPaint({20, 20, 20});
+
+	styles.button.pressed.label = labelPaintData;
+	styles.button.pressed.bg = vgv::colorPaint({35, 35, 35});
+
+	// window
+	styles.window.bg = &hintBgPaint;
+
 	// gui
-	auto label = vgv::colorPaint({240, 240, 240});
-	auto normal = vgv::colorPaint({vgv::norm, 0.02f, 0.02f, 0.02f});
-	auto hovered = vgv::colorPaint({vgv::norm, 0.08f, 0.08f, 0.08f});
-	auto pressed = vgv::colorPaint({vgv::norm, 0.12f, 0.12f, 0.12f});
-	auto windowBg = vgv::colorPaint({20, 20, 20, 230});
+	vui::Gui gui(ctx, lsFont, std::move(styles));
+	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
+	auto& button = win.create<vui::Button>("button, waddup");
+	button.onClick = [&](auto&) { dlg_info("Clicked!"); };
 
-	Gui::Styles styles {
-		{ // button
-			{ // normal
-				label,
-				normal,
-			}, { // hovered
-				label,
-				hovered,
-			}, { // pressed
-				label,
-				pressed
-			}
-		}, { // textfield
-			label,
-			normal,
-			vgv::colorPaint({20, 20, 170}), // selection
-		}, { // window
-			windowBg,
-			label
-		}, { // slider
-			vgv::colorPaint({200, 200, 200}), // left
-			vgv::colorPaint({80, 80, 80}) // right
-		}, { // hint
-			{ctx, normal},
-			{ctx, label},
-			{}
-		}
-	};
-
-	Gui gui(ctx, lsFont, std::move(styles));
-
-	Paint svgPaint;
-
-	// auto pad = Vec {20.f, 20.f};
-	auto px = 100.f;
-
+	// gui
+	/*
 	auto& win = gui.create<Window>(Vec {px, 100.f}, Vec {500.f, 880.f});
 	auto& cp = win.create<ColorPicker>(Vec2f {}, Vec {230.f, 200.f});
 
@@ -273,6 +270,7 @@ int main() {
 
 	svgPaint = {ctx, vgv::colorPaint(cp.picked)};
 	gui.updateDevice();
+	*/
 
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer buf){
@@ -290,6 +288,7 @@ int main() {
 		paint.bind(di);
 		shape.stroke(di);
 		text.draw(di);
+
 		gui.draw(di);
 	};
 
@@ -300,70 +299,51 @@ int main() {
 	window.onClose = [&](const auto&) { run = false; };
 	window.onKey = [&](const auto& ev) {
 		auto processed = false;
-		processed |= gui.key({(vui::Key) ev.keycode, ev.pressed});
+		processed |= (gui.key({(vui::Key) ev.keycode, ev.pressed}) != nullptr);
 		if(ev.pressed && !ev.utf8.empty() && !ny::specialKey(ev.keycode)) {
-			processed |= gui.textInput({ev.utf8.c_str()});
+			processed |= (gui.textInput({ev.utf8.c_str()}) != nullptr);
 		}
 
 		if(ev.pressed && !processed) {
-			bool re = false;
 			if(ev.keycode == ny::Keycode::escape) {
 				dlg_info("Escape pressed, exiting");
 				run = false;
 			} else if(ev.keycode == ny::Keycode::b) {
-				paint.paint = vgv::colorPaint({vgv::norm, 0.2, 0.2, 0.8});
-				re |= paint.updateDevice(ctx);
+				*paint.change() = vgv::colorPaint({vgv::norm, 0.2, 0.2, 0.8});
 			} else if(ev.keycode == ny::Keycode::g) {
-				paint.paint = vgv::colorPaint({vgv::norm, 0.1, 0.6, 0.3});
-				re |= paint.updateDevice(ctx);
+				*paint.change() = vgv::colorPaint({vgv::norm, 0.1, 0.6, 0.3});
 			} else if(ev.keycode == ny::Keycode::r) {
-				paint.paint = vgv::colorPaint({vgv::norm, 0.8, 0.2, 0.3});
-				re |= paint.updateDevice(ctx);
+				*paint.change() = vgv::colorPaint({vgv::norm, 0.8, 0.2, 0.3});
 			} else if(ev.keycode == ny::Keycode::d) {
-				paint.paint = vgv::colorPaint({vgv::norm, 0.1, 0.1, 0.1});
-				re |= paint.updateDevice(ctx);
+				*paint.change() = vgv::colorPaint({vgv::norm, 0.1, 0.1, 0.1});
 			} else if(ev.keycode == ny::Keycode::w) {
-				paint.paint = vgv::colorPaint(vgv::Color::white);
-				re |= paint.updateDevice(ctx);
+				*paint.change() = vgv::colorPaint(vgv::Color::white);
 			} else if(ev.keycode == ny::Keycode::p) {
-				paint.paint = vgv::linearGradient({0, 0}, {2000, 1000},
+				*paint.change() = vgv::linearGradient({0, 0}, {2000, 1000},
 					{255, 0, 0}, {255, 255, 0});
-				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::c) {
-				paint.paint = vgv::radialGradient({1000, 500}, 0, 1000,
+				*paint.change() = vgv::radialGradient({1000, 500}, 0, 1000,
 					{255, 0, 0}, {255, 255, 0});
-				re |= paint.updateDevice(ctx);
 			} else if(ev.keycode == ny::Keycode::k1) {
-				text.font = &lsFont;
-				text.update();
-				re |= text.updateDevice(ctx);
+				text.change()->font = &lsFont;
 			} else if(ev.keycode == ny::Keycode::k2) {
-				text.font = &osFont;
-				text.update();
-				re |= text.updateDevice(ctx);
-			}
-
-			if(re) {
-				dlg_warn("Unexpected rerecord from key press");
-				gui.rerecord();
+				text.change()->font = &osFont;
 			}
 		}
 	};
 	window.onResize = [&](const auto& ev) {
 		renderer.resize(ev.size);
 
-		text.position.x = (ev.size[0] - textWidth) / 2;
-		text.position.y = ev.size[1] - fontHeight - 20;
-		text.update();
-		if(text.updateDevice(ctx)) {
-			dlg_warn("unexpected text rerecord");
-		}
+		auto tchange = text.change();
+		tchange->position.x = (ev.size[0] - textWidth) / 2;
+		tchange->position.y = ev.size[1] - fontHeight - 20;
 
-		transform.matrix = nytl::identity<4, float>();
+		auto mat = nytl::identity<4, float>();
 		auto s = nytl::Vec {2.f / window.size().x, 2.f / window.size().y, 1};
-		scale(transform.matrix, s);
-		translate(transform.matrix, {-1, -1, 0});
-		transform.updateDevice();
+		scale(mat, s);
+		translate(mat, {-1, -1, 0});
+		*transform.change() = mat;
+		gui.transform(mat);
 	};
 
 	ktc::Subpath subpath;
@@ -372,8 +352,11 @@ int main() {
 	window.onMouseButton = [&](const auto& ev) {
 		auto p = static_cast<nytl::Vec2f>(ev.position);
 		if(gui.mouseButton({ev.pressed,
-				static_cast<vui::MouseButton>(ev.button), p}) ||
-				!ev.pressed) {
+				static_cast<vui::MouseButton>(ev.button), p})) {
+			return;
+		}
+
+		if(!ev.pressed) {
 			return;
 		}
 
@@ -383,12 +366,7 @@ int main() {
 				subpath.start = p;
 			} else {
 				subpath.sqBezier(p);
-				shape.points = ktc::flatten(subpath);
-				shape.update();
-				if(shape.updateDevice(ctx)) {
-					dlg_info("rerecord");
-					renderer.invalidate();
-				}
+				shape.change()->points = ktc::flatten(subpath);
 			}
 		} else if(ev.button == ny::MouseButton::right) {
 			win.position(p);
@@ -422,6 +400,11 @@ int main() {
 
 		if(gui.updateDevice()) {
 			dlg_info("gui rerecord");
+			renderer.invalidate();
+		}
+
+		if(ctx.updateDevice()) {
+			dlg_info("ctx rerecord");
 			renderer.invalidate();
 		}
 
