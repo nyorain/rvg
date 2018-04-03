@@ -11,6 +11,7 @@ example_src = [
 	'vui/hint.cpp',
 	'vui/container.cpp',
 	'vui/window.cpp',
+	'vui/colorPicker.cpp',
 ]
 
 example_deps = [

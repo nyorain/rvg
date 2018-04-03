@@ -24,6 +24,10 @@ void Gui::transform(const nytl::Mat4f& mat) {
 }
 
 Widget* Gui::mouseMove(const MouseMoveEvent& ev) {
+	if(buttonGrab_.first) {
+		return buttonGrab_.first->mouseMove(ev);
+	}
+
 	auto w = WidgetContainer::mouseMove(ev);
 	if(mouseOver() != w) {
 		listener().mouseOver(mouseOverWidget_, w);
@@ -38,6 +42,7 @@ Widget* Gui::mouseButton(const MouseButtonEvent& ev) {
 		auto w = buttonGrab_.first;
 		buttonGrab_.first->mouseButton(ev);
 		buttonGrab_ = {};
+		this->mouseMove({ev.position});
 		return w;
 	}
 

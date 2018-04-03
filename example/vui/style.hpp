@@ -44,10 +44,23 @@ struct SliderStyle {
 struct HintStyle {
 	Paint* bg; /// Background paint
 	Paint* text; /// Label/text paint
-	Paint* bgStroke; /// (optional) background stroke (border)
+	Paint* bgStroke {}; /// (optional) background stroke (border)
 	Vec2f padding {5.f, 5.f}; /// padding, distance from label to border
 	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
-	Font* font;
+	Font* font {}; /// Font to use, falls back to guis default font
+};
+
+struct ColorPickerStyle {
+	vgv::Paint* marker; // marker stroking
+	vgv::Paint* stroke {}; // (optional) hue + selector field stroke
+	Vec2f padding = {5.f, 5.f};
+	float huePadding = 10.f;
+	float strokeWidth = 1.5f;
+	float colorMarkerRadius = 3.f;
+	float colorMarkerThickness = 1.5f;
+	float hueMarkerHeight = 8.f;
+	float hueMarkerThickness = 4.f;
+	float hueWidth = 20.f;
 };
 
 struct Styles {
@@ -56,6 +69,7 @@ struct Styles {
 	WindowStyle window {};
 	SliderStyle slider {};
 	HintStyle hint {};
+	ColorPickerStyle colorPicker {};
 };
 
 } // namespace vui

@@ -19,10 +19,9 @@ void write(std::byte*& ptr, T&& data) {
 	ptr += sizeof(data);
 }
 
-void assertNorm(std::initializer_list<float> args) {
-	for(auto a : args) {
-		dlg_assert(a >= 0.f && a <= 1.f);
-	}
+template<typename... Args>
+bool normed(Args&&... args) {
+	return ((args >= 0.f && args <= 1.f) && ...);
 }
 
 float hue2rgb(float p, float q, float t) {
@@ -61,18 +60,18 @@ Color::Color(Vec4u8 rgba) : r(rgba[0]), g(rgba[1]), b(rgba[2]), a(rgba[3]) {
 }
 
 Color::Color(Norm, float r, float g, float b, float a)
-	: r(255.f * r), g(255.f * g), b(255.f * b), a(255.f * a) {
-	assertNorm({r, g, b, a});
+		: r(255.f * r), g(255.f * g), b(255.f * b), a(255.f * a) {
+	dlg_assert(normed(r, g, b, a));
 }
 
 Color::Color(Norm, Vec3f rgb, float a)
 	: Color(norm, rgb[0], rgb[1], rgb[2], a) {
-	assertNorm({rgb[0], rgb[1], rgb[2], a});
+	dlg_assert(normed(rgb[0], rgb[1], rgb[2], a));
 }
 
 Color::Color(Norm, Vec4f rgba)
-	: Color(norm, rgba[0], rgba[1], rgba[2], rgba[3]) {
-	assertNorm({rgba[0], rgba[1], rgba[2], rgba[3]});
+		: Color(norm, rgba[0], rgba[1], rgba[2], rgba[3]) {
+	dlg_assert(normed(rgba[0], rgba[1], rgba[2], rgba[3]));
 }
 
 Vec3f Color::rgbNorm() const {
@@ -89,7 +88,7 @@ Color hsl(u8 h, u8 s, u8 l, u8 a) {
 }
 
 Color hslNorm(float h, float s, float l, float a) {
-	assertNorm({h, s, l, a});
+	dlg_assert(normed(h, s, l, a));
 	if(s == 0.f) {
 		return {norm, l, l, l, a};
 	}
@@ -148,7 +147,7 @@ Color hsv(u8 h, u8 s, u8 v, u8 a) {
 }
 
 Color hsvNorm(float h, float s, float v, float a) {
-	assertNorm({h, s, v, a});
+	dlg_assert(normed(h, s, v, a));
 	if(s == 0) {
 		return {norm, v, v, v, a};
 	}
@@ -210,7 +209,7 @@ Vec4f hsvaNorm(const Color& c) {
 
 // - hsv/hsl conversion -
 Vec3f hsl2hsv(Vec3f hsl) {
-	assertNorm({hsl.x, hsl.y, hsl.z});
+	dlg_assert(normed(hsl.x, hsl.y, hsl.z));
 	auto t = hsl[1] * 0.5f * (1 - std::abs(2 * hsl[2] - 1));
 	auto v = hsl[2] + t;
   	auto s = hsl[2] > 0 ? 2 * t / v : 0.f;
@@ -219,7 +218,7 @@ Vec3f hsl2hsv(Vec3f hsl) {
 }
 
 Vec3f hsv2hsl(Vec3f hsv) {
-	assertNorm({hsv.x, hsv.y, hsv.z});
+	dlg_assert(normed(hsv.x, hsv.y, hsv.z));
 	auto l = 0.5f * hsv.z * (2 - hsv.z);
 	auto s = hsv[1];
 	if(l > 0 && l < 1) {

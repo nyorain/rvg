@@ -350,6 +350,7 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 			dlg_assert(mode.color.points.size() == points.size());
 			fillColorCache_.insert(fillColorCache_.end(),
 				mode.color.points.begin(), mode.color.points.end());
+			flags_.fillColor = true;
 		}
 	}
 
@@ -358,6 +359,7 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 			dlg_assert(mode.color.points.size() == points.size());
 			ktc::bakeColoredStroke(points, mode.color.points, {mode.stroke},
 				strokeCache_, strokeColorCache_);
+			flags_.strokeColor = true;
 		} else {
 			ktc::bakeStroke(points, {mode.stroke}, strokeCache_);
 		}
@@ -528,7 +530,7 @@ Shape::Shape(Context& ctx, std::vector<Vec2f> p, const DrawMode& d) :
 }
 
 void Shape::update() {
-	polygon_.update(state_.points, state_.draw);
+	polygon_.update(state_.points, state_.drawMode);
 }
 
 void Shape::disable(bool d, DrawType t) {
@@ -557,7 +559,7 @@ void RectShape::update() {
 			state_.position + Vec {0.f, state_.size.y},
 			state_.position
 		};
-		polygon_.update(points, state_.draw);
+		polygon_.update(points, state_.drawMode);
 	} else {
 		constexpr auto steps = 12u;
 		std::vector<Vec2f> points;
@@ -631,7 +633,7 @@ void RectShape::update() {
 
 		// close it
 		points.push_back(points[0]);
-		polygon_.update(points, state_.draw);
+		polygon_.update(points, state_.drawMode);
 	}
 }
 
@@ -662,21 +664,21 @@ CircleShape::CircleShape(Context& ctx,
 }
 
 void CircleShape::update() {
-	dlg_assertl(dlg_level_warn, state_.points > 2);
+	dlg_assertl(dlg_level_warn, state_.pointCount > 2);
 
 	std::vector<Vec2f> pts;
-	pts.reserve(state_.points);
+	pts.reserve(state_.pointCount);
 
 	auto a = state_.startAngle;
-	auto d = 2 * nytl::constants::pi / state_.points;
-	for(auto i = 0u; i < state_.points + 1; ++i) {
+	auto d = 2 * nytl::constants::pi / state_.pointCount;
+	for(auto i = 0u; i < state_.pointCount + 1; ++i) {
 		using namespace nytl::vec::cw::operators;
 		auto p = Vec {std::cos(a), std::sin(a)} * state_.radius;
 		pts.push_back(state_.center + p);
 		a += d;
 	}
 
-	polygon_.update(pts, state_.draw);
+	polygon_.update(pts, state_.drawMode);
 }
 
 void CircleShape::disable(bool d, DrawType t) {

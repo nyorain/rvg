@@ -2,7 +2,7 @@
 
 - [x] windows (basic panes, no operations)
 - [x] widget sizing options, Window::create auto sizing
-  - [ ] auto sizing on construction
+  - [x] auto sizing on construction
 - [x] row layouts
 - [x] slider
 - [x] vgv: rounded rect
@@ -10,16 +10,16 @@
   - [x] scrolling, clipping
   - [ ] enter/escape
   - [x] selection
-  - [ ] some basic shortcuts like ctrl-a
-- [ ] fix widget resizing todos
-- [ ] vgv: sanity checking (with asserts/logs)
+  - [ ] some basic shortcuts like ctrl-a (might need ny fixes)
+- [x] fix widget resizing todos
+- [x] vgv: sanity checking (with asserts/logs)
   - [x] color functions, conversion
   - [x] shape drawing functions
 - [ ] vgv: antialiasing
 - [ ] vgv: reorganize/split header/sources
   - [ ] shapes/context/texture/transform/scissor headers
-  - [ ] also make nk/font.h public header (sure? probably not good idea)
   - [x] separate path.hpp in separate library/utility
+  - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
 - [ ] advanced widget sizing hints, min/max size (?)
 - [ ] split vgv and gui library
 - [ ] clipboard support (probably over Gui/GuiListener)

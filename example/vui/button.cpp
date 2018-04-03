@@ -94,7 +94,13 @@ bool Button::hidden() const {
 }
 
 Widget* Button::mouseMove(const MouseMoveEvent& ev) {
-	hint_->position(ev.position + gui().hintOffset);
+	if(this->contains(ev.position)) {
+		hint_->hovered(true);
+		hint_->position(ev.position + gui().hintOffset);
+	} else {
+		hint_->hovered(false);
+	}
+
 	return this;
 }
 

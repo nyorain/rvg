@@ -460,14 +460,15 @@ public:
 	void disable(bool d, DrawType t = DrawType::strokeFill);
 	bool disabled(DrawType t = DrawType::strokeFill) const;
 
-	const auto& state() const { return state_; }
+	const auto& points() const { return state_.points; }
+	const auto& drawMode() const { return state_.drawMode; }
 	const auto& polygon() const { return polygon_; }
 	void update();
 
 protected:
 	struct State {
 		std::vector<Vec2f> points;
-		DrawMode draw;
+		DrawMode drawMode;
 	} state_;
 
 	Polygon polygon_;
@@ -490,15 +491,20 @@ public:
 	void disable(bool d, DrawType t = DrawType::strokeFill);
 	bool disabled(DrawType t = DrawType::strokeFill) const;
 
-	const auto& state() const { return state_; }
+	const auto& size() const { return state_.size; }
+	const auto& position() const { return state_.position; }
+	const auto& drawMode() const { return state_.drawMode; }
+	const auto& rounding() const { return state_.rounding; }
 	const auto& polygon() const { return polygon_; }
+	Rect2f bounds() const { return {position(), size()}; }
+
 	void update();
 
 protected:
 	struct {
 		Vec2f position;
 		Vec2f size;
-		DrawMode draw;
+		DrawMode drawMode;
 		std::array<float, 4> rounding {};
 	} state_;
 
@@ -523,7 +529,11 @@ public:
 	void disable(bool d, DrawType t = DrawType::strokeFill);
 	bool disabled(DrawType t = DrawType::strokeFill) const;
 
-	const auto& state() const { return state_; }
+	const auto& center() const { return state_.center; }
+	const auto& radius() const { return state_.radius; }
+	const auto& drawMode() const { return state_.drawMode; }
+	const auto& pointCount() const { return state_.pointCount; }
+	const auto& startAngle() const { return state_.startAngle; }
 	const auto& polygon() const { return polygon_; }
 	void update();
 
@@ -531,8 +541,8 @@ protected:
 	struct {
 		Vec2f center;
 		Vec2f radius;
-		DrawMode draw;
-		unsigned points {16};
+		DrawMode drawMode;
+		unsigned pointCount {16};
 		float startAngle {0.f};
 	} state_;
 

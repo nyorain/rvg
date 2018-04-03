@@ -8,6 +8,7 @@
 #include "vui/gui.hpp"
 #include "vui/button.hpp"
 #include "vui/window.hpp"
+#include "vui/colorPicker.hpp"
 
 #include <vgv/vgv.hpp>
 #include <katachi/path.hpp>
@@ -145,8 +146,6 @@ int main() {
 	// vgv
 	vgv::Context ctx(device, {renderer.renderPass(), 0, true});
 
-	vgv::Scissor scissor(ctx, {10, 10, 1900, 1060});
-
 	auto mat = nytl::identity<4, float>();
 	scale(mat, {2.f / window.size().x, 2.f / window.size().y, 1});
 	translate(mat, {-1.f, -1.f, 0.f});
@@ -216,11 +215,18 @@ int main() {
 	// window
 	styles.window.bg = &hintBgPaint;
 
+	// color picker
+	styles.colorPicker.marker = &hintBgPaint;
+
 	// gui
 	vui::Gui gui(ctx, lsFont, std::move(styles));
 	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
 	auto& button = win.create<vui::Button>("button, waddup");
 	button.onClick = [&](auto&) { dlg_info("Clicked!"); };
+	auto& cp = win.create<vui::ColorPicker>();
+	cp.onChange = [&](auto& cp){
+		svgPaint.paint(vgv::colorPaint(cp.picked()));
+	};
 
 	// gui
 	/*
@@ -277,8 +283,6 @@ int main() {
 		auto di = ctx.record(buf);
 
 		transform.bind(di);
-		scissor.bind(di);
-
 		svgPaint.bind(di);
 		svgShape.fill(di);
 
