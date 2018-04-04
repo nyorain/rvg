@@ -16,11 +16,15 @@ layout(set = 1, binding = 1) uniform Paint {
 layout(set = 1, binding = 2) uniform sampler2D tex;
 layout(set = 2, binding = 0) uniform sampler2D font;
 
-layout(push_constant) uniform Text {
-	bool is;
-} text;
+const uint TypeDefault = 0;
+const uint TypeText = 1;
+const uint TypeStroke = 2;
+layout(push_constant) uniform Type {
+	uint type;
+} type;
 
-#ifdef frag_scissor
+// - scissor -
+#ifdef FRAG_SCISSOR
 	layout(location = 3) in vec2 in_rawpos;
 
 	layout(set = 3, binding = 0) uniform Scissor {
@@ -34,10 +38,18 @@ layout(push_constant) uniform Text {
 			discard;
 		}
 	}
-#else
+#else // FRAG_SCISSOR
 	void applyScissor() {}
 #endif
 
+// - anti aliasing -
+#ifdef EDGE_AA
+	layout(set = 4, binding = 0) uniform Stroke {
+		float mult;
+	} stroke;
+#endif
+
+// - main -
 void main() {
 	applyScissor();
 	out_color = paintColor(in_paint, PaintData(
@@ -46,7 +58,14 @@ void main() {
 		paint.data.custom,
 		paint.data.type), tex, in_color);
 
-	if(text.is) {
+	if(type.type == TypeText) {
 		out_color.a *= texture(font, in_uv).a;
 	}
+
+#ifdef EDGE_AA
+	if(type.type == TypeStroke) {
+		float fac = min(1.0, (1.0 - abs(in_uv.y)) * stroke.mult);
+		out_color.a *= fac;
+	}
+#endif
 }

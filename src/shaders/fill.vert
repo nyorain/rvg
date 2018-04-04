@@ -16,7 +16,7 @@ layout(row_major, set = 1, binding = 0) uniform Paint {
 	mat4 matrix;
 } paint;
 
-#if defined(plane_scissor)
+#if defined(PLANE_SCISSOR)
 	out float gl_ClipDistance[4];
 
 	layout(set = 3, binding = 0) uniform Scissor {
@@ -41,7 +41,7 @@ layout(row_major, set = 1, binding = 0) uniform Paint {
 			last = i;
 		}
 	}
-#elif defined(frag_scissor)
+#elif defined(FRAG_SCISSOR)
 	layout(location = 3) out vec2 out_rawpos;
 
 	void applyScissor() {

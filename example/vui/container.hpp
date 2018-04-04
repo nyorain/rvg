@@ -4,8 +4,6 @@
 #include "input.hpp"
 #include "widget.hpp"
 
-#include <vgv/vgv.hpp>
-
 namespace vui {
 
 /// Owns widgets and manages them, i.e. forwards input and rendering calls.

@@ -1,23 +1,12 @@
 #pragma once
 
 #include <nytl/fwd.hpp>
-
-namespace vgv {
-
-struct DrawInstance;
-class Context;
-class Scissor;
-class Transform;
-class Font;
-class FontAtlas;
-class Paint;
-
-} // namespace vgv
+#include <rvg/fwd.hpp>
 
 namespace vui {
 
 using namespace nytl;
-using namespace vgv;
+using namespace rvg;
 
 class Gui;
 class Widget;

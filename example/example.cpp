@@ -10,7 +10,13 @@
 #include "vui/window.hpp"
 #include "vui/colorPicker.hpp"
 
-#include <vgv/vgv.hpp>
+#include <rvg/context.hpp>
+#include <rvg/shapes.hpp>
+#include <rvg/paint.hpp>
+#include <rvg/state.hpp>
+#include <rvg/font.hpp>
+#include <rvg/text.hpp>
+
 #include <katachi/path.hpp>
 #include <katachi/svg.hpp>
 
@@ -38,8 +44,8 @@ using namespace nytl::vec::operators;
 using namespace nytl::vec::cw::operators;
 
 // settings
-constexpr auto appName = "vgv-example";
-constexpr auto engineName = "vpp,vgv";
+constexpr auto appName = "rvg-example";
+constexpr auto engineName = "vpp,rvg";
 constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
@@ -143,57 +149,54 @@ int main() {
 
 	auto renderer = Renderer(renderInfo);
 
-	// vgv
-	vgv::Context ctx(device, {renderer.renderPass(), 0, true});
+	// rvg
+	rvg::Context ctx(device, {renderer.renderPass(), 0, true});
 
-	auto mat = nytl::identity<4, float>();
-	scale(mat, {2.f / window.size().x, 2.f / window.size().y, 1});
-	translate(mat, {-1.f, -1.f, 0.f});
-	vgv::Transform transform(ctx, mat);
+	rvg::Transform transform(ctx);
 
-	vgv::Shape shape(ctx, {}, {false, 5.f});
-	vgv::Paint paint(ctx, vgv::colorPaint({vgv::norm, 0.1f, .6f, .3f}));
+	rvg::Shape shape(ctx, {}, {false, 5.f});
+	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
 
 	auto fontHeight = 16;
-	vgv::FontAtlas atlas(ctx);
-	vgv::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
-	vgv::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
+	rvg::FontAtlas atlas(ctx);
+	rvg::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
+	rvg::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
 	atlas.bake(ctx);
 
-	vgv::Font lsSmall(atlas, "../../example/LiberationSans-Regular.ttf", 14);
+	rvg::Font lsSmall(atlas, "../../example/LiberationSans-Regular.ttf", 14);
 	atlas.bake(ctx);
 
 	auto string = "yo, whaddup";
-	vgv::Text text(ctx, string, lsFont, {0, 0});
+	rvg::Text text(ctx, string, lsFont, {0, 0});
 	auto textWidth = lsFont.width(string);
 
 	// svg path
-	// auto svgSubpath = vgv::parseSvgSubpath({300, 200},
+	// auto svgSubpath = rvg::parseSvgSubpath({300, 200},
 		// "h -150 a150 150 0 1 0 150 -150 z");
 	auto svgSubpath = ktc::parseSvgSubpath("h 1920 v 1080 h -1920 z");
 
-	vgv::Shape svgShape(ctx, ktc::flatten(svgSubpath), {true, 0.f});
+	rvg::Shape svgShape(ctx, ktc::flatten(svgSubpath), {true, 0.f});
 
 	// image stuff
-	vgv::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
-	auto foxTex = vgv::createTexture(device, "../../example/fox.jpg",
-		vgv::TextureType::rgba32);
+	rvg::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
+	auto foxTex = rvg::createTexture(device, "../../example/fox.jpg",
+		rvg::TextureType::rgba32);
 	auto iv = foxTex.vkImageView();
 
-	mat = nytl::identity<4, float>();
+	auto mat = nytl::identity<4, float>();
 	mat[0][0] = 1 / 300.f;
 	mat[1][1] = 1 / 200.f;
 	mat[0][3] = -500.f / 300.f;
 	mat[1][3] = -100.f / 200.f;
-	vgv::Paint foxPaint = {ctx, vgv::texturePaintRGBA(mat, iv)};
+	rvg::Paint foxPaint = {ctx, rvg::texturePaintRGBA(mat, iv)};
 
-	vgv::Paint svgPaint {ctx, vgv::colorPaint({150, 230, 200})};
+	rvg::Paint svgPaint {ctx, rvg::colorPaint({150, 230, 200})};
 
-	auto bgPaintData = vgv::colorPaint({5, 5, 5});
-	auto labelPaintData = vgv::colorPaint({240, 240, 240});
+	auto bgPaintData = rvg::colorPaint({5, 5, 5});
+	auto labelPaintData = rvg::colorPaint({240, 240, 240});
 
-	auto hintBgPaint = vgv::Paint(ctx, vgv::colorPaint({5, 5, 5, 200}));
-	auto hintTextPaint = vgv::Paint(ctx, labelPaintData);
+	auto hintBgPaint = rvg::Paint(ctx, rvg::colorPaint({5, 5, 5, 200}));
+	auto hintTextPaint = rvg::Paint(ctx, labelPaintData);
 
 	vui::Styles styles;
 
@@ -207,10 +210,10 @@ int main() {
 	styles.button.normal.bg = bgPaintData;
 
 	styles.button.hovered.label = labelPaintData;
-	styles.button.hovered.bg = vgv::colorPaint({20, 20, 20});
+	styles.button.hovered.bg = rvg::colorPaint({20, 20, 20});
 
 	styles.button.pressed.label = labelPaintData;
-	styles.button.pressed.bg = vgv::colorPaint({35, 35, 35});
+	styles.button.pressed.bg = rvg::colorPaint({35, 35, 35});
 
 	// window
 	styles.window.bg = &hintBgPaint;
@@ -225,7 +228,7 @@ int main() {
 	button.onClick = [&](auto&) { dlg_info("Clicked!"); };
 	auto& cp = win.create<vui::ColorPicker>();
 	cp.onChange = [&](auto& cp){
-		svgPaint.paint(vgv::colorPaint(cp.picked()));
+		svgPaint.paint(rvg::colorPaint(cp.picked()));
 	};
 
 	// gui
@@ -246,7 +249,7 @@ int main() {
 		return [&, component](float val) {
 			auto col = svgPaint.paint.data.frag.inner;
 			col.*component = 255.f * val;
-			svgPaint.paint = vgv::colorPaint(col);
+			svgPaint.paint = rvg::colorPaint(col);
 			if(svgPaint.updateDevice(ctx)) {
 				dlg_warn("Unexpected rerecord");
 			}
@@ -259,12 +262,12 @@ int main() {
 	auto& gslider = win.create<Slider>(Vec2f {}, 200);
 	auto& bslider = win.create<Slider>(Vec2f {}, 200);
 
-	rslider.onChange = colChangeFunc(&vgv::Color::r);
-	gslider.onChange = colChangeFunc(&vgv::Color::g);
-	bslider.onChange = colChangeFunc(&vgv::Color::b);
+	rslider.onChange = colChangeFunc(&rvg::Color::r);
+	gslider.onChange = colChangeFunc(&rvg::Color::g);
+	bslider.onChange = colChangeFunc(&rvg::Color::b);
 
 	cp.onPick = [&](auto& cp) {
-		svgPaint.paint = vgv::colorPaint(cp.picked);
+		svgPaint.paint = rvg::colorPaint(cp.picked);
 		if(svgPaint.updateDevice(ctx)) {
 			dlg_warn("Unexpected rerecord");
 		}
@@ -274,7 +277,7 @@ int main() {
 		bslider.current(cp.picked.b / 255.f);
 	};
 
-	svgPaint = {ctx, vgv::colorPaint(cp.picked)};
+	svgPaint = {ctx, rvg::colorPaint(cp.picked)};
 	gui.updateDevice();
 	*/
 
@@ -283,19 +286,20 @@ int main() {
 		auto di = ctx.record(buf);
 
 		transform.bind(di);
-		svgPaint.bind(di);
-		svgShape.fill(di);
+		// svgPaint.bind(di);
+		// svgShape.fill(di);
 
-		foxPaint.bind(di);
-		foxRect.fill(di);
+		// foxPaint.bind(di);
+		// foxRect.fill(di);
 
 		paint.bind(di);
 		shape.stroke(di);
-		text.draw(di);
+		// text.draw(di);
 
-		gui.draw(di);
+		// gui.draw(di);
 	};
 
+	ctx.updateDevice();
 	renderer.invalidate();
 
 	// connect window & renderer
@@ -313,20 +317,20 @@ int main() {
 				dlg_info("Escape pressed, exiting");
 				run = false;
 			} else if(ev.keycode == ny::Keycode::b) {
-				*paint.change() = vgv::colorPaint({vgv::norm, 0.2, 0.2, 0.8});
+				*paint.change() = rvg::colorPaint({rvg::norm, 0.2, 0.2, 0.8});
 			} else if(ev.keycode == ny::Keycode::g) {
-				*paint.change() = vgv::colorPaint({vgv::norm, 0.1, 0.6, 0.3});
+				*paint.change() = rvg::colorPaint({rvg::norm, 0.1, 0.6, 0.3});
 			} else if(ev.keycode == ny::Keycode::r) {
-				*paint.change() = vgv::colorPaint({vgv::norm, 0.8, 0.2, 0.3});
+				*paint.change() = rvg::colorPaint({rvg::norm, 0.8, 0.2, 0.3});
 			} else if(ev.keycode == ny::Keycode::d) {
-				*paint.change() = vgv::colorPaint({vgv::norm, 0.1, 0.1, 0.1});
+				*paint.change() = rvg::colorPaint({rvg::norm, 0.1, 0.1, 0.1});
 			} else if(ev.keycode == ny::Keycode::w) {
-				*paint.change() = vgv::colorPaint(vgv::Color::white);
+				*paint.change() = rvg::colorPaint(rvg::Color::white);
 			} else if(ev.keycode == ny::Keycode::p) {
-				*paint.change() = vgv::linearGradient({0, 0}, {2000, 1000},
+				*paint.change() = rvg::linearGradient({0, 0}, {2000, 1000},
 					{255, 0, 0}, {255, 255, 0});
 			} else if(ev.keycode == ny::Keycode::c) {
-				*paint.change() = vgv::radialGradient({1000, 500}, 0, 1000,
+				*paint.change() = rvg::radialGradient({1000, 500}, 0, 1000,
 					{255, 0, 0}, {255, 255, 0});
 			} else if(ev.keycode == ny::Keycode::k1) {
 				text.change()->font = &lsFont;

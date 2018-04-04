@@ -51,9 +51,9 @@ protected:
 	ny::AppContext& ac_;
 	std::unique_ptr<ny::WindowContext> wc_;
 
-	vk::SurfaceKHR surface_;
-	nytl::Vec2ui size_;
-	ny::ToplevelState state_;
+	vk::SurfaceKHR surface_ {};
+	nytl::Vec2ui size_ {};
+	ny::ToplevelState state_ {};
 	bool focus_ {};
 	bool mouseOver_ {};
 };

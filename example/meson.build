@@ -15,7 +15,7 @@ example_src = [
 ]
 
 example_deps = [
-	vgv_dep,
+	rvg_dep,
 	dep_ny
 ]
 

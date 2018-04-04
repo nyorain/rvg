@@ -1,6 +1,7 @@
 #include "button.hpp"
 #include "gui.hpp"
 #include "hint.hpp"
+#include <rvg/font.hpp>
 #include <dlg/dlg.hpp>
 
 namespace vui {
@@ -17,7 +18,7 @@ Button::Button(Gui& gui, const Rect2f& bounds, std::string_view text,
 		const ButtonStyle& style) : Widget(gui, bounds), style_(style) {
 
 	auto font = style.font ? style.font : &gui.font();
-	bg_ = {context(), {}, {}, {true, 2.f}, style.rounding};
+	bg_ = {context()};
 	label_ = {context(), text, *font, {}};
 	hint_ = &gui.create<DelayedHint>(Vec2f {}, "Button Hint");
 
@@ -63,11 +64,14 @@ Widget* Button::mouseButton(const MouseButtonEvent& event) {
 
 void Button::size(Vec2f size) {
 	auto tc = label_.change();
-	auto bgc = bg_.change();
-
 	auto textSize = Vec {label_.width(), gui().font().height()};
 	tc->position = style().padding;
+
+	auto bgc = bg_.change();
 	bgc->size = size;
+	bgc->rounding = style().rounding;
+	bgc->drawMode = {true, 2.f};
+
 	if(size.x != autoSize) {
 		tc->position.x = (size.x - textSize.x) / 2;
 	} else {

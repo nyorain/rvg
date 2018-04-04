@@ -1,16 +1,16 @@
 #pragma once
 
 #include "fwd.hpp"
-#include <vgv/vgv.hpp>
+#include <rvg/paint.hpp>
 #include <optional>
 #include <array>
 
 namespace vui {
 
 struct ButtonDraw {
-	vgv::PaintData label;
-	vgv::PaintData bg;
-	std::optional<vgv::PaintData> bgStroke;
+	rvg::PaintData label;
+	rvg::PaintData bg;
+	std::optional<rvg::PaintData> bgStroke;
 };
 
 struct ButtonStyle {
@@ -23,36 +23,36 @@ struct ButtonStyle {
 };
 
 struct TextfieldStyle {
-	vgv::PaintData label;
-	vgv::PaintData bg;
-	vgv::PaintData selection;
+	rvg::PaintData label;
+	rvg::PaintData bg;
+	rvg::PaintData selection;
 };
 
 struct WindowStyle {
-	vgv::Paint* bg;
-	vgv::Paint* bgStroke;
+	rvg::Paint* bg;
+	rvg::Paint* bgStroke;
 	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
 	Vec2f outerPadding = Vec {10.f, 10.f};
 	float innerPadding = 10.f;
 };
 
 struct SliderStyle {
-	vgv::PaintData left;
-	vgv::PaintData right;
+	rvg::PaintData left;
+	rvg::PaintData right;
 };
 
 struct HintStyle {
-	Paint* bg; /// Background paint
-	Paint* text; /// Label/text paint
-	Paint* bgStroke {}; /// (optional) background stroke (border)
+	rvg::Paint* bg; /// Background paint
+	rvg::Paint* text; /// Label/text paint
+	rvg::Paint* bgStroke {}; /// (optional) background stroke (border)
 	Vec2f padding {5.f, 5.f}; /// padding, distance from label to border
 	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
 	Font* font {}; /// Font to use, falls back to guis default font
 };
 
 struct ColorPickerStyle {
-	vgv::Paint* marker; // marker stroking
-	vgv::Paint* stroke {}; // (optional) hue + selector field stroke
+	rvg::Paint* marker; // marker stroking
+	rvg::Paint* stroke {}; // (optional) hue + selector field stroke
 	Vec2f padding = {5.f, 5.f};
 	float huePadding = 10.f;
 	float strokeWidth = 1.5f;

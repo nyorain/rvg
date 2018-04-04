@@ -1,5 +1,6 @@
 #include "colorPicker.hpp"
 #include "gui.hpp"
+#include <rvg/context.hpp>
 #include <dlg/dlg.hpp>
 #include <nytl/rectOps.hpp>
 
@@ -26,37 +27,28 @@ ColorPicker::ColorPicker(Gui& gui, const Rect2f& bounds, const Color& start,
 
 	auto hsv = hsvNorm(start);
 
-	selector_ = {context(), style.padding, {}, {true, style.strokeWidth}};
-	basePaint_ = {context(), vgv::colorPaint(hsvNorm(hsv[0], 1.f, 1.f))};
-	hueMarker_ = {context(), {}, {style.hueWidth, style.hueMarkerHeight},
-		{false, style.hueMarkerThickness}};
-	colorMarker_ = {context(), {}, style.colorMarkerRadius,
-		{false, style.colorMarkerThickness}, 6u};
+	selector_ = {context()};
+	hueMarker_ = {context()};
+	colorMarker_ = {context()};
+	basePaint_ = {context(), colorPaint(hsvNorm(hsv[0], 1.f, 1.f))};
+
+	hue_ = {context()};
+	sGrad_ = {context(), {}};
+	vGrad_ = {context(), {}};
+
+	this->size(hsv, bounds.size);
 
 	auto drawMode = DrawMode {false, style.hueWidth};
 	drawMode.color.fill = false;
 	drawMode.color.stroke = true;
 
-	for(auto i = 0u; i < 7 + 1; ++i) {
+	for(auto i = 0u; i < 7; ++i) {
 		auto col = hsvNorm(i / 6.f, 1.f, 1.f);
 		drawMode.color.points.push_back(col.rgba());
 	}
 
-	hue_ = {context(), {}, std::move(drawMode)};
-
-	sGrad_ = {context(), {}};
-	vGrad_ = {context(), {}};
-
-	auto size = bounds.size;
-	if(size == Vec {autoSize, autoSize}) {
-		size = {230, 200};
-	} else if(size.x == autoSize) {
-		size.x = std::min(0.87f * size.y, 150.f);
-	} else if(size.y == autoSize) {
-		size.y = std::min(1.15f * size.x, 120.f);
-	}
-
-	this->size(hsv, size);
+	auto hc = hue_.change();
+	hc->drawMode = std::move(drawMode);
 }
 
 void ColorPicker::size(Vec2f size) {
@@ -65,12 +57,22 @@ void ColorPicker::size(Vec2f size) {
 }
 
 void ColorPicker::size(Vec3f hsv, Vec2f size) {
+	if(size == Vec {autoSize, autoSize}) {
+		size = {230, 200};
+	} else if(size.x == autoSize) {
+		size.x = std::min(0.87f * size.y, 150.f);
+	} else if(size.y == autoSize) {
+		size.y = std::min(1.15f * size.x, 120.f);
+	}
+
 	auto es = size - 2 * style().padding; // effective size
 
 	// selector
 	auto sc = selector_.change();
 	sc->size = es;
 	sc->size.x -= style().hueWidth + style().huePadding;
+	sc->position = style().padding;
+	sc->drawMode = {true, style().strokeWidth};
 
 	// hue
 	auto hc = hue_.change();
@@ -87,20 +89,25 @@ void ColorPicker::size(Vec3f hsv, Vec2f size) {
 	hmc->position.x = es.x - style().hueWidth;
 	hmc->position.y = hsv[0] * es.y - style().hueMarkerHeight / 2.f;
 	hmc->position += style().padding;
+	hmc->size = {style().hueWidth, style().hueMarkerHeight};
+	hmc->drawMode = {false, style().hueMarkerThickness};
 
 	// color marker
 	using namespace nytl::vec::cw::operators;
 	auto cmc = colorMarker_.change();
 	cmc->center = Vec {hsv[1], 1.f - hsv[2]} * selector_.size();
 	cmc->center += style().padding;
+	cmc->radius = {style().colorMarkerRadius, style().colorMarkerRadius};
+	cmc->drawMode = {false, style().colorMarkerThickness};
+	cmc->pointCount = 6u;
 
 	// gradients
-	sGrad_.paint(vgv::linearGradient(
+	sGrad_.paint(linearGradient(
 		selector_.position(), Vec {selector_.size().x, 0.f},
-		::vgv::hsv(0, 0, 255), ::vgv::hsv(0, 0, 255, 0)));
-	vGrad_.paint(vgv::linearGradient(
+		::rvg::hsv(0, 0, 255), ::rvg::hsv(0, 0, 255, 0)));
+	vGrad_.paint(linearGradient(
 		selector_.position(), Vec {0.f, es.y},
-		::vgv::hsv(0, 255, 0, 0), ::vgv::hsv(0, 255, 0)));
+		::rvg::hsv(0, 255, 0, 0), ::rvg::hsv(0, 255, 0)));
 
 	Widget::size(size);
 }

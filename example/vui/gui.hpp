@@ -5,11 +5,10 @@
 #include "style.hpp"
 #include "container.hpp"
 
-#include <vgv/vgv.hpp>
-
 #include <nytl/nonCopyable.hpp>
 #include <nytl/vec.hpp>
 #include <nytl/rect.hpp>
+#include <nytl/mat.hpp>
 #include <nytl/stringParam.hpp>
 
 #include <unordered_set>
@@ -21,13 +20,33 @@ namespace vui {
 /// certain events.
 class GuiListener {
 public:
+	/// Static GuiListener object using the default (no op) implementation.
 	static GuiListener& nop();
 
 public:
-	virtual void copy(StringParam) {}
+	/// Called when a widget wants to copy a string to the clipboard.
+	virtual void copy(std::string_view) {}
+
+	/// Called when a widget wants to read a string from the clipboard.
+	/// When the GuiListener can deliver such a string, it should call
+	/// Gui::paste with that string and the given widget.
 	virtual void pasteRequest(Widget&) {}
-	virtual void selection(StringParam) {}
+
+	/// Called every time the selection changes (e.g. of a textfield).
+	/// On linux, the GuiListener might forward this selection
+	/// to the system (x11/wayland primary).
+	virtual void selection(std::string_view) {}
+
+	/// Called every time the focus changes.
+	/// First parameter is the old focused widget, second parameter
+	/// the new one. Any of those parameters can be nullptr, indicating
+	/// no focused widget.
 	virtual void focus(Widget*, Widget*) {}
+
+	/// Called every time widget over which the mouse hovers changes.
+	/// First parameter is the old hovered widget, second parameter
+	/// the new one. Any of those parameters can be nullptr, indicating
+	/// no hovered widget.
 	virtual void mouseOver(Widget*, Widget*) {}
 };
 

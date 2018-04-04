@@ -1,5 +1,6 @@
 #include "hint.hpp"
 #include "gui.hpp"
+#include <rvg/font.hpp>
 
 namespace vui {
 
@@ -15,9 +16,8 @@ Hint::Hint(Gui& gui, const Rect2f& bounds, std::string_view text,
 		const HintStyle& style) : Widget(gui, bounds), style_(style) {
 
 	auto font = style.font ? style.font : &gui.font();
-	auto stroke = style.bgStroke ? 2.f : 0.f;
 
-	bg_ = {context(), {}, {}, {true, stroke}, style.rounding};
+	bg_ = {context()};
 	bg_.disable(true);
 	text_ = {context(), text, *font, {}};
 	text_.disable(true);
@@ -53,12 +53,16 @@ bool Hint::hidden() const {
 }
 
 void Hint::size(Vec2f size) {
-	auto tc = text_.change();
-	auto bgc = bg_.change();
-
 	auto textSize = Vec {text_.width(), text_.font()->height()};
+	auto tc = text_.change();
 	tc->position = style().padding;
+
+	auto stroke = style().bgStroke ? 2.f : 0.f;
+	auto bgc = bg_.change();
+	bgc->drawMode = {true, stroke};
 	bgc->size = size;
+	bgc->rounding = style().rounding;
+
 	if(size.x != autoSize) {
 		tc->position.x = (size.x - textSize.x) / 2;
 	} else {

@@ -5,8 +5,10 @@ shaders_src = [
 ]
 
 shader_configs = [
-	['.plane_scissor', '-Dplane_scissor'],
-	['.frag_scissor', '-Dfrag_scissor'],
+	['.plane_scissor', '-DPLANE_SCISSOR'],
+	['.frag_scissor', '-DFRAG_SCISSOR'],
+	['.plane_scissor.edge_aa', ['-DPLANCE_SCISSOR', '-DEDGE_AA']],
+	['.frag_scissor.edge_aa', ['-DFRAG_SCISSOR', '-DEDGE_AA']],
 ]
 
 shaders = []

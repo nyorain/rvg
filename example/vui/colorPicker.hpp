@@ -3,6 +3,11 @@
 #include "fwd.hpp"
 #include "widget.hpp"
 #include "style.hpp"
+
+#include <rvg/shapes.hpp>
+#include <rvg/paint.hpp>
+#include <rvg/text.hpp>
+
 #include <functional>
 
 namespace vui {
@@ -26,7 +31,7 @@ public:
 	Widget* mouseMove(const MouseMoveEvent&) override;
 	void draw(const DrawInstance&) const override;
 
-	void pick(const vgv::Color&);
+	void pick(const Color&);
 	Color picked() const;
 
 	float currentHue() const;

@@ -3,6 +3,9 @@
 #include "widget.hpp"
 #include "style.hpp"
 
+#include <rvg/shapes.hpp>
+#include <rvg/text.hpp>
+
 namespace vui {
 
 /// Small popup hint that displays text and processes no input.

@@ -1,4 +1,11 @@
-#include <vgv/vgv.hpp>
+#include <rvg/context.hpp>
+#include <rvg/font.hpp>
+#include <rvg/text.hpp>
+#include <rvg/polygon.hpp>
+#include <rvg/shapes.hpp>
+#include <rvg/state.hpp>
+#include <rvg/deviceObject.hpp>
+
 #include <katachi/path.hpp>
 #include <katachi/stroke.hpp>
 #include <katachi/curves.hpp>
@@ -13,20 +20,21 @@
 #include <nytl/utf.hpp>
 #include <cstring>
 
-#include <vgv/nk_font/font.h>
+#include <rvg/nk_font/font.h>
 
 #include <shaders/fill.vert.frag_scissor.h>
 #include <shaders/fill.frag.frag_scissor.h>
-
 #include <shaders/fill.vert.plane_scissor.h>
 #include <shaders/fill.frag.plane_scissor.h>
+#include <shaders/fill.frag.frag_scissor.edge_aa.h>
+#include <shaders/fill.frag.plane_scissor.edge_aa.h>
 
 // TODO(performance): optionally create (static) Polygons in deviceLocal memory.
 // TODO(performance): cache points vec in *Shape::update
 // TODO: something like default font(atlas) in context instead of dummy
 //   texture?
 
-namespace vgv {
+namespace rvg {
 namespace {
 
 template<typename T>
@@ -39,7 +47,7 @@ void write(std::byte*& ptr, T&& data) {
 
 // Context
 Context::Context(vpp::Device& dev, const ContextSettings& settings) :
-	device_(dev)
+	device_(dev), settings_(settings)
 {
 	constexpr auto sampleCount = vk::SampleCountBits::e1;
 
@@ -93,14 +101,24 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	dsLayoutPaint_ = {dev, paintDSB};
 	dsLayoutFontAtlas_ = {dev, fontAtlasDSB};
 	dsLayoutScissor_ = {dev, scissorDSB};
-
-	pipeLayout_ = {dev, {
+	std::vector<vk::DescriptorSetLayout> layouts = {
 		dsLayoutTransform_,
 		dsLayoutPaint_,
 		dsLayoutFontAtlas_,
 		dsLayoutScissor_
-	}, {
-		// is.text push constants for font texture usage
+	};
+
+	if(settings.aaStroke) {
+		auto aaStrokeDSB = {
+			vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
+				vk::ShaderStageBits::fragment),
+		};
+
+		dsLayoutStrokeAA_ = {dev, aaStrokeDSB};
+		layouts.push_back(dsLayoutStrokeAA_);
+	}
+
+	pipeLayout_ = {dev, layouts, {
 		{vk::ShaderStageBits::fragment, 0, 4}
 	}};
 
@@ -125,7 +143,13 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	if(clipDistance) {
 		vertData = fill_vert_plane_scissor_data;
-		fragData = fill_frag_plane_scissor_data;
+		if(settings.aaStroke) {
+			fragData = fill_frag_plane_scissor_edge_aa_data;
+		} else {
+			fragData = fill_frag_plane_scissor_data;
+		}
+	} else if(settings.aaStroke) {
+		fragData = fill_frag_frag_scissor_edge_aa_data;
 	}
 
 	auto fillVertex = vpp::ShaderModule(dev, vertData);
@@ -259,7 +283,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
 
 	identityTransform_ = {*this};
-	pointColorPaint_ = {*this, ::vgv::pointColorPaint()};
+	pointColorPaint_ = {*this, ::rvg::pointColorPaint()};
 	defaultScissor_ = {*this, Scissor::reset};
 }
 
@@ -292,7 +316,7 @@ void Context::registerUpdateDevice(DeviceObject obj) {
 	updateDevice_.insert(obj);
 }
 
-bool Context::deviceObjectDestroyed(::vgv::DeviceObject& obj) noexcept {
+bool Context::deviceObjectDestroyed(::rvg::DeviceObject& obj) noexcept {
 	auto it = updateDevice_.begin();
 	auto visitor = [&](auto* ud) {
 		if(&obj == ud) {
@@ -312,8 +336,8 @@ bool Context::deviceObjectDestroyed(::vgv::DeviceObject& obj) noexcept {
 	return false;
 }
 
-void Context::deviceObjectMoved(::vgv::DeviceObject& o,
-		::vgv::DeviceObject& n) noexcept {
+void Context::deviceObjectMoved(::rvg::DeviceObject& o,
+		::rvg::DeviceObject& n) noexcept {
 
 	auto it = updateDevice_.begin();
 	auto visitor = [&](auto* ud) {
@@ -339,29 +363,52 @@ Polygon::Polygon(Context& ctx) : DeviceObject(ctx) {
 }
 
 void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
-	fillCache_.clear();
-	fillColorCache_.clear();
-	strokeCache_.clear();
-	strokeColorCache_.clear();
+	constexpr auto fringe = 2.f; // TODO
 
-	if(mode.fill) {
-		fillCache_.insert(fillCache_.end(), points.begin(), points.end());
+	fill_.points.clear();
+	fill_.color.clear();
+	stroke_.points.clear();
+	stroke_.color.clear();
+
+	flags_.fill = mode.fill;
+	if(flags_.fill) {
+		fill_.points.insert(fill_.points.end(), points.begin(), points.end());
 		if(mode.color.fill) {
 			dlg_assert(mode.color.points.size() == points.size());
-			fillColorCache_.insert(fillColorCache_.end(),
+			fill_.color.insert(fill_.color.end(),
 				mode.color.points.begin(), mode.color.points.end());
-			flags_.fillColor = true;
 		}
 	}
 
-	if(mode.stroke > 0.f) {
+	flags_.stroke = mode.stroke > 0.f;
+	if(flags_.stroke) {
+		auto settings = ktc::StrokeSettings {mode.stroke};
+		auto baseHandler = [&](const auto& vertex) {
+			stroke_.points.push_back(vertex.position);
+			if(context().settings().aaStroke) {
+				stroke_.aa.push_back(vertex.aa);
+			}
+		};
+
+		if(context().settings().aaStroke) {
+			stroke_.mult = (mode.stroke * 0.5f + fringe * 0.5f) / fringe;
+			settings.width += fringe * 0.5f;
+		}
+
 		if(mode.color.stroke) {
 			dlg_assert(mode.color.points.size() == points.size());
-			ktc::bakeColoredStroke(points, mode.color.points, {mode.stroke},
-				strokeCache_, strokeColorCache_);
-			flags_.strokeColor = true;
+			auto handler = [&](const auto& vertex) {
+				baseHandler(vertex);
+				stroke_.color.push_back(vertex.color);
+			};
+			ktc::bakeColoredStroke(points, mode.color.points, settings,
+				handler);
 		} else {
-			ktc::bakeStroke(points, {mode.stroke}, strokeCache_);
+			ktc::bakeStroke(points, settings, baseHandler);
+		}
+
+		if(context().settings().aaStroke && !stroke_.aaDs) {
+			stroke_.aaDs = {context().dsLayoutStrokeAA(), context().dsPool()};
 		}
 	}
 
@@ -403,121 +450,169 @@ bool Polygon::disabled(DrawType type) const {
 // color data [if any] (vec4u8)
 // -- end
 
-bool Polygon::updateDevice() {
-	// TODO: only create buffers if needed. When a Polygon is never stroked,
-	// don't ever create a stroke buffer. Probably needs additional flag
+// TODO: we currently assume that update is always called before
+// updateDevice but what if e.g. updateDevice was triggered by
+// a disable call?
 
+bool Polygon::updateDevice() {
 	dlg_assert(valid());
 
 	bool rerecord = false;
-	auto upload = [&](auto& cache, auto& colorCache, auto colorFlag,
-			auto disableFlag, auto& buf) {
+	auto upload = [&](auto& points, auto& color, auto disable,
+			auto& colorFlag, auto& pbuf, auto& cbuf) {
 
-		auto neededSize = sizeof(vk::DrawIndirectCommand);
-		neededSize += sizeof(cache[0]) * cache.size();
-		if(!colorCache.empty()) {
-			neededSize = vpp::align(neededSize, 4u);
-			neededSize += sizeof(colorCache[0]) * colorCache.size();
+		// pos
+		auto pneeded = sizeof(vk::DrawIndirectCommand);
+		pneeded += !disable * (sizeof(points[0]) * points.size());
+		if(pbuf.size() < pneeded) {
+			pneeded *= 2;
+			pbuf = context().device().bufferAllocator().alloc(true,
+				pneeded, vk::BufferUsageBits::vertexBuffer, 4u);
+			rerecord = true;
 		}
 
-		if(disableFlag) {
-			neededSize = sizeof(vk::DrawIndirectCommand);
-		} else if(colorCache.empty() == colorFlag) {
+		auto pmap = pbuf.memoryMap();
+		auto ptr = pmap.ptr();
+
+		vk::DrawIndirectCommand cmd {};
+		cmd.vertexCount = !disable * points.size();
+		cmd.instanceCount = 1;
+		write(ptr, cmd);
+
+		if(disable) {
+			return;
+		}
+
+		std::memcpy(ptr, points.data(), points.size() * sizeof(points[0]));
+
+		// color
+		if(colorFlag == color.empty()) {
 			colorFlag ^= true;
 			rerecord = true;
 		}
 
-		if(buf.size() < neededSize) {
-			neededSize *= 2;
-			buf = context().device().bufferAllocator().alloc(true, neededSize,
-				vk::BufferUsageBits::vertexBuffer, 4u);
-			rerecord = true;
-		}
-
-		auto map = buf.memoryMap();
-		auto ptr = map.ptr();
-
-		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = !disableFlag * cache.size();
-		cmd.instanceCount = 1;
-		write(ptr, cmd);
-
-		if(disableFlag) {
+		if(!colorFlag) {
 			return;
 		}
 
-		std::memcpy(ptr, cache.data(), cache.size() * sizeof(cache[0]));
-
-		if(!colorCache.empty()) {
-			auto off = 2/3.f * (buf.size() - sizeof(vk::DrawIndirectCommand));
-			off += sizeof(vk::DrawIndirectCommand);
-			auto uoff = vpp::align(vk::DeviceSize(off), 4u);
-			ptr = map.ptr() + uoff;
-			auto size = colorCache.size() * sizeof(colorCache[0]);
-			std::memcpy(ptr, colorCache.data(), size);
+		auto cneeded = (sizeof(color[0])) * color.size();
+		if(cbuf.size() < cneeded) {
+			cbuf = context().device().bufferAllocator().alloc(true,
+				cneeded * 2 + 1, vk::BufferUsageBits::vertexBuffer, 4u);
+			rerecord = true;
 		}
+
+		auto cmap = cbuf.memoryMap();
+		std::memcpy(cmap.ptr(), color.data(), cneeded);
 	};
 
-	upload(fillCache_, fillColorCache_, flags_.fillColor,
-		flags_.disableFill, fillBuf_);
-	upload(strokeCache_, strokeColorCache_, flags_.strokeColor,
-		flags_.disableStroke, strokeBuf_);
+	if(flags_.fill) {
+		auto f = flags_.colorFill;
+		upload(fill_.points, fill_.color, flags_.disableFill, f,
+			fill_.pBuf, fill_.cBuf);
+		flags_.colorFill = f;
+	}
+
+	if(flags_.stroke) {
+		auto f = flags_.colorStroke;
+		upload(stroke_.points, stroke_.color, flags_.disableStroke, f,
+			stroke_.pBuf, stroke_.cBuf);
+		flags_.colorStroke = f;
+
+		// stroke anti aliasing
+		if(context().settings().aaStroke) {
+			auto needed = sizeof(float);
+			needed += stroke_.aa.size() * sizeof(stroke_.aa[0]);
+			if(stroke_.aaBuf.size() < needed) {
+				auto& b = stroke_.aaBuf;
+				auto usage = vk::BufferUsageBits::uniformBuffer |
+					vk::BufferUsageBits::vertexBuffer;
+				b = context().device().bufferAllocator().alloc(
+					true, 2 * needed, usage);
+				rerecord = true;
+
+				dlg_info("{}", b.buffer().vkHandle());
+				dlg_info("{}", b.offset());
+				dlg_info("{}", b.size());
+				vpp::DescriptorSetUpdate update(stroke_.aaDs);
+				update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
+			}
+
+			auto map = stroke_.aaBuf.memoryMap();
+			auto ptr = map.ptr();
+			write(ptr, stroke_.mult);
+			std::memcpy(ptr, stroke_.aa.data(),
+				stroke_.aa.size() * sizeof(stroke_.aa[0]));
+		}
+	}
+
 	return rerecord;
 }
 
 void Polygon::fill(const DrawInstance& ini) const {
-	dlg_assert(valid() && fillBuf_.size() > 0);
+	dlg_assert(flags_.fill && valid() && fill_.pBuf.size() > 0);
 
 	auto& ctx = ini.context;
 	auto& cmdb = ini.cmdBuf;
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
 
-	static constexpr auto isText = uint32_t(0);
+	static constexpr auto type = uint32_t(0);
 	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &isText);
+		0, 4, &type);
 
-	// position and dummy uv buffer
-	auto& b = fillBuf_;
+	auto& b = fill_.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
+	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
+	vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off}); // dummy uv
 
-	if(flags_.fillColor) {
-		auto o = 2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand));
-		o += sizeof(vk::DrawIndirectCommand);
-		off = b.offset() + vpp::align(vk::DeviceSize(o), 4u);
+	if(flags_.colorFill) {
+		auto& c = fill_.cBuf;
+		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
+	} else {
+		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
 	}
 
-	// (potentially dummy) color buffer
-	vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off});
 	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
 void Polygon::stroke(const DrawInstance& ini) const {
-	dlg_assert(valid() && strokeBuf_.size() > 0);
+	dlg_assert(flags_.stroke && valid() && stroke_.pBuf.size() > 0);
 
 	auto& ctx = ini.context;
 	auto& cmdb = ini.cmdBuf;
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
 
-	static constexpr auto isText = uint32_t(0);
+	static constexpr auto type = uint32_t(2);
 	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &isText);
+		0, 4, &type);
 
 	// position and dummy uv buffer
-	auto& b = strokeBuf_;
+	auto& b = stroke_.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer(), b.buffer()}, {off, off});
+	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
 
-	if(flags_.strokeColor) {
-		auto o = 2/3.f * (b.size() - sizeof(vk::DrawIndirectCommand));
-		o += sizeof(vk::DrawIndirectCommand);
-		off = b.offset() + vpp::align(vk::DeviceSize(o), 4u);
+	// aa
+	if(context().settings().aaStroke) {
+		dlg_assert(stroke_.aaBuf.size());
+		auto& a = stroke_.aaBuf;
+		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + 4});
+		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+			ctx.pipeLayout(), Context::aaStrokeBindSet,
+			{stroke_.aaDs}, {});
+	} else {
+		vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off});
 	}
 
-	// (potentially dummy) color buffer
-	vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off});
+	// color
+	if(flags_.colorStroke) {
+		auto& c = stroke_.cBuf;
+		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
+	} else {
+		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
+	}
+
 	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
@@ -697,7 +792,7 @@ FontAtlas::FontAtlas(Context& ctx) {
 }
 
 FontAtlas::~FontAtlas() {
-	nk_font_atlas_cleanup(&nkAtlas());
+	nk_font_atlas_clear(&nkAtlas());
 }
 
 bool FontAtlas::bake(Context& ctx) {
@@ -706,6 +801,7 @@ bool FontAtlas::bake(Context& ctx) {
 	bool rerecord = false;
 
 	int w, h;
+	nk_font_atlas_begin(&nkAtlas());
 	auto data = reinterpret_cast<const std::byte*>(
 		nk_font_atlas_bake(&nkAtlas(), &w, &h, NK_FONT_ATLAS_ALPHA8));
 
@@ -719,9 +815,9 @@ bool FontAtlas::bake(Context& ctx) {
 	if(uw > width_ || uh > height_) {
 		// TODO: allocate more than needed? 2d problem here though,
 		//   the rectpack algorithm does not only produce squares
-		texture_ = vgv::createTexture(ctx.device(), w, h,
+		texture_ = rvg::createTexture(ctx.device(), w, h,
 			reinterpret_cast<const std::byte*>(data),
-			vgv::TextureType::a8);
+			rvg::TextureType::a8);
 		rerecord = true;
 
 		vpp::DescriptorSetUpdate update(ds_);
@@ -740,6 +836,7 @@ bool FontAtlas::bake(Context& ctx) {
 		qs.wait(qs.add({{}, {}, {}, 1, &cmdBuf.vkHandle(), {}, {}}));
 	}
 
+	nk_font_atlas_end(&nkAtlas(), {}, nullptr);
 	return rerecord;
 }
 
@@ -893,11 +990,12 @@ void Text::draw(const DrawInstance& ini) const {
 
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), fontBindSet, {state_.font->atlas().ds()}, {});
+		ctx.pipeLayout(), Context::fontBindSet,
+		{state_.font->atlas().ds()}, {});
 
-	static constexpr auto isText = uint32_t(1);
+	static constexpr auto type = uint32_t(1);
 	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &isText);
+		0, 4, &type);
 
 	auto ioff = sizeof(vk::DrawIndirectCommand);
 	auto off = buf_.offset() + ioff;
@@ -943,7 +1041,7 @@ Rect2f Text::ithBounds(unsigned n) const {
 	return r;
 }
 
-void Text::State::utf8(StringParam utf8) {
+void Text::State::utf8(std::string_view utf8) {
 	utf32 = toUtf32(utf8);
 }
 
@@ -1000,7 +1098,7 @@ void Transform::update() {
 void Transform::bind(const DrawInstance& di) const {
 	dlg_assert(valid() && ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), transformBindSet, {ds_}, {});
+		di.context.pipeLayout(), Context::transformBindSet, {ds_}, {});
 }
 
 // Scissor
@@ -1034,7 +1132,7 @@ bool Scissor::updateDevice() {
 void Scissor::bind(const DrawInstance& di) const {
 	dlg_assert(ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), scissorBindSet, {ds_}, {});
+		di.context.pipeLayout(), Context::scissorBindSet, {ds_}, {});
 }
 
 // DeviceObject
@@ -1067,4 +1165,4 @@ DeviceObject::~DeviceObject() {
 	}
 }
 
-} // namespace vgv
+} // namespace rvg

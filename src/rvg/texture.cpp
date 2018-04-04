@@ -1,4 +1,4 @@
-#include <vgv/vgv.hpp>
+#include <rvg/paint.hpp>
 #include <vpp/imageOps.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/queue.hpp>
@@ -13,7 +13,7 @@
 // TODO: image uploading not really correct.
 // https://github.com/SaschaWillems/Vulkan/blob/master/base/VulkanTexture.hpp
 
-namespace vgv {
+namespace rvg {
 
 void upload(const vpp::Image& img, vk::Format format,
 		vk::ImageLayout layout, const vk::Extent3D& size,

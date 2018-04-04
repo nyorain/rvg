@@ -3,7 +3,12 @@
 #include "fwd.hpp"
 #include "widget.hpp"
 #include "style.hpp"
+
+#include <rvg/shapes.hpp>
+#include <rvg/text.hpp>
+
 #include <functional>
+#include <string_view>
 
 namespace vui {
 

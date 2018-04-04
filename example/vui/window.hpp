@@ -3,6 +3,7 @@
 #include "fwd.hpp"
 #include "container.hpp"
 #include "style.hpp"
+#include <rvg/shapes.hpp>
 
 namespace vui {
 

@@ -1,4 +1,6 @@
-#include <vgv/vgv.hpp>
+#include <rvg/paint.hpp>
+#include <rvg/context.hpp>
+
 #include <vpp/vk.hpp>
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
@@ -10,7 +12,7 @@
 // https://stackoverflow.com/questions/3423214/
 // https://stackoverflow.com/questions/3018313/
 
-namespace vgv {
+namespace rvg {
 namespace {
 
 template<typename T>
@@ -147,7 +149,7 @@ Color hsv(u8 h, u8 s, u8 v, u8 a) {
 }
 
 Color hsvNorm(float h, float s, float v, float a) {
-	dlg_assert(normed(h, s, v, a));
+	dlg_assertm(normed(h, s, v, a), "{} {} {} {}", h, s, v, a);
 	if(s == 0) {
 		return {norm, v, v, v, a};
 	}
@@ -336,7 +338,7 @@ void Paint::update() {
 void Paint::bind(const DrawInstance& di) const {
 	dlg_assert(valid() && ds_ && ubo_.size());
 	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), paintBindSet, {ds_}, {});
+		di.context.pipeLayout(), Context::paintBindSet, {ds_}, {});
 }
 
 bool Paint::updateDevice() {

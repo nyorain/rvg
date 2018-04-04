@@ -1,4 +1,4 @@
-project('vgv', ['cpp', 'c'],
+project('rvg', ['cpp', 'c'],
 	license: 'MIT',
 	version: '0.1.0',
 	meson_version: '>=0.43',
@@ -49,9 +49,9 @@ dep_katachi = dependency('katachi', fallback: ['katachi', 'katachi_dep'])
 dep_vulkan = dependency('vulkan')
 
 src_inc = include_directories('src') # for shaders, internal headers
-vgv_inc = include_directories('include')
+rvg_inc = include_directories('include')
 
-vgv_deps = [
+rvg_deps = [
   dep_vpp,
   dep_nytl,
   dep_dlg,
@@ -60,13 +60,25 @@ vgv_deps = [
 ]
 
 subdir('src/shaders')
-subdir('src/vgv')
+subdir('src/rvg')
 
-vgv_dep = declare_dependency(
-	link_with: vgv_lib,
-	dependencies: vgv_deps,
-	include_directories: vgv_inc)
+rvg_dep = declare_dependency(
+	link_with: rvg_lib,
+	dependencies: rvg_deps,
+	include_directories: rvg_inc)
 
 if build_example
   subdir('example')
 endif
+
+# pkgconfig
+pkg = import('pkgconfig')
+pkg_dirs = ['.']
+pkg.generate(
+	name: 'rvg',
+	requires: ['vulkan', 'vpp', 'nytl'],
+	libraries: rvg_lib,
+	filebase: 'rvg',
+	subdirs: pkg_dirs,
+	version: meson.project_version(),
+	description: 'Retained vulkan/vector graphics')
