@@ -83,6 +83,7 @@ public:
 	const auto& pointColorPaint() const { return pointColorPaint_; }
 	const auto& identityTransform() const { return identityTransform_; }
 	const auto& defaultScissor() const { return defaultScissor_; }
+	const auto& defaultStrokeAA() const { return defaultStrokeAA_; }
 
 	const auto& settings() const { return settings_; }
 
@@ -111,6 +112,9 @@ private:
 	Scissor defaultScissor_;
 	Transform identityTransform_;
 	Paint pointColorPaint_;
+
+	vpp::BufferRange defaultStrokeAABuf_;
+	vpp::DescriptorSet defaultStrokeAA_;
 
 	std::unordered_set<DeviceObject> updateDevice_;
 	bool rerecord_ {};

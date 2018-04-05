@@ -1,3 +1,7 @@
+// Copyright (c) 2018 nyorain
+// Distributed under the Boost Software License, Version 1.0.
+// See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
+
 #include <rvg/context.hpp>
 #include <rvg/font.hpp>
 #include <rvg/text.hpp>
@@ -7,7 +11,6 @@
 #include <rvg/deviceObject.hpp>
 
 #include <katachi/path.hpp>
-#include <katachi/stroke.hpp>
 #include <katachi/curves.hpp>
 
 #include <vpp/vk.hpp>
@@ -68,6 +71,21 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	samplerInfo.minFilter = vk::Filter::nearest;
 	fontSampler_ = {dev, samplerInfo};
 
+	// pool
+	vk::DescriptorPoolSize poolSizes[2] = {};
+	poolSizes[0].descriptorCount = 500;
+	poolSizes[0].type = vk::DescriptorType::uniformBuffer;
+
+	poolSizes[1].descriptorCount = 500;
+	poolSizes[1].type = vk::DescriptorType::combinedImageSampler;
+
+	vk::DescriptorPoolCreateInfo poolInfo;
+	poolInfo.maxSets = 100;
+	poolInfo.poolSizeCount = 2;
+	poolInfo.pPoolSizes = poolSizes;
+	dsPool_ = {dev, poolInfo};
+
+
 	// layouts
 	auto transformDSB = {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
@@ -121,20 +139,6 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	pipeLayout_ = {dev, layouts, {
 		{vk::ShaderStageBits::fragment, 0, 4}
 	}};
-
-	// pool
-	vk::DescriptorPoolSize poolSizes[2] = {};
-	poolSizes[0].descriptorCount = 500;
-	poolSizes[0].type = vk::DescriptorType::uniformBuffer;
-
-	poolSizes[1].descriptorCount = 500;
-	poolSizes[1].type = vk::DescriptorType::combinedImageSampler;
-
-	vk::DescriptorPoolCreateInfo poolInfo;
-	poolInfo.maxSets = 100;
-	poolInfo.poolSizeCount = 2;
-	poolInfo.pPoolSizes = poolSizes;
-	dsPool_ = {dev, poolInfo};
 
 	// pipeline
 	using ShaderData = nytl::Span<const std::uint32_t>;
@@ -285,6 +289,19 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	identityTransform_ = {*this};
 	pointColorPaint_ = {*this, ::rvg::pointColorPaint()};
 	defaultScissor_ = {*this, Scissor::reset};
+
+	if(settings.aaStroke) {
+		defaultStrokeAABuf_ = device().bufferAllocator().alloc(
+			true, 12 * sizeof(float), vk::BufferUsageBits::uniformBuffer);
+		auto map = defaultStrokeAABuf_.memoryMap();
+		auto ptr = map.ptr();
+		write(ptr, 1.f);
+
+		defaultStrokeAA_ = {dsLayoutStrokeAA_, dsPool_};
+		auto& b = defaultStrokeAABuf_;
+		vpp::DescriptorSetUpdate update(defaultStrokeAA_);
+		update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
+	}
 }
 
 DrawInstance Context::record(vk::CommandBuffer cmdb) {
@@ -293,6 +310,12 @@ DrawInstance Context::record(vk::CommandBuffer cmdb) {
 	defaultScissor_.bind(ret);
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		pipeLayout(), fontBindSet, {dummyTex_}, {});
+
+	if(settings().aaStroke) {
+		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+			pipeLayout(), aaStrokeBindSet, {defaultStrokeAA_}, {});
+	}
+
 	return ret;
 }
 
@@ -356,264 +379,6 @@ void Context::deviceObjectMoved(::rvg::DeviceObject& o,
 			return;
 		}
 	}
-}
-
-// Polygon
-Polygon::Polygon(Context& ctx) : DeviceObject(ctx) {
-}
-
-void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
-	constexpr auto fringe = 2.f; // TODO
-
-	fill_.points.clear();
-	fill_.color.clear();
-	stroke_.points.clear();
-	stroke_.color.clear();
-
-	flags_.fill = mode.fill;
-	if(flags_.fill) {
-		fill_.points.insert(fill_.points.end(), points.begin(), points.end());
-		if(mode.color.fill) {
-			dlg_assert(mode.color.points.size() == points.size());
-			fill_.color.insert(fill_.color.end(),
-				mode.color.points.begin(), mode.color.points.end());
-		}
-	}
-
-	flags_.stroke = mode.stroke > 0.f;
-	if(flags_.stroke) {
-		auto settings = ktc::StrokeSettings {mode.stroke};
-		auto baseHandler = [&](const auto& vertex) {
-			stroke_.points.push_back(vertex.position);
-			if(context().settings().aaStroke) {
-				stroke_.aa.push_back(vertex.aa);
-			}
-		};
-
-		if(context().settings().aaStroke) {
-			stroke_.mult = (mode.stroke * 0.5f + fringe * 0.5f) / fringe;
-			settings.width += fringe * 0.5f;
-		}
-
-		if(mode.color.stroke) {
-			dlg_assert(mode.color.points.size() == points.size());
-			auto handler = [&](const auto& vertex) {
-				baseHandler(vertex);
-				stroke_.color.push_back(vertex.color);
-			};
-			ktc::bakeColoredStroke(points, mode.color.points, settings,
-				handler);
-		} else {
-			ktc::bakeStroke(points, settings, baseHandler);
-		}
-
-		if(context().settings().aaStroke && !stroke_.aaDs) {
-			stroke_.aaDs = {context().dsLayoutStrokeAA(), context().dsPool()};
-		}
-	}
-
-	context().registerUpdateDevice(this);
-}
-
-void Polygon::disable(bool disable, DrawType type) {
-	if(type == DrawType::strokeFill || type == DrawType::fill) {
-		flags_.disableFill = disable;
-	}
-
-	if(type == DrawType::strokeFill || type == DrawType::stroke) {
-		flags_.disableStroke = disable;
-	}
-
-	context().registerUpdateDevice(this);
-}
-
-bool Polygon::disabled(DrawType type) const {
-	bool ret = true;
-	if(type == DrawType::strokeFill || type == DrawType::fill) {
-		ret &= flags_.disableFill;
-	}
-
-	if(type == DrawType::strokeFill || type == DrawType::stroke) {
-		ret &= flags_.disableStroke;
-	}
-
-	return ret;
-}
-
-// Buffer layouts (IDC = IndirectDrawCommand):
-//
-// -- start (align: 4)
-// IDC
-// -- pos: sizeof(IDC)
-// position data (vec2f)
-// -- pos: align(IDC + 2/3.f * (buf.size - sizeof(IDC)), 4u)
-// color data [if any] (vec4u8)
-// -- end
-
-// TODO: we currently assume that update is always called before
-// updateDevice but what if e.g. updateDevice was triggered by
-// a disable call?
-
-bool Polygon::updateDevice() {
-	dlg_assert(valid());
-
-	bool rerecord = false;
-	auto upload = [&](auto& points, auto& color, auto disable,
-			auto& colorFlag, auto& pbuf, auto& cbuf) {
-
-		// pos
-		auto pneeded = sizeof(vk::DrawIndirectCommand);
-		pneeded += !disable * (sizeof(points[0]) * points.size());
-		if(pbuf.size() < pneeded) {
-			pneeded *= 2;
-			pbuf = context().device().bufferAllocator().alloc(true,
-				pneeded, vk::BufferUsageBits::vertexBuffer, 4u);
-			rerecord = true;
-		}
-
-		auto pmap = pbuf.memoryMap();
-		auto ptr = pmap.ptr();
-
-		vk::DrawIndirectCommand cmd {};
-		cmd.vertexCount = !disable * points.size();
-		cmd.instanceCount = 1;
-		write(ptr, cmd);
-
-		if(disable) {
-			return;
-		}
-
-		std::memcpy(ptr, points.data(), points.size() * sizeof(points[0]));
-
-		// color
-		if(colorFlag == color.empty()) {
-			colorFlag ^= true;
-			rerecord = true;
-		}
-
-		if(!colorFlag) {
-			return;
-		}
-
-		auto cneeded = (sizeof(color[0])) * color.size();
-		if(cbuf.size() < cneeded) {
-			cbuf = context().device().bufferAllocator().alloc(true,
-				cneeded * 2 + 1, vk::BufferUsageBits::vertexBuffer, 4u);
-			rerecord = true;
-		}
-
-		auto cmap = cbuf.memoryMap();
-		std::memcpy(cmap.ptr(), color.data(), cneeded);
-	};
-
-	if(flags_.fill) {
-		auto f = flags_.colorFill;
-		upload(fill_.points, fill_.color, flags_.disableFill, f,
-			fill_.pBuf, fill_.cBuf);
-		flags_.colorFill = f;
-	}
-
-	if(flags_.stroke) {
-		auto f = flags_.colorStroke;
-		upload(stroke_.points, stroke_.color, flags_.disableStroke, f,
-			stroke_.pBuf, stroke_.cBuf);
-		flags_.colorStroke = f;
-
-		// stroke anti aliasing
-		if(context().settings().aaStroke) {
-			auto needed = sizeof(float);
-			needed += stroke_.aa.size() * sizeof(stroke_.aa[0]);
-			if(stroke_.aaBuf.size() < needed) {
-				auto& b = stroke_.aaBuf;
-				auto usage = vk::BufferUsageBits::uniformBuffer |
-					vk::BufferUsageBits::vertexBuffer;
-				b = context().device().bufferAllocator().alloc(
-					true, 2 * needed, usage);
-				rerecord = true;
-
-				dlg_info("{}", b.buffer().vkHandle());
-				dlg_info("{}", b.offset());
-				dlg_info("{}", b.size());
-				vpp::DescriptorSetUpdate update(stroke_.aaDs);
-				update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
-			}
-
-			auto map = stroke_.aaBuf.memoryMap();
-			auto ptr = map.ptr();
-			write(ptr, stroke_.mult);
-			std::memcpy(ptr, stroke_.aa.data(),
-				stroke_.aa.size() * sizeof(stroke_.aa[0]));
-		}
-	}
-
-	return rerecord;
-}
-
-void Polygon::fill(const DrawInstance& ini) const {
-	dlg_assert(flags_.fill && valid() && fill_.pBuf.size() > 0);
-
-	auto& ctx = ini.context;
-	auto& cmdb = ini.cmdBuf;
-
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
-
-	static constexpr auto type = uint32_t(0);
-	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &type);
-
-	auto& b = fill_.pBuf;
-	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
-	vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off}); // dummy uv
-
-	if(flags_.colorFill) {
-		auto& c = fill_.cBuf;
-		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
-	} else {
-		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
-	}
-
-	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
-}
-
-void Polygon::stroke(const DrawInstance& ini) const {
-	dlg_assert(flags_.stroke && valid() && stroke_.pBuf.size() > 0);
-
-	auto& ctx = ini.context;
-	auto& cmdb = ini.cmdBuf;
-
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
-
-	static constexpr auto type = uint32_t(2);
-	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &type);
-
-	// position and dummy uv buffer
-	auto& b = stroke_.pBuf;
-	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
-
-	// aa
-	if(context().settings().aaStroke) {
-		dlg_assert(stroke_.aaBuf.size());
-		auto& a = stroke_.aaBuf;
-		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + 4});
-		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-			ctx.pipeLayout(), Context::aaStrokeBindSet,
-			{stroke_.aaDs}, {});
-	} else {
-		vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off});
-	}
-
-	// color
-	if(flags_.colorStroke) {
-		auto& c = stroke_.cBuf;
-		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
-	} else {
-		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
-	}
-
-	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
 }
 
 // Shape

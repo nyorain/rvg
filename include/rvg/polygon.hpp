@@ -26,6 +26,8 @@ struct DrawMode {
 		bool fill {}; /// whether they can be used when filling
 		bool stroke {}; /// whether they can be used when stroking
 	} color {};
+
+	bool aaFill {}; /// Whether to enable anti aliased fill
 };
 
 enum class DrawType {
@@ -68,6 +70,11 @@ public:
 	bool updateDevice();
 
 protected:
+	bool upload(Span<const Vec2f> points, Span<const Vec4u8> color,
+		bool disable, bool colorFlag, vpp::BufferRange& pbuf,
+		vpp::BufferRange& cbuf);
+
+protected:
 	struct {
 		bool fill : 1;
 		bool stroke : 1;
@@ -75,6 +82,7 @@ protected:
 		bool colorStroke : 1;
 		bool disableFill : 1;
 		bool disableStroke : 1;
+		bool aaFill : 1;
 	} flags_ {};
 
 	struct {
@@ -89,9 +97,7 @@ protected:
 			std::vector<Vec2f> aa;
 			vpp::BufferRange pBuf;
 			vpp::BufferRange cBuf;
-			vpp::BufferRange aaBuf; // (optional) aa uv
-			vpp::DescriptorSet ds; // thickness ubo (from aabuf);
-			float mult; // for aa
+			vpp::BufferRange aaBuf;
 		} aa;
 	} fill_;
 

@@ -117,3 +117,33 @@ enum class ScissorMode {
 	/// - command buffers have to be rerecorded on every scissor change
 	cmd,
 };
+
+## Polygon cleanup
+
+```cpp
+// - IndirectDrawCommand (16 bytes total)
+// - positions, Vec2f per vertex (4 bytes)
+// - color (optional), Vec4u8 per vertex (4 bytes)
+// If color changes or buffer is recreated: rerecord needed.
+struct FillPolygon {
+	std::vector<Vec2f> positions;
+	std::vector<Color> colors;
+	vpp::BufferRange buffer;
+};
+
+// - IndirectDrawCommand (16 bytes total)
+// - positions, Vec2f per vertex (4 bytes)
+// - color (optional: color), Vec4u8 per vertex (4 bytes)
+// - aa uv (optional: aa), Vec2f per vertex (8 bytes)
+// - aa stroke mult (optional, 4 bytes total)
+// If color or aa changes or buffer is recreated: rerecord needed.
+struct StrokePolygon {
+	std::vector<Vec2f> positions;
+	std::vector<Color> colors;
+	std::vector<Vec2f> uv;
+	vpp::BufferRange buffer;
+};
+
+bool updateDevice(Context&, FillPolygon&);
+bool updateDevice(Context&, StrokePolygon&);
+```

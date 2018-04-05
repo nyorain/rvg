@@ -154,7 +154,7 @@ int main() {
 
 	rvg::Transform transform(ctx);
 
-	rvg::Shape shape(ctx, {}, {false, 5.f});
+	rvg::Shape shape(ctx, {}, {false, 25.f});
 	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
 
 	auto fontHeight = 16;
@@ -217,6 +217,8 @@ int main() {
 
 	// window
 	styles.window.bg = &hintBgPaint;
+	styles.window.rounding = {20.f, 20.f, 20.f, 20.f};
+	styles.window.outerPadding = {10.f, 50.f};
 
 	// color picker
 	styles.colorPicker.marker = &hintBgPaint;
@@ -286,17 +288,17 @@ int main() {
 		auto di = ctx.record(buf);
 
 		transform.bind(di);
-		// svgPaint.bind(di);
-		// svgShape.fill(di);
+		svgPaint.bind(di);
+		svgShape.fill(di);
 
-		// foxPaint.bind(di);
-		// foxRect.fill(di);
+		foxPaint.bind(di);
+		foxRect.fill(di);
 
 		paint.bind(di);
 		shape.stroke(di);
-		// text.draw(di);
+		text.draw(di);
 
-		// gui.draw(di);
+		gui.draw(di);
 	};
 
 	ctx.updateDevice();

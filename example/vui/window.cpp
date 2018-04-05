@@ -11,7 +11,9 @@ Window::Window(Gui& gui, const Rect2f& bounds, const WindowStyle& style) :
 		LayoutWidget(gui, bounds), style_(style) {
 
 	auto stroke = style.bgStroke ? 2.f : 0.f;
-	bg_ = {context(), {}, size(), {true, stroke}, style.rounding};
+	auto drawMode = DrawMode {true, stroke};
+	drawMode.aaFill = true;
+	bg_ = {context(), {}, size(), drawMode, style.rounding};
 }
 
 void Window::refreshLayout() {

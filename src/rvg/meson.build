@@ -2,6 +2,7 @@ rvg_src = [
 	'rvg.cpp',
 	'paint.cpp',
 	'texture.cpp',
+	'polygon.cpp',
 	'nk_font/font.c',
 	shaders
 ]
