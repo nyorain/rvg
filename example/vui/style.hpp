@@ -23,9 +23,16 @@ struct ButtonStyle {
 };
 
 struct TextfieldStyle {
-	rvg::PaintData label;
-	rvg::PaintData bg;
-	rvg::PaintData selection;
+	rvg::Paint* text;
+	rvg::Paint* selected;
+	rvg::Paint* bg;
+	rvg::Paint* cursor;
+	rvg::Paint* selectedText {};
+	rvg::Paint* bgStroke {};
+	float cursorWidth = 1.f;
+	Vec2f padding = Vec {10.f, 10.f};
+	std::array<float, 4> rounding = {};
+	Font* font {};
 };
 
 struct WindowStyle {
@@ -53,7 +60,6 @@ struct HintStyle {
 struct ColorPickerStyle {
 	rvg::Paint* marker; // marker stroking
 	rvg::Paint* stroke {}; // (optional) hue + selector field stroke
-	Vec2f padding = {5.f, 5.f};
 	float huePadding = 10.f;
 	float strokeWidth = 1.5f;
 	float colorMarkerRadius = 3.f;

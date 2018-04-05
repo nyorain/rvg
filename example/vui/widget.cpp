@@ -54,8 +54,7 @@ void Widget::intersectScissor(const Rect2f& rect) {
 void Widget::updateScissor() {
 	auto cpy = intersectScissor_;
 	cpy.position -= bounds_.position;
-	auto own = Rect2f {{}, size()};
-	scissor_.rect(nytl::intersection(cpy, own));
+	scissor_.rect(nytl::intersection(cpy, ownScissor()));
 }
 
 Context& Widget::context() const {
@@ -68,6 +67,10 @@ void Widget::registerUpdate() {
 
 void Widget::registerUpdateDevice() {
 	gui().addUpdateDevice(*this);
+}
+
+Rect2f Widget::ownScissor() const {
+	return {{}, size()};
 }
 
 } // namespace vui

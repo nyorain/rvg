@@ -22,24 +22,30 @@ for rendering with vulkan. Could easily be used for a gui library.
 - [x] rvg: sanity checking (with asserts/logs)
   - [x] color functions, conversion
   - [x] shape drawing functions
-- [ ] rvg: antialiasing
+- [x] rvg: antialiasing
+  - [ ] fix stroke caps
+  - [ ] better settings (Context, DrawMode)
+  - [ ] simplify Polygon
 - [ ] rvg: reorganize/split header/sources
   - [x] shapes/context/texture/transform/scissor headers
   - [x] separate path.hpp in separate library/utility
   - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
-- [ ] rvg: make non-texture gradients use transform space
-- [ ] advanced widget sizing hints, min/max size (?)
+- [ ] rvg: make non-texture gradients make use of transform buffer span
 - [ ] split rvg and gui library
 - [ ] clipboard support (probably over Gui/GuiListener)
 - [ ] don't use that much paints and descriptors for widgets
   -> advanced styling/themes
 - [ ] widget styles, also spacings/paddings/margins/borders etc
 - [ ] popups (needed for dropdown menu, tooltip)
-- [ ] z widget ordering
+- [x] z widget ordering
+  - [ ] temporary raise on one layer (reorder in vector)
+  - [ ] allow widgets to change it? needed?
 - [ ] dropdown menu
 - [ ] tooltip
 - [ ] tabs
 - [ ] better mouse/keyboard grabs
+  - [ ] currently bugs when multiple button grabs
+  - [ ] key grabs (needed?)
 - [x] think about dynamic scissor, avoiding rerecording on Widget::bounds
 - [ ] benchmark alternative pipelines, optimize default use cases
   - [ ] performance optimizations, resolve performance todos
@@ -50,6 +56,7 @@ for rendering with vulkan. Could easily be used for a gui library.
 - [ ] release public version
 - [ ] rvg: more stroke settings: linecap/linejoin
 - [ ] animations
+- [ ] advanced widget sizing hints, min/max size (needed?)
 - [ ] textfields/slider combos for ints/floats
 - [ ] better,easier custom navigation (e.g. tab-based)
 - [ ] custom grabbing slider

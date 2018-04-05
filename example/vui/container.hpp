@@ -99,15 +99,14 @@ public:
 	/// Returns a reference to it.
 	template<typename W, typename... Args>
 	W& create(Args&&... args) {
-		return ContainerWidget::create<W>(Rect2f {nextPosition(), nextSize()},
-			std::forward<Args>(args)...);
+		return createSized<W>(nextSize(), std::forward<Args>(args)...);
 	}
 
 	/// Like create but lets the caller explicitly specify the size passed
 	/// to the widget.
 	template<typename W, typename... Args>
 	W& createSized(Vec2f size, Args&&... args) {
-		return ContainerWidget::create<W>({nextPosition(), size},
+		return ContainerWidget::create<W>(Rect2f {nextPosition(), size},
 			std::forward<Args>(args)...);
 	}
 

@@ -75,17 +75,19 @@ void Button::size(Vec2f size) {
 	if(size.x != autoSize) {
 		tc->position.x = (size.x - textSize.x) / 2;
 	} else {
-		bgc->size.x = textSize.x + 2 * style().padding.x;
+		size.x = textSize.x + 2 * style().padding.x;
+		bgc->size.x = size.x;
 	}
 
 	if(size.y != autoSize) {
 		tc->position.y = (size.y - textSize.y) / 2;
 	} else {
-		bgc->size.y = textSize.y + 2 * style().padding.y;
+		size.y = textSize.y + 2 * style().padding.y;
+		bgc->size.y = size.y;
 	}
 
 	// resizes scissor
-	Widget::size(bgc->size);
+	Widget::size(size);
 }
 
 void Button::hide(bool hide) {

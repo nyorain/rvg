@@ -8,12 +8,17 @@ namespace vui {
 namespace {
 
 template<size_t D, typename T>
-Vec<D, T> clamp(Vec<D, T> v, Vec<D, T> min, Vec<D, T> max) {
+Vec<D, T> clamp(Vec<D, T> v, const Vec<D, T>& min, const Vec<D, T>& max) {
 	for(auto i = 0u; i < D; ++i) {
 		v[i] = std::clamp(v[i], min[i], max[i]);
 	}
 
 	return v;
+}
+
+template<size_t D, typename T>
+Vec<D, T> clamp(const Vec<D, T>& v, Rect<D, T> bounds) {
+	return clamp(v, bounds.position, bounds.position + bounds.size);
 }
 
 } // anon namespace
@@ -65,30 +70,26 @@ void ColorPicker::size(Vec3f hsv, Vec2f size) {
 		size.y = std::min(1.15f * size.x, 120.f);
 	}
 
-	auto es = size - 2 * style().padding; // effective size
-
 	// selector
 	auto sc = selector_.change();
-	sc->size = es;
+	sc->size = size;
 	sc->size.x -= style().hueWidth + style().huePadding;
-	sc->position = style().padding;
 	sc->drawMode = {true, style().strokeWidth};
 
 	// hue
 	auto hc = hue_.change();
 	hc->points.clear();
 
-	auto ystep = es.y / 6.f;
-	auto x = style().padding.x + es.x - style().hueWidth / 2;
+	auto ystep = size.y / 6.f;
+	auto x = size.x - style().hueWidth / 2;
 	for(auto i = 0u; i < 7; ++i) {
-		hc->points.push_back({x, style().padding.y + ystep * i});
+		hc->points.push_back({x, ystep * i});
 	}
 
 	// hue marker
 	auto hmc = hueMarker_.change();
-	hmc->position.x = es.x - style().hueWidth;
-	hmc->position.y = hsv[0] * es.y - style().hueMarkerHeight / 2.f;
-	hmc->position += style().padding;
+	hmc->position.x = size.x - style().hueWidth;
+	hmc->position.y = hsv[0] * size.y - style().hueMarkerHeight / 2.f;
 	hmc->size = {style().hueWidth, style().hueMarkerHeight};
 	hmc->drawMode = {false, style().hueMarkerThickness};
 
@@ -96,7 +97,6 @@ void ColorPicker::size(Vec3f hsv, Vec2f size) {
 	using namespace nytl::vec::cw::operators;
 	auto cmc = colorMarker_.change();
 	cmc->center = Vec {hsv[1], 1.f - hsv[2]} * selector_.size();
-	cmc->center += style().padding;
 	cmc->radius = {style().colorMarkerRadius, style().colorMarkerRadius};
 	cmc->drawMode = {false, style().colorMarkerThickness};
 	cmc->pointCount = 6u;
@@ -106,7 +106,7 @@ void ColorPicker::size(Vec3f hsv, Vec2f size) {
 		selector_.position(), Vec {selector_.size().x, 0.f},
 		::rvg::hsv(0, 0, 255), ::rvg::hsv(0, 0, 255, 0)));
 	vGrad_.paint(linearGradient(
-		selector_.position(), Vec {0.f, es.y},
+		selector_.position(), Vec {0.f, size.y},
 		::rvg::hsv(0, 255, 0, 0), ::rvg::hsv(0, 255, 0)));
 
 	Widget::size(size);
@@ -128,21 +128,18 @@ Widget* ColorPicker::mouseButton(const MouseButtonEvent& ev) {
 		return nullptr;
 	}
 
-	sliding_ = ev.pressed;
-	if(ev.pressed) {
-		click(ev.position - position());
+	if(!ev.pressed) {
+		slidingSV_ = slidingHue_ = false;
+		return this;
 	}
 
+	click(ev.position - position(), true);
 	return this;
 }
 
 Widget* ColorPicker::mouseMove(const MouseMoveEvent& ev) {
-	if(sliding_) {
-		click(ev.position - position());
-		return this;
-	}
-
-	return nullptr;
+	click(ev.position - position(), false);
+	return this;
 }
 
 void ColorPicker::pick(const Color& color) {
@@ -155,8 +152,7 @@ void ColorPicker::pick(const Color& color) {
 	basePaint_.paint(colorPaint(hsvNorm(hue, 1.f, 1.f)));
 
 	auto hmc = hueMarker_.change();
-	hmc->position.y = style().padding.y + hue * selector_.size().y;
-	hmc->position.y -= style().hueMarkerHeight / 2.f;
+	hmc->position.y = hue * selector_.size().y - style().hueMarkerHeight / 2.f;
 
 	using namespace nytl::vec::cw::operators;
 	auto cmc = colorMarker_.change();
@@ -186,20 +182,24 @@ void ColorPicker::draw(const DrawInstance& di) const {
 	colorMarker_.stroke(di);
 }
 
-void ColorPicker::click(Vec2f pos) {
-	pos = clamp(pos, style().padding, size() - style().padding);
+void ColorPicker::click(Vec2f pos, bool real) {
+	pos = clamp(pos, Vec2f {}, size());
 	auto hue = Rect2f {
-		{selector_.size().x + style().huePadding, style().padding.y},
+		{selector_.size().x + style().huePadding, 0.f},
 		{style().hueWidth, selector_.size().y}
 	};
 
-	if(nytl::contains(selector_.bounds(), pos)) {
+	if(slidingSV_ || (real && nytl::contains(selector_.bounds(), pos))) {
+		slidingSV_ = true;
+		pos = clamp(pos, selector_.bounds());
 		colorMarker_.change()->center = pos;
 		if(onChange) {
 			onChange(*this);
 		}
-	} else if(nytl::contains(hue, pos)) {
-		auto norm = (pos.y - style().padding.y) / selector_.size().y;
+	} else if(slidingHue_ || (real && nytl::contains(hue, pos))) {
+		slidingHue_ = true;
+		pos = clamp(pos, hue);
+		auto norm = pos.y / selector_.size().y;
 		hueMarker_.change()->position.y = pos.y;
 		hueMarker_.change()->position.y -= style().hueMarkerHeight / 2.f;
 		basePaint_.paint(colorPaint(hsvNorm(norm, 1.f, 1.f)));
@@ -211,12 +211,12 @@ void ColorPicker::click(Vec2f pos) {
 
 float ColorPicker::currentHue() const {
 	auto pos = hueMarker_.position().y + style().hueMarkerHeight / 2.f;
-	return (pos - style().padding.y) / selector_.size().y;
+	return pos / selector_.size().y;
 }
 
 Vec2f ColorPicker::currentSV() const {
 	using namespace nytl::vec::cw::operators;
-	auto sv = (colorMarker_.center() - style().padding) / selector_.size();
+	auto sv = colorMarker_.center() / selector_.size();
 	sv.y = 1 - sv.y;
 	return sv;
 }
@@ -224,6 +224,19 @@ Vec2f ColorPicker::currentSV() const {
 Color ColorPicker::picked() const {
 	auto sv = currentSV();
 	return hsvNorm(currentHue(), sv.x, sv.y);
+}
+
+Rect2f ColorPicker::ownScissor() const {
+	auto r = Widget::ownScissor();
+	auto y = std::max(style().colorMarkerRadius,
+		style().hueMarkerHeight / 2.f + style().hueMarkerThickness);
+
+	r.position.x -= style().colorMarkerRadius;
+	r.position.y -= y;
+	r.size.x += style().colorMarkerRadius + 1.f;
+	r.size.y += 2 * y;
+
+	return r;
 }
 
 } // namespace vui

@@ -9,6 +9,7 @@
 #include "vui/button.hpp"
 #include "vui/window.hpp"
 #include "vui/colorPicker.hpp"
+#include "vui/textfield.hpp"
 
 #include <rvg/context.hpp>
 #include <rvg/shapes.hpp>
@@ -154,7 +155,7 @@ int main() {
 
 	rvg::Transform transform(ctx);
 
-	rvg::Shape shape(ctx, {}, {false, 25.f});
+	rvg::Shape shape(ctx, {}, {false, 10.f});
 	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
 
 	auto fontHeight = 16;
@@ -198,6 +199,8 @@ int main() {
 	auto hintBgPaint = rvg::Paint(ctx, rvg::colorPaint({5, 5, 5, 200}));
 	auto hintTextPaint = rvg::Paint(ctx, labelPaintData);
 
+	auto bgPaint = rvg::Paint(ctx, bgPaintData);
+
 	vui::Styles styles;
 
 	// hint
@@ -218,7 +221,14 @@ int main() {
 	// window
 	styles.window.bg = &hintBgPaint;
 	styles.window.rounding = {20.f, 20.f, 20.f, 20.f};
-	styles.window.outerPadding = {10.f, 50.f};
+	styles.window.outerPadding = {20.f, 20.f};
+
+	// textfield
+	auto selectedPaint = rvg::Paint {ctx, rvg::colorPaint({50, 50, 50})};
+	styles.textfield.bg = &bgPaint;
+	styles.textfield.text = &hintTextPaint;
+	styles.textfield.selected = &selectedPaint;
+	styles.textfield.cursor = &hintTextPaint;
 
 	// color picker
 	styles.colorPicker.marker = &hintBgPaint;
@@ -233,16 +243,17 @@ int main() {
 		svgPaint.paint(rvg::colorPaint(cp.picked()));
 	};
 
+	win.create<vui::Button>("b#2");
+
+	auto& tf = win.createSized<vui::Textfield>(nytl::Vec {400.f, vui::autoSize});
+	tf.onChange = [&](auto& tf) {
+		dlg_info("changed: {}", tf.utf8());
+	};
+
+	svgPaint = {ctx, rvg::colorPaint(cp.picked())};
+
 	// gui
 	/*
-	auto& win = gui.create<Window>(Vec {px, 100.f}, Vec {500.f, 880.f});
-	auto& cp = win.create<ColorPicker>(Vec2f {}, Vec {230.f, 200.f});
-
-	auto& button = win.create<Button>(Vec2f {}, "Click me");
-	button.onClicked = [](auto&) { dlg_info("Button was clicked"); };
-	win.create<Button>(Vec2f {}, "Button Number Two");
-	win.create<Textfield>(Vec2f {}, 200);
-
 	auto& row = win.create<Row>(Vec2f{});
 	row.create<Button>(Vec2f {}, "Row Button #1");
 	row.create<Button>(Vec2f {}, "Row Button #2");
@@ -279,8 +290,6 @@ int main() {
 		bslider.current(cp.picked.b / 255.f);
 	};
 
-	svgPaint = {ctx, rvg::colorPaint(cp.picked)};
-	gui.updateDevice();
 	*/
 
 	// render recoreding

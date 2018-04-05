@@ -33,7 +33,7 @@
 #include <shaders/fill.frag.plane_scissor.edge_aa.h>
 
 // TODO(performance): optionally create (static) Polygons in deviceLocal memory.
-// TODO(performance): cache points vec in *Shape::update
+// TODO(performance): cache points vec in {Circle, Rect}Shape::update
 // TODO: something like default font(atlas) in context instead of dummy
 //   texture?
 
@@ -792,16 +792,12 @@ Rect2f Text::ithBounds(unsigned n) const {
 		throw std::out_of_range("Text::ithBounds");
 	}
 
-	// TODO: always use advance
 	auto start = posCache_[n * 6 + vertIndex0];
-	auto r = Rect2f {start - position, posCache_[n * 6 + vertIndex2] - start};
+	auto end = posCache_[n * 6 + vertIndex2];
 
-	if(r.size.x <= 0.f) {
-		auto pglyph = nk_font_find_glyph(state_.font->nkFont(), text[n]);
-		dlg_assert(pglyph);
-
-		r.size.x = pglyph->xadvance;
-	}
+	auto pglyph = nk_font_find_glyph(state_.font->nkFont(), text[n]);
+	dlg_assert(pglyph);
+	auto r = Rect2f {start - position, {pglyph->xadvance, end.y - start.y}};
 
 	return r;
 }

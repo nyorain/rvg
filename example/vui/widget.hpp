@@ -101,6 +101,9 @@ protected:
 	/// Utility to bind scissor and transform to the given DrawInstance.
 	void bindState(const DrawInstance&) const;
 
+	/// Returns its own scissor rect in local coordinates.
+	virtual Rect2f ownScissor() const;
+
 protected:
 	Gui& gui_; // associated gui
 	Rect2f bounds_; // global bounds

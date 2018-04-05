@@ -12,7 +12,6 @@
 
 namespace vui {
 
-/// Small popup hint that displays text and processes no input.
 class Button : public Widget {
 public:
 	std::function<void(Button&)> onClick;

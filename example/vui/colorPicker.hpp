@@ -40,7 +40,8 @@ public:
 	const auto& style() const { return style_.get(); }
 
 protected:
-	void click(Vec2f pos);
+	Rect2f ownScissor() const override;
+	void click(Vec2f pos, bool real);
 	void size(Vec3f hsv, Vec2f size);
 
 protected:
@@ -56,7 +57,8 @@ protected:
 	Paint sGrad_ {}; // saturation gradient
 	Paint vGrad_ {}; // value gradient
 
-	bool sliding_ {};
+	bool slidingSV_ {};
+	bool slidingHue_ {};
 };
 
 } // namespace vui

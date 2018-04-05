@@ -12,6 +12,7 @@ example_src = [
 	'vui/container.cpp',
 	'vui/window.cpp',
 	'vui/colorPicker.cpp',
+	'vui/textfield.cpp',
 ]
 
 example_deps = [
