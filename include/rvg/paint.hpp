@@ -170,7 +170,7 @@ public:
 
 protected:
 	PaintData paint_ {};
-	vpp::BufferRange ubo_;
+	vpp::SubBuffer ubo_;
 	vpp::DescriptorSet ds_;
 	vk::ImageView oldView_ {};
 };

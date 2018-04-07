@@ -8,7 +8,7 @@
 #include <rvg/state.hpp>
 #include <rvg/paint.hpp>
 
-#include <vpp/descriptor.hpp>
+#include <vpp/trackedDescriptor.hpp>
 #include <vpp/pipeline.hpp>
 #include <vpp/image.hpp>
 
@@ -33,10 +33,12 @@ struct ContextSettings {
 	/// Can increase scissor performance significantly.
 	bool clipDistanceEnable {false};
 
-	/// Whether stroke calls should be shape-antialiased.
-	/// Might have a major performance impact, so turn this off
-	/// if you already have some other anti aliasing enabled.
-	bool aaStroke {true};
+	/// Whether to support antialiasing. Still has to be enabled for
+	/// every shape (DrawMode). Using it can introduce a significant
+	/// overhead while just enabling it here should only have a minor
+	/// impact. If not enabled here, the DrawMode stroke/fill aa settings
+	/// always have to be set to false.
+	bool antiAliasing {true};
 };
 
 /// Drawing context. Manages all pipelines and layouts needed to
@@ -56,6 +58,8 @@ public:
 	static constexpr auto scissorBindSet = 3u;
 	static constexpr auto aaStrokeBindSet = 4u;
 
+	static constexpr auto fringe() { return 2.f; }
+
 public:
 	Context(vpp::Device&, const ContextSettings&);
 
@@ -64,18 +68,18 @@ public:
 
 	void rerecord() { rerecord_ = true; }
 
-	const vpp::Device& device() const { return device_; };
-	vk::PipelineLayout pipeLayout() const { return pipeLayout_; }
-	const auto& dsPool() const { return dsPool_; }
-
-	vk::Pipeline fanPipe() const { return fanPipe_; }
-	vk::Pipeline stripPipe() const { return stripPipe_; }
+	const auto& device() const { return device_; };
+	const auto& pipeLayout() const { return pipeLayout_; }
+	const auto& fanPipe() const { return fanPipe_; }
+	const auto& stripPipe() const { return stripPipe_; }
 
 	const auto& dsLayoutTransform() const { return dsLayoutTransform_; }
 	const auto& dsLayoutScissor() const { return dsLayoutScissor_; }
 	const auto& dsLayoutPaint() const { return dsLayoutPaint_; }
 	const auto& dsLayoutFontAtlas() const { return dsLayoutFontAtlas_; }
 	const auto& dsLayoutStrokeAA() const { return dsLayoutStrokeAA_; }
+
+	vpp::DescriptorAllocator& dsAllocator() const;
 
 	const auto& emptyImage() const { return emptyImage_; };
 
@@ -86,6 +90,7 @@ public:
 	const auto& defaultStrokeAA() const { return defaultStrokeAA_; }
 
 	const auto& settings() const { return settings_; }
+	bool antiAliasing() const { return settings().antiAliasing; }
 
 	void registerUpdateDevice(DeviceObject);
 	bool deviceObjectDestroyed(::rvg::DeviceObject&) noexcept;
@@ -93,15 +98,16 @@ public:
 
 private:
 	const vpp::Device& device_;
+
 	vpp::Pipeline fanPipe_;
 	vpp::Pipeline stripPipe_;
 	vpp::PipelineLayout pipeLayout_;
-	vpp::DescriptorSetLayout dsLayoutTransform_;
-	vpp::DescriptorSetLayout dsLayoutScissor_;
-	vpp::DescriptorSetLayout dsLayoutPaint_;
-	vpp::DescriptorSetLayout dsLayoutFontAtlas_;
-	vpp::DescriptorSetLayout dsLayoutStrokeAA_;
-	vpp::DescriptorPool dsPool_;
+
+	vpp::TrDsLayout dsLayoutTransform_;
+	vpp::TrDsLayout dsLayoutScissor_;
+	vpp::TrDsLayout dsLayoutPaint_;
+	vpp::TrDsLayout dsLayoutFontAtlas_;
+	vpp::TrDsLayout dsLayoutStrokeAA_;
 
 	vpp::Sampler fontSampler_;
 	vpp::Sampler texSampler_;
@@ -113,7 +119,7 @@ private:
 	Transform identityTransform_;
 	Paint pointColorPaint_;
 
-	vpp::BufferRange defaultStrokeAABuf_;
+	vpp::SubBuffer defaultStrokeAABuf_;
 	vpp::DescriptorSet defaultStrokeAA_;
 
 	std::unordered_set<DeviceObject> updateDevice_;

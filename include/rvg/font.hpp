@@ -6,7 +6,7 @@
 
 #include <rvg/fwd.hpp>
 
-#include <vpp/descriptor.hpp>
+#include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
 #include <vpp/image.hpp>
 
@@ -29,7 +29,7 @@ public:
 
 protected:
 	std::unique_ptr<nk_font_atlas> atlas_;
-	vpp::DescriptorSet ds_;
+	vpp::TrDs ds_;
 	vpp::ViewableImage texture_;
 	unsigned width_ = 0, height_ = 0;
 };

@@ -6,12 +6,15 @@
 #include <rvg/context.hpp>
 #include <katachi/stroke.hpp>
 #include <vpp/vk.hpp>
+#include <vpp/bufferOps.hpp>
 #include <nytl/vecOps.hpp>
 #include <dlg/dlg.hpp>
+#include <optional>
 
 // TODO: we currently assume that update is always called before
 // updateDevice but what if e.g. updateDevice was triggered by
 // a disable call?
+// TODO: staging buffer uploadWork performance
 
 namespace rvg {
 namespace {
@@ -22,117 +25,169 @@ void write(std::byte*& ptr, T&& data) {
 	ptr += sizeof(data);
 }
 
+template<typename... Args> std::optional<vpp::UploadWork>
+upload140(const vpp::BufferSpan& buf, Args&&... args) {
+	// NOTE: we could also use direct writing for small updates
+	dlg_assert(buf.valid());
+	if(buf.buffer().mappable()) {
+		vpp::writeMap140(buf, std::forward<Args>(args)...);
+		return {};
+	} else {
+		return vpp::writeStaging140(buf, std::forward<Args>(args)...);
+	}
+}
+
 } // anon namespace
 
 // Polygon
 Polygon::Polygon(Context& ctx) : DeviceObject(ctx) {
 }
 
+void Polygon::updateStroke(Span<const Vec2f> points, const DrawMode& mode) {
+	if(mode.color.stroke != flags_.colorStroke) {
+		flags_.colorStroke = mode.color.stroke;
+		context().rerecord();
+	}
+
+	if(mode.aaStroke != flags_.aaStroke) {
+		flags_.aaStroke = mode.aaStroke;
+		context().rerecord();
+	}
+
+	dlg_assertm(!flags_.aaStroke || context().antiAliasing(),
+		"Anti aliasing must be enabled in the context");
+
+	auto sf = mode.aaStroke ? context().fringe() : 0.f;
+	auto width = mode.stroke + sf;
+	auto loop = mode.loop;
+	if(points.size() > 2 && points.front() == points.back()) {
+		loop = true;
+		points = points.slice(0, points.size() - 1);
+	}
+
+	auto settings = ktc::StrokeSettings {width, loop, sf};
+	auto vertHandler = [&](const auto& vertex) {
+		stroke_.points.push_back(vertex.position);
+		if(flags_.aaStroke) {
+			stroke_.aa.push_back(vertex.aa);
+		}
+
+		if(flags_.colorStroke) {
+			stroke_.color.push_back(vertex.color);
+		}
+	};
+
+	if(flags_.aaStroke) {
+		auto fringe = context().fringe();
+		strokeMult_ = (mode.stroke * 0.5f + fringe * 0.5f) / fringe;
+		settings.width += fringe * 0.5f;
+	}
+
+	if(mode.color.stroke) {
+		ktc::bakeColoredStroke(points, mode.color.points, settings,
+			vertHandler);
+	} else {
+		ktc::bakeStroke(points, settings, vertHandler);
+	}
+
+	if(flags_.aaStroke && !strokeDs_) {
+		auto& layout = context().dsLayoutStrokeAA();
+		strokeDs_ = context().dsAllocator().allocate(layout);
+	}
+}
+
+void Polygon::updateFill(Span<const Vec2f> points, const DrawMode& mode) {
+	if(mode.color.fill != flags_.colorFill) {
+		flags_.colorFill = mode.color.fill;
+		context().rerecord();
+	}
+
+	if(mode.aaFill != flags_.aaFill) {
+		flags_.aaFill = mode.aaFill;
+		context().rerecord();
+	}
+
+	if(flags_.aaFill) {
+		dlg_assertm(context().antiAliasing(), "Anti aliasing must be \
+			enabled in the context");
+
+		// inset fill points and generate alpha blended stroke at
+		// the edges for smoothness
+		auto fillHandler = [&](const auto& vertex) {
+			fill_.points.push_back(vertex.position);
+			if(mode.color.fill) {
+				fill_.color.push_back(vertex.color);
+			}
+		};
+
+		auto strokeHandler = [&](const auto& vertex) {
+			fillAA_.points.push_back(vertex.position);
+			fillAA_.aa.push_back(vertex.aa);
+			if(mode.color.fill) {
+				fillAA_.color.push_back(vertex.color);
+			}
+		};
+
+		if(mode.color.fill) {
+			ktc::bakeColoredFillAA(points, mode.color.points,
+				context().fringe(), fillHandler, strokeHandler);
+		} else {
+			ktc::bakeFillAA(points, context().fringe(), fillHandler,
+				strokeHandler);
+		}
+	} else {
+		// just copy color and points, no processing needed
+		fill_.points.insert(fill_.points.end(), points.begin(), points.end());
+		if(mode.color.fill) {
+			dlg_assert(mode.color.points.size() == points.size());
+			fill_.color.insert(fill_.color.end(),
+				mode.color.points.begin(), mode.color.points.end());
+		}
+	}
+}
+
 void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
-	constexpr auto fringe = 1.f; // TODO
+	dlg_assertm(valid(), "Polygon must not be in invalid state");
 
 	fill_.points.clear();
 	fill_.color.clear();
-	fill_.aa.points.clear();
-	fill_.aa.color.clear();
-	fill_.aa.aa.clear();
+	fillAA_.points.clear();
+	fillAA_.color.clear();
+	fillAA_.aa.clear();
 	stroke_.points.clear();
 	stroke_.color.clear();
 	stroke_.aa.clear();
 
+	if(mode.deviceLocal != flags_.deviceLocal) {
+		flags_.deviceLocal = mode.deviceLocal;
+		fill_ = {};
+		fillAA_ = {};
+		stroke_ = {};
+	}
+
 	flags_.fill = mode.fill;
 	if(flags_.fill) {
-		if(mode.color.fill != flags_.colorFill) {
-			flags_.colorFill = mode.color.fill;
-			context().rerecord();
-		}
-
-		if(mode.aaFill != flags_.aaFill) {
-			flags_.aaFill = mode.aaFill;
-			context().rerecord();
-		}
-
-		if(flags_.aaFill) {
-			dlg_assert(context().settings().aaStroke);
-			auto fillHandler = [&](const auto& vertex) {
-				fill_.points.push_back(vertex.position);
-				if(mode.color.fill) {
-					fill_.color.push_back(vertex.color);
-				}
-			};
-
-			auto strokeHandler = [&](const auto& vertex) {
-				fill_.aa.points.push_back(vertex.position);
-				fill_.aa.aa.push_back(vertex.aa);
-				if(mode.color.fill) {
-					fill_.aa.color.push_back(vertex.color);
-				}
-			};
-
-			constexpr auto fringe = 0.5f; // TODO
-			if(mode.color.fill) {
-				ktc::bakeColoredFillAA(points, mode.color.points, fringe,
-					fillHandler, strokeHandler);
-			} else {
-				ktc::bakeFillAA(points, fringe, fillHandler, strokeHandler);
-			}
-		} else {
-			fill_.points.insert(fill_.points.end(), points.begin(),
-				points.end());
-			if(mode.color.fill) {
-				dlg_assert(mode.color.points.size() == points.size());
-				fill_.color.insert(fill_.color.end(),
-					mode.color.points.begin(), mode.color.points.end());
-			}
-		}
+		updateFill(points, mode);
 	}
 
 	flags_.stroke = mode.stroke > 0.f;
 	if(flags_.stroke) {
-		if(mode.color.stroke != flags_.colorStroke) {
-			flags_.colorStroke = mode.color.stroke;
-			context().rerecord();
-		}
-
-		auto settings = ktc::StrokeSettings {mode.stroke};
-		auto vertHandler = [&](const auto& vertex) {
-			stroke_.points.push_back(vertex.position);
-			if(context().settings().aaStroke) {
-				stroke_.aa.push_back(vertex.aa);
-			}
-
-			if(mode.color.stroke) {
-				stroke_.color.push_back(vertex.color);
-			}
-		};
-
-		if(context().settings().aaStroke) {
-			stroke_.mult = (mode.stroke * 0.5f + fringe * 0.5f) / fringe;
-			settings.width += fringe * 0.5f;
-		}
-
-		if(mode.color.stroke) {
-			ktc::bakeColoredStroke(points, mode.color.points, settings,
-				vertHandler);
-		} else {
-			ktc::bakeStroke(points, settings, vertHandler);
-		}
-
-		if(context().settings().aaStroke && !stroke_.aaDs) {
-			stroke_.aaDs = {context().dsLayoutStrokeAA(), context().dsPool()};
-		}
+		updateStroke(points, mode);
 	}
 
 	context().registerUpdateDevice(this);
 }
 
 void Polygon::disable(bool disable, DrawType type) {
+	auto re = false;
 	if(type == DrawType::strokeFill || type == DrawType::fill) {
-		flags_.disableFill = disable;
+		auto old = flags_.disableFill;
+		re |= (old != (flags_.disableFill = disable));
 	}
 
 	if(type == DrawType::strokeFill || type == DrawType::stroke) {
-		flags_.disableStroke = disable;
+		auto old = flags_.disableStroke;
+		re |= (old != (flags_.disableStroke = disable));
 	}
 
 	context().registerUpdateDevice(this);
@@ -151,119 +206,116 @@ bool Polygon::disabled(DrawType type) const {
 	return ret;
 }
 
-bool Polygon::upload(Span<const Vec2f> points, Span<const Vec4u8> color,
-		bool disable, bool colorFlag, vpp::BufferRange& pbuf,
-		vpp::BufferRange& cbuf) {
+bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
+		vk::BufferUsageFlags usage) {
+	needed = std::max(needed, vk::DeviceSize(16u));
+	if(buf.size() < needed) {
+		auto props = flags_.deviceLocal ?
+			vk::MemoryPropertyBits::deviceLocal :
+			vk::MemoryPropertyBits::hostVisible;
+		auto memBits = context().device().memoryTypeBits(props);
+		buf = context().device().bufferAllocator().alloc(
+			!flags_.deviceLocal, needed * 2, usage, 4u, memBits);
+		return true;
+	}
 
+	return false;
+}
+
+bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	auto rerecord = false;
 	auto pneeded = sizeof(vk::DrawIndirectCommand);
-	pneeded += !disable * (sizeof(points[0]) * points.size());
-	if(pbuf.size() < pneeded) {
-		pneeded *= 2;
-		pbuf = context().device().bufferAllocator().alloc(true,
-			pneeded, vk::BufferUsageBits::vertexBuffer, 4u);
-		rerecord = true;
-	}
-
-	auto pmap = pbuf.memoryMap();
-	auto ptr = pmap.ptr();
+	pneeded += !disable * (sizeof(draw.points[0]) * draw.points.size());
+	rerecord |= checkResize(draw.pBuf, pneeded,
+		vk::BufferUsageBits::vertexBuffer);
 
 	vk::DrawIndirectCommand cmd {};
-	cmd.vertexCount = !disable * points.size();
+	cmd.vertexCount = !disable * draw.points.size();
 	cmd.instanceCount = 1;
-	write(ptr, cmd);
 
 	if(disable) {
+		upload140(draw.pBuf, vpp::raw(cmd));
 		return rerecord;
 	}
 
-	std::memcpy(ptr, points.data(), points.size() * sizeof(points[0]));
+	auto points = vpp::raw(*draw.points.data(), draw.points.size());
+	upload140(draw.pBuf, vpp::raw(cmd), points);
 
 	// color
-	if(!colorFlag) {
+	if(!color) {
 		return rerecord;
 	}
 
-	auto cneeded = (sizeof(color[0])) * color.size();
-	if(cbuf.size() < cneeded) {
-		cbuf = context().device().bufferAllocator().alloc(true,
-			cneeded * 2 + 1, vk::BufferUsageBits::vertexBuffer, 4u);
-		rerecord = true;
-	}
+	auto cneeded = (sizeof(draw.color[0])) * draw.color.size();
+	rerecord |= checkResize(draw.cBuf, cneeded,
+		vk::BufferUsageBits::vertexBuffer);
+	upload140(draw.cBuf, vpp::raw(*draw.color.data(), draw.color.size()));
 
-	auto cmap = cbuf.memoryMap();
-	std::memcpy(cmap.ptr(), color.data(), cneeded);
+	return rerecord;
+}
+
+bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
+		float* mult) {
+
+	bool rerecord = upload(static_cast<Draw&>(stroke), disable, color);
+	if(aa) {
+		auto needed = stroke.aa.size() * sizeof(stroke.aa[0]);
+		vk::BufferUsageFlags usage = vk::BufferUsageBits::vertexBuffer;
+		if(mult) {
+			needed += sizeof(float);
+			usage |= vk::BufferUsageBits::uniformBuffer;
+		}
+
+		rerecord |= checkResize(stroke.aaBuf, needed, usage);
+		auto data = vpp::raw(*stroke.aa.data(), stroke.aa.size());
+
+		if(mult) {
+			upload140(stroke.aaBuf, *mult, data);
+		} else {
+			upload140(stroke.aaBuf, data);
+		}
+	}
 
 	return rerecord;
 }
 
 bool Polygon::updateDevice() {
-	dlg_assert(valid());
+	dlg_assertm(valid(), "Polygon must not be in invalid state");
 
 	bool rerecord = false;
 
 	if(flags_.fill) {
-		rerecord |= upload(fill_.points, fill_.color,
-			flags_.disableFill, flags_.colorFill,
-			fill_.pBuf, fill_.cBuf);
-
+		rerecord |= upload(fill_, flags_.disableFill, flags_.colorFill);
 		if(flags_.aaFill) {
-			rerecord |= upload(fill_.aa.points, fill_.aa.color,
-				flags_.disableFill, flags_.colorFill,
-				fill_.aa.pBuf, fill_.aa.cBuf);
-
-			auto needed = fill_.aa.aa.size() * sizeof(fill_.aa.aa[0]);
-			if(fill_.aa.aaBuf.size() < needed) {
-				auto& b = fill_.aa.aaBuf;
-				auto usage = vk::BufferUsageBits::vertexBuffer;
-				b = context().device().bufferAllocator().alloc(
-					true, 2 * needed, usage, 4u);
-				rerecord = true;
-			}
-
-			auto map = fill_.aa.aaBuf.memoryMap();
-			std::memcpy(map.ptr(), fill_.aa.aa.data(),
-				fill_.aa.aa.size() * sizeof(fill_.aa.aa[0]));
+			rerecord |= upload(fillAA_, flags_.disableFill, flags_.colorFill,
+				true, nullptr);
 		}
 	}
 
 	if(flags_.stroke) {
-		rerecord |= upload(stroke_.points, stroke_.color,
-			flags_.disableStroke, flags_.colorStroke,
-			stroke_.pBuf, stroke_.cBuf);
+		auto prev = stroke_.aaBuf.size();
+		rerecord |= upload(stroke_, flags_.disableStroke, flags_.colorStroke,
+			flags_.aaStroke, &strokeMult_);
 
-		// stroke anti aliasing
-		if(context().settings().aaStroke) {
-			auto needed = sizeof(float);
-			needed += stroke_.aa.size() * sizeof(stroke_.aa[0]);
-			if(stroke_.aaBuf.size() < needed) {
-				auto& b = stroke_.aaBuf;
-				auto usage = vk::BufferUsageBits::uniformBuffer |
-					vk::BufferUsageBits::vertexBuffer;
-				b = context().device().bufferAllocator().alloc(
-					true, 2 * needed, usage, 4u);
-				rerecord = true;
-
-				vpp::DescriptorSetUpdate update(stroke_.aaDs);
-				update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
-			}
-
-			auto map = stroke_.aaBuf.memoryMap();
-			auto ptr = map.ptr();
-			write(ptr, stroke_.mult);
-			std::memcpy(ptr, stroke_.aa.data(),
-				stroke_.aa.size() * sizeof(stroke_.aa[0]));
+		// check if buffer with our uniform was recreated
+		if(prev != stroke_.aaBuf.size()) {
+			auto& b = stroke_.aaBuf;
+			vpp::DescriptorSetUpdate update(strokeDs_);
+			update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
 		}
 	}
 
 	return rerecord;
 }
 
-void Polygon::fill(const DrawInstance& ini) const {
-	dlg_assert(flags_.fill && valid() && fill_.pBuf.size() > 0);
+void Polygon::fill(const DrawInstance& di) const {
+	dlg_assertm(flags_.fill, "Polygon has no fill data");
+	dlg_assertm(valid(), "Polygon must not be in an invalid state");
+	dlg_assertm(&di.context == &context(),
+		"Cannot stroke Polygon for another context");
 
-	auto& ctx = ini.context;
-	auto& cmdb = ini.cmdBuf;
+	auto& ctx = di.context;
+	auto& cmdb = di.cmdBuf;
 
 	// fill
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
@@ -279,6 +331,7 @@ void Polygon::fill(const DrawInstance& ini) const {
 
 	if(flags_.colorFill) {
 		auto& c = fill_.cBuf;
+		dlg_assert(c.size());
 		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
 	} else {
 		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
@@ -288,67 +341,57 @@ void Polygon::fill(const DrawInstance& ini) const {
 
 	// aa stroke
 	if(flags_.aaFill) {
-		vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics,
-			ctx.stripPipe());
-		static constexpr auto type = uint32_t(2);
-		vk::cmdPushConstants(cmdb, ctx.pipeLayout(),
-			vk::ShaderStageBits::fragment, 0, 4, &type);
-
-		auto& b = fill_.aa.pBuf;
-		auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-		vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
-
-		dlg_assert(fill_.aa.aaBuf.size());
-		auto& a = fill_.aa.aaBuf;
-		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset()});
-		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-			ctx.pipeLayout(), Context::aaStrokeBindSet,
-			{ctx.defaultStrokeAA()}, {});
-
-		// color
-		if(flags_.colorFill) {
-			auto& c = fill_.aa.cBuf;
-			vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
-		} else {
-			vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy
-		}
-
-		vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
+		stroke(di, fillAA_, true, flags_.colorFill, ctx.defaultStrokeAA(), 0u);
 	}
 }
 
-void Polygon::stroke(const DrawInstance& ini) const {
-	dlg_assert(flags_.stroke && valid() && stroke_.pBuf.size() > 0);
+void Polygon::stroke(const DrawInstance& di) const {
+	dlg_assertm(flags_.stroke, "Polygon has no stroke data");
+	dlg_assertm(valid(), "Polygon must not be in an invalid state");
+	dlg_assertm(&di.context == &context(),
+		"Cannot stroke Polygon for another context");
 
-	auto& ctx = ini.context;
-	auto& cmdb = ini.cmdBuf;
+	stroke(di, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 4u);
+}
 
+void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
+		bool color, vk::DescriptorSet aaDs, unsigned aaOff) const {
+
+	dlg_assert(stroke.pBuf.size());
+
+	auto& ctx = di.context;
+	auto& cmdb = di.cmdBuf;
 	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
 
-	static constexpr auto type = uint32_t(2);
-	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &type);
-
 	// position and dummy uv buffer
-	auto& b = stroke_.pBuf;
+	auto& b = stroke.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
 	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
 
 	// aa
-	if(context().settings().aaStroke) {
-		dlg_assert(stroke_.aaBuf.size());
-		auto& a = stroke_.aaBuf;
-		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + 4});
+	auto type = uint32_t(0);
+	if(aa) {
+		type = 2u;
+		auto& a = stroke.aaBuf;
+		dlg_assert(a.size());
+		dlg_assert(aaDs);
+		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + aaOff});
 		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 			ctx.pipeLayout(), Context::aaStrokeBindSet,
-			{stroke_.aaDs}, {});
+			{aaDs}, {});
+
 	} else {
-		vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off});
+		vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off}); // dummy aa uv
 	}
 
+	// used to determine whether aa alpha blending is used
+	vk::cmdPushConstants(cmdb, ctx.pipeLayout(),
+		vk::ShaderStageBits::fragment, 0, 4, &type);
+
 	// color
-	if(flags_.colorStroke) {
-		auto& c = stroke_.cBuf;
+	if(color) {
+		auto& c = stroke.cBuf;
+		dlg_assert(c.size());
 		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
 	} else {
 		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color

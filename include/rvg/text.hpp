@@ -67,7 +67,7 @@ protected:
 	bool disable_ {};
 	std::vector<Vec2f> posCache_;
 	std::vector<Vec2f> uvCache_;
-	vpp::BufferRange buf_;
+	vpp::SubBuffer buf_;
 	const Font* oldFont_ {};
 };
 

@@ -318,7 +318,7 @@ Paint::Paint(Context& ctx, const PaintData& xpaint) :
 	ubo_ = ctx.device().bufferAllocator().alloc(true,
 		paintUboSize, vk::BufferUsageBits::uniformBuffer);
 
-	ds_ = {ctx.dsLayoutPaint(), ctx.dsPool()};
+	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutPaint());
 	auto map = ubo_.memoryMap();
 	auto ptr = map.ptr();
 	uploadPaint(ptr, paint_.data);

@@ -71,21 +71,6 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	samplerInfo.minFilter = vk::Filter::nearest;
 	fontSampler_ = {dev, samplerInfo};
 
-	// pool
-	vk::DescriptorPoolSize poolSizes[2] = {};
-	poolSizes[0].descriptorCount = 500;
-	poolSizes[0].type = vk::DescriptorType::uniformBuffer;
-
-	poolSizes[1].descriptorCount = 500;
-	poolSizes[1].type = vk::DescriptorType::combinedImageSampler;
-
-	vk::DescriptorPoolCreateInfo poolInfo;
-	poolInfo.maxSets = 100;
-	poolInfo.poolSizeCount = 2;
-	poolInfo.pPoolSizes = poolSizes;
-	dsPool_ = {dev, poolInfo};
-
-
 	// layouts
 	auto transformDSB = {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
@@ -126,7 +111,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		dsLayoutScissor_
 	};
 
-	if(settings.aaStroke) {
+	if(settings.antiAliasing) {
 		auto aaStrokeDSB = {
 			vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
 				vk::ShaderStageBits::fragment),
@@ -147,12 +132,12 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	if(clipDistance) {
 		vertData = fill_vert_plane_scissor_data;
-		if(settings.aaStroke) {
+		if(settings.antiAliasing) {
 			fragData = fill_frag_plane_scissor_edge_aa_data;
 		} else {
 			fragData = fill_frag_plane_scissor_data;
 		}
-	} else if(settings.aaStroke) {
+	} else if(settings.antiAliasing) {
 		fragData = fill_frag_frag_scissor_edge_aa_data;
 	}
 
@@ -281,7 +266,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		reinterpret_cast<const std::byte*>(bytes),
 		TextureType::rgba32);
 
-	dummyTex_ = {dsLayoutFontAtlas_, dsPool_};
+	dummyTex_ = dsAllocator().allocate(dsLayoutFontAtlas_);
 	vpp::DescriptorSetUpdate update(dummyTex_);
 	auto layout = vk::ImageLayout::general;
 	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
@@ -290,18 +275,22 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	pointColorPaint_ = {*this, ::rvg::pointColorPaint()};
 	defaultScissor_ = {*this, Scissor::reset};
 
-	if(settings.aaStroke) {
+	if(settings.antiAliasing) {
 		defaultStrokeAABuf_ = device().bufferAllocator().alloc(
 			true, 12 * sizeof(float), vk::BufferUsageBits::uniformBuffer);
 		auto map = defaultStrokeAABuf_.memoryMap();
 		auto ptr = map.ptr();
 		write(ptr, 1.f);
 
-		defaultStrokeAA_ = {dsLayoutStrokeAA_, dsPool_};
+		defaultStrokeAA_ = dsAllocator().allocate(dsLayoutStrokeAA_);
 		auto& b = defaultStrokeAABuf_;
 		vpp::DescriptorSetUpdate update(defaultStrokeAA_);
 		update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
 	}
+}
+
+vpp::DescriptorAllocator& Context::dsAllocator() const {
+	return device().descriptorAllocator();
 }
 
 DrawInstance Context::record(vk::CommandBuffer cmdb) {
@@ -311,7 +300,7 @@ DrawInstance Context::record(vk::CommandBuffer cmdb) {
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		pipeLayout(), fontBindSet, {dummyTex_}, {});
 
-	if(settings().aaStroke) {
+	if(settings().antiAliasing) {
 		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 			pipeLayout(), aaStrokeBindSet, {defaultStrokeAA_}, {});
 	}
@@ -553,7 +542,7 @@ bool CircleShape::disabled(DrawType t) const {
 FontAtlas::FontAtlas(Context& ctx) {
 	atlas_ = std::make_unique<nk_font_atlas>();
 	nk_font_atlas_init_default(&nkAtlas());
-	ds_ = {ctx.dsLayoutFontAtlas(), ctx.dsPool()};
+	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutFontAtlas());
 }
 
 FontAtlas::~FontAtlas() {
@@ -837,7 +826,7 @@ Transform::Transform(Context& ctx, const Mat4f& m) :
 
 	ubo_ = ctx.device().bufferAllocator().alloc(true, transformUboSize,
 		vk::BufferUsageBits::uniformBuffer);
-	ds_ = {ctx.dsLayoutTransform(), ctx.dsPool()};
+	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutTransform());
 
 	updateDevice();
 	vpp::DescriptorSetUpdate update(ds_);
@@ -869,7 +858,7 @@ Scissor::Scissor(Context& ctx, const Rect2f& r)
 
 	ubo_ = ctx.device().bufferAllocator().alloc(true, scissorUboSize,
 		vk::BufferUsageBits::uniformBuffer);
-	ds_ = {ctx.dsLayoutScissor(), ctx.dsPool()};
+	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutScissor());
 
 	updateDevice();
 	vpp::DescriptorSetUpdate update(ds_);

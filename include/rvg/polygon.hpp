@@ -8,7 +8,7 @@
 #include <rvg/deviceObject.hpp>
 
 #include <nytl/vec.hpp>
-#include <vpp/descriptor.hpp>
+#include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
 
 namespace rvg {
@@ -17,6 +17,8 @@ namespace rvg {
 struct DrawMode {
 	bool fill {}; /// Whether it can be filled
 	float stroke {}; /// Whether it can be stroked
+
+	bool loop {}; /// Whether to loop the stroked points
 
 	/// Defines per-point color values.
 	/// If the polygon is then filled/stroked with a pointColorPaint,
@@ -27,7 +29,23 @@ struct DrawMode {
 		bool stroke {}; /// whether they can be used when stroking
 	} color {};
 
-	bool aaFill {}; /// Whether to enable anti aliased fill
+	/// Whether to enable anti aliased fill
+	/// Antialiasing must be enabled for the context.
+	/// Changing this will always trigger a rerecord.
+	/// May have really large performance impact.
+	bool aaFill {};
+
+	/// Whether to enable anti aliased stroking
+	/// Antialiasing must be enabled for the context.
+	/// Changing this will always trigger a rerecord.
+	/// May have some performance impact but way less then aaFill.
+	bool aaStroke {};
+
+	/// Whether to use deviceLocal memory.
+	/// Usually makes updates slower and draws faster so use this
+	/// for polygons that don't change often.
+	/// If this is false, hostVisible memory will be used.
+	bool deviceLocal {};
 };
 
 enum class DrawType {
@@ -70,9 +88,30 @@ public:
 	bool updateDevice();
 
 protected:
-	bool upload(Span<const Vec2f> points, Span<const Vec4u8> color,
-		bool disable, bool colorFlag, vpp::BufferRange& pbuf,
-		vpp::BufferRange& cbuf);
+	struct Draw {
+		std::vector<Vec2f> points;
+		std::vector<Vec4u8> color;
+		vpp::SubBuffer pBuf;
+		vpp::SubBuffer cBuf;
+	};
+
+	struct Stroke : public Draw {
+		std::vector<Vec2f> aa;
+		vpp::SubBuffer aaBuf;
+	};
+
+	// - internal utility -
+	bool upload(Draw&, bool disable, bool color);
+	bool upload(Stroke&, bool disable, bool color, bool aa, float* mult);
+
+	void updateStroke(Span<const Vec2f>, const DrawMode&);
+	void updateFill(Span<const Vec2f>, const DrawMode&);
+
+	void stroke(const DrawInstance&, const Stroke&, bool aa, bool color,
+		vk::DescriptorSet, unsigned aaOff) const;
+
+	bool checkResize(vpp::SubBuffer&, vk::DeviceSize needed,
+		vk::BufferUsageFlags);
 
 protected:
 	struct {
@@ -83,34 +122,15 @@ protected:
 		bool disableFill : 1;
 		bool disableStroke : 1;
 		bool aaFill : 1;
+		bool aaStroke : 1;
+		bool deviceLocal : 1;
 	} flags_ {};
 
-	struct {
-		std::vector<Vec2f> points;
-		std::vector<Vec4u8> color;
-		vpp::BufferRange pBuf; // indirect draw command and points
-		vpp::BufferRange cBuf; // (optional) color
-
-		struct {
-			std::vector<Vec2f> points;
-			std::vector<Vec4u8> color;
-			std::vector<Vec2f> aa;
-			vpp::BufferRange pBuf;
-			vpp::BufferRange cBuf;
-			vpp::BufferRange aaBuf;
-		} aa;
-	} fill_;
-
-	struct {
-		std::vector<Vec2f> points;
-		std::vector<Vec4u8> color;
-		std::vector<Vec2f> aa;
-		vpp::BufferRange pBuf; // indirect draw command and points
-		vpp::BufferRange cBuf; // (optional) color
-		vpp::BufferRange aaBuf; // (optional) aa uv
-		vpp::DescriptorSet aaDs; // thickness ubo (from aabuf);
-		float mult; // for aa
-	} stroke_;
+	Draw fill_;
+	Stroke fillAA_;
+	Stroke stroke_;
+	vpp::TrDs strokeDs_;
+	float strokeMult_ {};
 };
 
 } // namespace rvg

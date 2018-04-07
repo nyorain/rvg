@@ -17,8 +17,9 @@ vpp::RenderPass createRenderPass(const vpp::Device&, vk::Format,
 	vk::SampleCountBits);
 
 Renderer::Renderer(const RendererCreateInfo& info) :
-	sampleCount_(info.samples), clearColor_(info.clearColor)
-{
+	DefaultRenderer(info.present), sampleCount_(info.samples),
+		clearColor_(info.clearColor) {
+
 	vpp::SwapchainPreferences prefs {};
 	if(info.vsync) {
 		prefs.presentMode = vk::PresentModeKHR::fifo; // vsync
@@ -27,7 +28,7 @@ Renderer::Renderer(const RendererCreateInfo& info) :
 	scInfo_ = vpp::swapchainCreateInfo(info.dev, info.surface,
 		{info.size[0], info.size[1]}, prefs);
 	renderPass_ = createRenderPass(info.dev, scInfo_.imageFormat, samples());
-	vpp::DefaultRenderer::init(renderPass_, scInfo_, info.present);
+	vpp::DefaultRenderer::init(renderPass_, scInfo_);
 }
 
 void Renderer::createMultisampleTarget(const vk::Extent2D& size)
@@ -98,7 +99,7 @@ void Renderer::record(const RenderBuffer& buf)
 
 void Renderer::resize(nytl::Vec2ui size)
 {
-	vpp::DefaultRenderer::resize({size[0], size[1]}, scInfo_);
+	vpp::DefaultRenderer::recreate({size[0], size[1]}, scInfo_);
 }
 
 void Renderer::samples(vk::SampleCountBits samples)

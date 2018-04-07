@@ -11,7 +11,7 @@
 #include <nytl/rect.hpp>
 #include <nytl/mat.hpp>
 
-#include <vpp/descriptor.hpp>
+#include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
 
 namespace rvg {
@@ -41,8 +41,8 @@ public:
 
 protected:
 	Mat4f matrix_;
-	vpp::BufferRange ubo_;
-	vpp::DescriptorSet ds_;
+	vpp::SubBuffer ubo_;
+	vpp::TrDs ds_;
 };
 
 /// Limits the area in which can be drawn.
@@ -71,8 +71,8 @@ public:
 
 protected:
 	Rect2f rect_ = reset;
-	vpp::BufferRange ubo_;
-	vpp::DescriptorSet ds_;
+	vpp::SubBuffer ubo_;
+	vpp::TrDs ds_;
 };
 
 } // namespace rvg

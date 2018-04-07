@@ -1,4 +1,4 @@
 [wrap-git]
 directory=vpp
 url=https://github.com/nyorain/vpp.git
-revision=v0.2
+revision=master

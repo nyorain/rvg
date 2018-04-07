@@ -26,6 +26,9 @@ for rendering with vulkan. Could easily be used for a gui library.
   - [ ] fix stroke caps
   - [ ] better settings (Context, DrawMode)
   - [ ] simplify Polygon
+- [ ] rvg: paint/transform/scissor on deviceLocal memory optionally
+  - [ ] more efficient staging writes. Don't submit command buffer at once
+- [ ] rvg: correct vulkan synchronization
 - [ ] rvg: reorganize/split header/sources
   - [x] shapes/context/texture/transform/scissor headers
   - [x] separate path.hpp in separate library/utility

@@ -64,7 +64,8 @@ void main() {
 
 #ifdef EDGE_AA
 	if(type.type == TypeStroke) {
-		float fac = min(1.0, (1.0 - abs(in_uv.y)) * stroke.mult);
+		// float fac = (1.0 - abs(in_uv.y)) * stroke.mult * in_uv.x;
+		float fac = (min(1.0, 1.0 - abs(in_uv.y)) * stroke.mult) * in_uv.x;
 		out_color.a *= fac;
 	}
 #endif
