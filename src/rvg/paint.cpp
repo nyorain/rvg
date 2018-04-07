@@ -315,10 +315,11 @@ Paint::Paint(Context& ctx, const PaintData& xpaint) :
 	}
 
 	oldView_ = paint_.texture;
-	ubo_ = ctx.device().bufferAllocator().alloc(true,
-		paintUboSize, vk::BufferUsageBits::uniformBuffer);
+	auto memBits = ctx.device().hostMemoryTypes();
+	ubo_ = {ctx.bufferAllocator(), paintUboSize,
+		vk::BufferUsageBits::uniformBuffer, 0u, memBits};
 
-	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutPaint());
+	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
 	auto map = ubo_.memoryMap();
 	auto ptr = map.ptr();
 	uploadPaint(ptr, paint_.data);

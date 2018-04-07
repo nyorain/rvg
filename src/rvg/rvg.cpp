@@ -266,7 +266,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		reinterpret_cast<const std::byte*>(bytes),
 		TextureType::rgba32);
 
-	dummyTex_ = dsAllocator().allocate(dsLayoutFontAtlas_);
+	dummyTex_ = {dsAllocator(), dsLayoutFontAtlas_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
 	auto layout = vk::ImageLayout::general;
 	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
@@ -276,13 +276,13 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	defaultScissor_ = {*this, Scissor::reset};
 
 	if(settings.antiAliasing) {
-		defaultStrokeAABuf_ = device().bufferAllocator().alloc(
-			true, 12 * sizeof(float), vk::BufferUsageBits::uniformBuffer);
+		defaultStrokeAABuf_ = {bufferAllocator(), 12 * sizeof(float),
+			vk::BufferUsageBits::uniformBuffer, 0u, device().hostMemoryTypes()};
 		auto map = defaultStrokeAABuf_.memoryMap();
 		auto ptr = map.ptr();
 		write(ptr, 1.f);
 
-		defaultStrokeAA_ = dsAllocator().allocate(dsLayoutStrokeAA_);
+		defaultStrokeAA_ = {dsAllocator(), dsLayoutStrokeAA_};
 		auto& b = defaultStrokeAABuf_;
 		vpp::DescriptorSetUpdate update(defaultStrokeAA_);
 		update.uniform({{b.buffer(), b.offset(), sizeof(float)}});
@@ -291,6 +291,10 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 vpp::DescriptorAllocator& Context::dsAllocator() const {
 	return device().descriptorAllocator();
+}
+
+vpp::BufferAllocator& Context::bufferAllocator() const {
+	return device().bufferAllocator();
 }
 
 DrawInstance Context::record(vk::CommandBuffer cmdb) {
@@ -542,7 +546,7 @@ bool CircleShape::disabled(DrawType t) const {
 FontAtlas::FontAtlas(Context& ctx) {
 	atlas_ = std::make_unique<nk_font_atlas>();
 	nk_font_atlas_init_default(&nkAtlas());
-	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutFontAtlas());
+	ds_ = {ctx.dsAllocator(), ctx.dsLayoutFontAtlas()};
 }
 
 FontAtlas::~FontAtlas() {
@@ -713,8 +717,10 @@ bool Text::updateDevice() {
 
 	if(buf_.size() < neededSize) {
 		neededSize *= 2;
-		buf_ = context().device().bufferAllocator().alloc(true,
-			neededSize, vk::BufferUsageBits::vertexBuffer);
+		auto bits = context().device().hostMemoryTypes();
+		buf_ = {context().bufferAllocator(), neededSize,
+			vk::BufferUsageBits::vertexBuffer, 0u, bits};
+
 		rerecord = true;
 	}
 
@@ -824,9 +830,10 @@ Transform::Transform(Context& ctx) : Transform(ctx, identity<4, float>()) {
 Transform::Transform(Context& ctx, const Mat4f& m) :
 		DeviceObject(ctx), matrix_(m) {
 
-	ubo_ = ctx.device().bufferAllocator().alloc(true, transformUboSize,
-		vk::BufferUsageBits::uniformBuffer);
-	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutTransform());
+	ubo_ = {ctx.bufferAllocator(), transformUboSize,
+		vk::BufferUsageBits::uniformBuffer, 0u,
+		ctx.device().hostMemoryTypes()};
+	ds_ = {ctx.dsAllocator(), ctx.dsLayoutTransform()};
 
 	updateDevice();
 	vpp::DescriptorSetUpdate update(ds_);
@@ -856,9 +863,10 @@ constexpr auto scissorUboSize = sizeof(Vec2f) * 2;
 Scissor::Scissor(Context& ctx, const Rect2f& r)
 		: DeviceObject(ctx), rect_(r) {
 
-	ubo_ = ctx.device().bufferAllocator().alloc(true, scissorUboSize,
-		vk::BufferUsageBits::uniformBuffer);
-	ds_ = ctx.dsAllocator().allocate(ctx.dsLayoutScissor());
+	ubo_ = {ctx.bufferAllocator(), scissorUboSize,
+		vk::BufferUsageBits::uniformBuffer, 0u,
+		ctx.device().hostMemoryTypes()};
+	ds_ = {ctx.dsAllocator(), ctx.dsLayoutScissor()};
 
 	updateDevice();
 	vpp::DescriptorSetUpdate update(ds_);

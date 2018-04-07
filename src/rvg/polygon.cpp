@@ -92,7 +92,7 @@ void Polygon::updateStroke(Span<const Vec2f> points, const DrawMode& mode) {
 
 	if(flags_.aaStroke && !strokeDs_) {
 		auto& layout = context().dsLayoutStrokeAA();
-		strokeDs_ = context().dsAllocator().allocate(layout);
+		strokeDs_ = {context().dsAllocator(), layout};
 	}
 }
 
@@ -214,8 +214,7 @@ bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
 			vk::MemoryPropertyBits::deviceLocal :
 			vk::MemoryPropertyBits::hostVisible;
 		auto memBits = context().device().memoryTypeBits(props);
-		buf = context().device().bufferAllocator().alloc(
-			!flags_.deviceLocal, needed * 2, usage, 4u, memBits);
+		buf = {context().bufferAllocator(), needed * 2, usage, 4u, memBits};
 		return true;
 	}
 

@@ -58,7 +58,7 @@ public:
 	static constexpr auto scissorBindSet = 3u;
 	static constexpr auto aaStrokeBindSet = 4u;
 
-	static constexpr auto fringe() { return 2.f; }
+	static constexpr auto fringe() { return 1.5f; }
 
 public:
 	Context(vpp::Device&, const ContextSettings&);
@@ -80,6 +80,7 @@ public:
 	const auto& dsLayoutStrokeAA() const { return dsLayoutStrokeAA_; }
 
 	vpp::DescriptorAllocator& dsAllocator() const;
+	vpp::BufferAllocator& bufferAllocator() const;
 
 	const auto& emptyImage() const { return emptyImage_; };
 
@@ -113,14 +114,14 @@ private:
 	vpp::Sampler texSampler_;
 
 	vpp::ViewableImage emptyImage_;
-	vpp::DescriptorSet dummyTex_;
+	vpp::TrDs dummyTex_;
 
 	Scissor defaultScissor_;
 	Transform identityTransform_;
 	Paint pointColorPaint_;
 
 	vpp::SubBuffer defaultStrokeAABuf_;
-	vpp::DescriptorSet defaultStrokeAA_;
+	vpp::TrDs defaultStrokeAA_;
 
 	std::unordered_set<DeviceObject> updateDevice_;
 	bool rerecord_ {};

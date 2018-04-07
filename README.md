@@ -23,21 +23,28 @@ for rendering with vulkan. Could easily be used for a gui library.
   - [x] color functions, conversion
   - [x] shape drawing functions
 - [x] rvg: antialiasing
-  - [ ] fix stroke caps
-  - [ ] better settings (Context, DrawMode)
-  - [ ] simplify Polygon
+  - [x] fix stroke caps
+  - [x] better settings (Context, DrawMode)
+  - [x] simplify Polygon
 - [ ] rvg: paint/transform/scissor on deviceLocal memory optionally
+  - [ ] also text
   - [ ] more efficient staging writes. Don't submit command buffer at once
+    - [ ] use semaphores (-> vpp: work chainging)
 - [ ] rvg: correct vulkan synchronization
 - [ ] rvg: reorganize/split header/sources
   - [x] shapes/context/texture/transform/scissor headers
   - [x] separate path.hpp in separate library/utility
   - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
+  - [ ] split sources (state/context/shapes/text/font)
 - [ ] rvg: make non-texture gradients make use of transform buffer span
-- [ ] split rvg and gui library
+- [ ] nanovg like box gradient
+- [ ] split rvg and vui library
+  - [ ] readd vui::Slider (with (optional?) different style)
 - [ ] clipboard support (probably over Gui/GuiListener)
 - [ ] don't use that much paints and descriptors for widgets
+  -> optional dynamic new ext descriptor support
   -> advanced styling/themes
+- [ ] allow to specify fringe on context creation (?)
 - [ ] widget styles, also spacings/paddings/margins/borders etc
 - [ ] popups (needed for dropdown menu, tooltip)
 - [x] z widget ordering
@@ -57,7 +64,7 @@ for rendering with vulkan. Could easily be used for a gui library.
 - [ ] multistop gradients (?), using small 1d textures
   - [ ] see discussion https://github.com/memononen/nanovg/pull/430
 - [ ] release public version
-- [ ] rvg: more stroke settings: linecap/linejoin
+- [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
 - [ ] animations
 - [ ] advanced widget sizing hints, min/max size (needed?)
 - [ ] textfields/slider combos for ints/floats

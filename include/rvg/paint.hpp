@@ -10,7 +10,7 @@
 
 #include <nytl/vec.hpp>
 #include <nytl/mat.hpp>
-#include <vpp/descriptor.hpp>
+#include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
 
 #include <cstdint>
@@ -171,7 +171,7 @@ public:
 protected:
 	PaintData paint_ {};
 	vpp::SubBuffer ubo_;
-	vpp::DescriptorSet ds_;
+	vpp::TrDs ds_;
 	vk::ImageView oldView_ {};
 };
 
