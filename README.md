@@ -3,7 +3,12 @@
 Vulkan library for high-level 2D vector-like rendering.
 Modeled loosely after svg, inspired by nanoVG.
 Uses retained mode for rendering which makes it highly efficient
-for rendering with vulkan. Could easily be used for a gui library.
+for rendering with vulkan since curves and shapes are not recomputed
+and uploaded every frame but just once. Does not even need a command buffer
+rerecord every frame, even things like paints, shapes or transforms can be
+changed without triggering the need for a command buffer rerecord which makes
+it use way less cpu performance than immediate mode alternatives.
+Could easily be used for a gui library.
 
 ## Roadmap
 
@@ -38,9 +43,12 @@ for rendering with vulkan. Could easily be used for a gui library.
   - [ ] split sources (state/context/shapes/text/font)
 - [ ] rvg: make non-texture gradients make use of transform buffer span
 - [ ] nanovg like box gradient
+- [ ] readd vui::Slider (with (optional?) different style)
+- [ ] implement vui cursor callback in gui listener (mainly textfield)
 - [ ] split rvg and vui library
-  - [ ] readd vui::Slider (with (optional?) different style)
 - [ ] clipboard support (probably over Gui/GuiListener)
+- [ ] vui: horizontal splitting line
+- [ ] vui: radio button
 - [ ] don't use that much paints and descriptors for widgets
   -> optional dynamic new ext descriptor support
   -> advanced styling/themes
