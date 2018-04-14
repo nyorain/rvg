@@ -34,7 +34,7 @@ Could easily be used for a gui library.
 - [ ] rvg: paint/transform/scissor on deviceLocal memory optionally
   - [ ] also text
   - [ ] more efficient staging writes. Don't submit command buffer at once
-    - [ ] use semaphores (-> vpp: work chainging)
+    - [ ] use semaphores (-> vpp: work chaining)
 - [ ] rvg: correct vulkan synchronization
 - [ ] rvg: reorganize/split header/sources
   - [x] shapes/context/texture/transform/scissor headers

@@ -155,7 +155,7 @@ int main() {
 
 	rvg::Transform transform(ctx);
 
-	auto drawMode = rvg::DrawMode {false, 10.f};
+	auto drawMode = rvg::DrawMode {false, 1.f};
 	drawMode.aaStroke = true;
 	rvg::Shape shape(ctx, {}, drawMode);
 	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
@@ -429,7 +429,20 @@ int main() {
 			renderer.invalidate();
 		}
 
-		renderer.renderBlock();
+		auto semaphore = ctx.stageUpload();
+		auto wait = {
+			vpp::StageSemaphore {
+				semaphore,
+				vk::PipelineStageBits::drawIndirect,
+			}
+		};
+
+		vpp::RenderInfo info;
+		if(semaphore) {
+			info.wait = wait;
+		}
+
+		renderer.renderBlock(info);
 
 		if(printFrames) {
 			++fpsCounter;

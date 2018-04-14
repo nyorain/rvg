@@ -14,7 +14,10 @@
 // TODO: we currently assume that update is always called before
 // updateDevice but what if e.g. updateDevice was triggered by
 // a disable call?
-// TODO: staging buffer uploadWork performance
+
+// TODO(performance): staging buffer uploadWork performance
+// TODO(performance): no need for a buffer barrier in EVERY fill/stroke
+//   call, the first one (per command buffer) should be enough.
 
 namespace rvg {
 namespace {
@@ -25,15 +28,15 @@ void write(std::byte*& ptr, T&& data) {
 	ptr += sizeof(data);
 }
 
-template<typename... Args> std::optional<vpp::UploadWork>
-upload140(const vpp::BufferSpan& buf, Args&&... args) {
+template<typename... Args>
+void upload140(Context& ctx, const vpp::BufferSpan& buf, const Args&... args) {
 	// NOTE: we could also use direct writing for small updates
 	dlg_assert(buf.valid());
 	if(buf.buffer().mappable()) {
-		vpp::writeMap140(buf, std::forward<Args>(args)...);
-		return {};
+		vpp::writeMap140(buf, args...);
 	} else {
-		return vpp::writeStaging140(buf, std::forward<Args>(args)...);
+		ctx.addStage(vpp::writeStaging(ctx.uploadCmdBuf(), buf,
+			vpp::BufferLayout::std140, args...));
 	}
 }
 
@@ -233,12 +236,12 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	cmd.instanceCount = 1;
 
 	if(disable) {
-		upload140(draw.pBuf, vpp::raw(cmd));
+		upload140(context(), draw.pBuf, vpp::raw(cmd));
 		return rerecord;
 	}
 
 	auto points = vpp::raw(*draw.points.data(), draw.points.size());
-	upload140(draw.pBuf, vpp::raw(cmd), points);
+	upload140(context(), draw.pBuf, vpp::raw(cmd), points);
 
 	// color
 	if(!color) {
@@ -248,7 +251,8 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	auto cneeded = (sizeof(draw.color[0])) * draw.color.size();
 	rerecord |= checkResize(draw.cBuf, cneeded,
 		vk::BufferUsageBits::vertexBuffer);
-	upload140(draw.cBuf, vpp::raw(*draw.color.data(), draw.color.size()));
+	upload140(context(), draw.cBuf, vpp::raw(*draw.color.data(),
+		draw.color.size()));
 
 	return rerecord;
 }
@@ -269,9 +273,9 @@ bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
 		auto data = vpp::raw(*stroke.aa.data(), stroke.aa.size());
 
 		if(mult) {
-			upload140(stroke.aaBuf, *mult, data);
+			upload140(context(), stroke.aaBuf, *mult, data);
 		} else {
-			upload140(stroke.aaBuf, data);
+			upload140(context(), stroke.aaBuf, data);
 		}
 	}
 
@@ -357,6 +361,7 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 		bool color, vk::DescriptorSet aaDs, unsigned aaOff) const {
 
 	dlg_assert(stroke.pBuf.size());
+	vk::BufferMemoryBarrier bufBarrier;
 
 	auto& ctx = di.context;
 	auto& cmdb = di.cmdBuf;
@@ -374,11 +379,28 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 		auto& a = stroke.aaBuf;
 		dlg_assert(a.size());
 		dlg_assert(aaDs);
+
+		auto dstStage = Flags {vk::PipelineStageBits::vertexInput};
+		bufBarrier.buffer = a.buffer();
+		bufBarrier.offset = a.offset();
+		bufBarrier.size = a.size();
+		bufBarrier.srcAccessMask = flags_.deviceLocal ?
+			vk::AccessBits::transferWrite :
+			vk::AccessBits::hostWrite;
+		bufBarrier.dstAccessMask = vk::AccessBits::vertexAttributeRead;
+
+		if(aaOff) {
+			bufBarrier.dstAccessMask |= vk::AccessBits::uniformRead;
+			dstStage |= vk::PipelineStageBits::fragmentShader;
+		}
+
+		vk::cmdPipelineBarrier(cmdb, vk::PipelineStageBits::host, dstStage,
+			{}, {}, {bufBarrier}, {});
+
 		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + aaOff});
 		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 			ctx.pipeLayout(), Context::aaStrokeBindSet,
 			{aaDs}, {});
-
 	} else {
 		vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off}); // dummy aa uv
 	}
@@ -391,6 +413,21 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 	if(color) {
 		auto& c = stroke.cBuf;
 		dlg_assert(c.size());
+
+		bufBarrier.buffer = c.buffer();
+		bufBarrier.offset = c.offset();
+		bufBarrier.size = c.size();
+		bufBarrier.srcAccessMask = flags_.deviceLocal ?
+			vk::AccessBits::transferWrite :
+			vk::AccessBits::hostWrite;
+		bufBarrier.dstAccessMask = vk::AccessBits::vertexAttributeRead;
+
+		auto srcStage = flags_.deviceLocal ?
+			vk::PipelineStageBits::host :
+			vk::PipelineStageBits::transfer;
+		vk::cmdPipelineBarrier(cmdb, srcStage,
+			vk::PipelineStageBits::vertexInput, {}, {}, {bufBarrier}, {});
+
 		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
 	} else {
 		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color

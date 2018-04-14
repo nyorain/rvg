@@ -260,6 +260,12 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	fanPipe_ = {dev, pipes[0]};
 	stripPipe_ = {dev, pipes[1]};
 
+	// sync stuff
+	auto family = device().queueSubmitter().queue().family();
+	uploadSemaphore_ = {device()};
+	uploadCmdBuf_ = device().commandAllocator().get(family,
+		vk::CommandPoolCreateBits::resetCommandBuffer);
+
 	// dummies
 	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
 	emptyImage_ = createTexture(dev, 1, 1,
@@ -326,6 +332,40 @@ bool Context::updateDevice() {
 	auto ret = rerecord_;
 	rerecord_ = false;
 	return ret;
+}
+
+vk::Semaphore Context::stageUpload() {
+	if(!recordedUpload_) {
+		return {};
+	}
+
+	vk::endCommandBuffer(uploadCmdBuf_);
+	recordedUpload_ = false;
+
+	vk::SubmitInfo info;
+	info.commandBufferCount = 1;
+	info.pCommandBuffers = &uploadCmdBuf_.vkHandle();
+	info.pSignalSemaphores = &uploadSemaphore_.vkHandle();
+	info.signalSemaphoreCount = 1u;
+	device().queueSubmitter().add(info);
+	return uploadSemaphore_;
+}
+
+vk::CommandBuffer Context::uploadCmdBuf() {
+	if(!recordedUpload_) {
+		vk::resetCommandBuffer(uploadCmdBuf_);
+		vk::beginCommandBuffer(uploadCmdBuf_, {});
+		recordedUpload_ = true;
+		stages_.clear();
+	}
+
+	return uploadCmdBuf_;
+}
+
+void Context::addStage(vpp::SubBuffer&& buf) {
+	if(buf.size()) {
+		stages_.emplace_back(std::move(buf));
+	}
 }
 
 void Context::registerUpdateDevice(DeviceObject obj) {

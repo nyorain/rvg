@@ -10,7 +10,9 @@
 
 #include <vpp/trackedDescriptor.hpp>
 #include <vpp/pipeline.hpp>
+#include <vpp/commandBuffer.hpp>
 #include <vpp/image.hpp>
+#include <vpp/sync.hpp>
 
 #include <variant>
 #include <unordered_set>
@@ -27,7 +29,7 @@ struct ContextSettings {
 	/// The renderpass and subpass in which it will be used.
 	/// Must be specified for pipeline creation.
 	vk::RenderPass renderPass;
-	unsigned subpass {0};
+	unsigned subpass;
 
 	/// Whether the device has the clipDistance feature enabled.
 	/// Can increase scissor performance significantly.
@@ -39,6 +41,13 @@ struct ContextSettings {
 	/// impact. If not enabled here, the DrawMode stroke/fill aa settings
 	/// always have to be set to false.
 	bool antiAliasing {true};
+
+	// TODO
+	/// The QueueSubmitter to submit any upload work to.
+	/// Should be associated with the queue for rendering since
+	/// otherwise Context::waitSemaphore cannot be used for rendering.
+	/// In this case, one could still synchronize using fences.
+	// vpp::QueueSubmitter& submitter;
 };
 
 /// Drawing context. Manages all pipelines and layouts needed to
@@ -63,8 +72,25 @@ public:
 public:
 	Context(vpp::Device&, const ContextSettings&);
 
+	/// Must be called once per frame when there is no command buffer
+	/// executing that references objects associated with this context.
+	/// Will update device objects (like buffers).
+	/// Returns whether a rerecord is needed. Submitting a previously
+	/// recorded command buffer referencing objects associated with this
+	/// Context when this returns true results in undefined behaviour.
 	bool updateDevice();
+
+	/// Starts a command buffer recording.
+	/// The DrawInstance can then be used to draw objects associated
+	/// with this context.
 	DrawInstance record(vk::CommandBuffer);
+
+	/// Queues all pending upload operations and returns the semaphore to wait
+	/// upon for the next render call.
+	/// Must be waited upon with the indirectDraw stage bit.
+	/// Used to make sure that new data was uploaded to deviceLocal
+	/// vulkan resources.
+	vk::Semaphore stageUpload();
 
 	void rerecord() { rerecord_ = true; }
 
@@ -92,6 +118,9 @@ public:
 
 	const auto& settings() const { return settings_; }
 	bool antiAliasing() const { return settings().antiAliasing; }
+
+	vk::CommandBuffer uploadCmdBuf();
+	void addStage(vpp::SubBuffer&& buf);
 
 	void registerUpdateDevice(DeviceObject);
 	bool deviceObjectDestroyed(::rvg::DeviceObject&) noexcept;
@@ -125,6 +154,13 @@ private:
 
 	std::unordered_set<DeviceObject> updateDevice_;
 	bool rerecord_ {};
+
+	// TODO(performance) just use an own BufferAllocator and clear all
+	// allocations. Should be more performant
+	std::vector<vpp::SubBuffer> stages_;
+	vpp::Semaphore uploadSemaphore_;
+	vpp::CommandBuffer uploadCmdBuf_;
+	bool recordedUpload_ {};
 
 	const ContextSettings settings_;
 };
