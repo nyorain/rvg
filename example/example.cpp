@@ -157,6 +157,7 @@ int main() {
 
 	auto drawMode = rvg::DrawMode {false, 1.f};
 	drawMode.aaStroke = true;
+	drawMode.deviceLocal = true;
 	rvg::Shape shape(ctx, {}, drawMode);
 	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
 

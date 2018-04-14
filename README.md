@@ -31,11 +31,16 @@ Could easily be used for a gui library.
   - [x] fix stroke caps
   - [x] better settings (Context, DrawMode)
   - [x] simplify Polygon
-- [ ] rvg: paint/transform/scissor on deviceLocal memory optionally
+- [ ] rvg: paint/transform/scissor on deviceLocal memory
+  - [ ] probably enough when specifiable on construction, must not be dynamic
   - [ ] also text
-  - [ ] more efficient staging writes. Don't submit command buffer at once
-    - [ ] use semaphores (-> vpp: work chaining)
-- [ ] rvg: correct vulkan synchronization
+  - [x] more efficient staging writes. Don't submit command buffer at once
+    - [x] use semaphores (-> vpp: work chaining)
+	      NOTE: abandoned the vpp work chaining concept, too high-level, cost
+- [x] rvg: correct vulkan synchronization
+  - [ ] probably best to require the user to set it in the render pass or
+        otherwise handle it. Document this somewhere
+- [ ] better textures: use optimal layout, new context-based uploading cmdbuf
 - [ ] rvg: reorganize/split header/sources
   - [x] shapes/context/texture/transform/scissor headers
   - [x] separate path.hpp in separate library/utility
@@ -44,7 +49,7 @@ Could easily be used for a gui library.
 - [ ] rvg: make non-texture gradients make use of transform buffer span
 - [ ] nanovg like box gradient
 - [ ] readd vui::Slider (with (optional?) different style)
-- [ ] implement vui cursor callback in gui listener (mainly textfield)
+- [ ] implement vui cursor image callback in gui listener (e.g. textfield hover)
 - [ ] split rvg and vui library
 - [ ] clipboard support (probably over Gui/GuiListener)
 - [ ] vui: horizontal splitting line
@@ -60,7 +65,7 @@ Could easily be used for a gui library.
   - [ ] allow widgets to change it? needed?
 - [ ] dropdown menu
 - [ ] tooltip
-- [ ] tabs
+- [ ] tabs (vui::TabbedPane or something as class)
 - [ ] better mouse/keyboard grabs
   - [ ] currently bugs when multiple button grabs
   - [ ] key grabs (needed?)
@@ -73,13 +78,13 @@ Could easily be used for a gui library.
   - [ ] see discussion https://github.com/memononen/nanovg/pull/430
 - [ ] release public version
 - [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
+- [ ] window decorations/integrate with tabs
 - [ ] animations
 - [ ] advanced widget sizing hints, min/max size (needed?)
 - [ ] textfields/slider combos for ints/floats
 - [ ] better,easier custom navigation (e.g. tab-based)
 - [ ] custom grabbing slider
-- [ ] window operations
-- [ ] window decorations/integrate with tabs
+- [ ] window operations (move, resize) (?)
 - [ ] graph widget, e.g. for frametimes
 - [ ] drag and drop stuff (not sure if needed at all)
 - [ ] helper for non-convex shapes (in rvg: stencil buffer? or decomposition?)

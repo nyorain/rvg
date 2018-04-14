@@ -353,7 +353,6 @@ vk::Semaphore Context::stageUpload() {
 
 vk::CommandBuffer Context::uploadCmdBuf() {
 	if(!recordedUpload_) {
-		vk::resetCommandBuffer(uploadCmdBuf_);
 		vk::beginCommandBuffer(uploadCmdBuf_, {});
 		recordedUpload_ = true;
 		stages_.clear();
@@ -962,5 +961,6 @@ DeviceObject::~DeviceObject() {
 		context().deviceObjectDestroyed(*this);
 	}
 }
+
 
 } // namespace rvg

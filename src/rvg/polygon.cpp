@@ -213,6 +213,10 @@ bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
 		vk::BufferUsageFlags usage) {
 	needed = std::max(needed, vk::DeviceSize(16u));
 	if(buf.size() < needed) {
+		if(flags_.deviceLocal) {
+			usage |= vk::BufferUsageBits::transferDst;
+		}
+
 		auto props = flags_.deviceLocal ?
 			vk::MemoryPropertyBits::deviceLocal :
 			vk::MemoryPropertyBits::hostVisible;
@@ -361,7 +365,6 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 		bool color, vk::DescriptorSet aaDs, unsigned aaOff) const {
 
 	dlg_assert(stroke.pBuf.size());
-	vk::BufferMemoryBarrier bufBarrier;
 
 	auto& ctx = di.context;
 	auto& cmdb = di.cmdBuf;
@@ -380,23 +383,6 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 		dlg_assert(a.size());
 		dlg_assert(aaDs);
 
-		auto dstStage = Flags {vk::PipelineStageBits::vertexInput};
-		bufBarrier.buffer = a.buffer();
-		bufBarrier.offset = a.offset();
-		bufBarrier.size = a.size();
-		bufBarrier.srcAccessMask = flags_.deviceLocal ?
-			vk::AccessBits::transferWrite :
-			vk::AccessBits::hostWrite;
-		bufBarrier.dstAccessMask = vk::AccessBits::vertexAttributeRead;
-
-		if(aaOff) {
-			bufBarrier.dstAccessMask |= vk::AccessBits::uniformRead;
-			dstStage |= vk::PipelineStageBits::fragmentShader;
-		}
-
-		vk::cmdPipelineBarrier(cmdb, vk::PipelineStageBits::host, dstStage,
-			{}, {}, {bufBarrier}, {});
-
 		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + aaOff});
 		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 			ctx.pipeLayout(), Context::aaStrokeBindSet,
@@ -413,21 +399,6 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 	if(color) {
 		auto& c = stroke.cBuf;
 		dlg_assert(c.size());
-
-		bufBarrier.buffer = c.buffer();
-		bufBarrier.offset = c.offset();
-		bufBarrier.size = c.size();
-		bufBarrier.srcAccessMask = flags_.deviceLocal ?
-			vk::AccessBits::transferWrite :
-			vk::AccessBits::hostWrite;
-		bufBarrier.dstAccessMask = vk::AccessBits::vertexAttributeRead;
-
-		auto srcStage = flags_.deviceLocal ?
-			vk::PipelineStageBits::host :
-			vk::PipelineStageBits::transfer;
-		vk::cmdPipelineBarrier(cmdb, srcStage,
-			vk::PipelineStageBits::vertexInput, {}, {}, {bufBarrier}, {});
-
 		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
 	} else {
 		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color

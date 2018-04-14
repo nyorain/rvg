@@ -199,6 +199,19 @@ vpp::RenderPass createRenderPass(const vpp::Device& dev,
 	if(sampleCount != vk::SampleCountBits::e1)
 		subpass.pResolveAttachments = &resolveReference;
 
+	vk::SubpassDependency dependency;
+	dependency.srcSubpass = vk::subpassExternal;
+	dependency.srcStageMask =
+		vk::PipelineStageBits::host |
+		vk::PipelineStageBits::transfer;
+	dependency.srcAccessMask = vk::AccessBits::hostWrite |
+		vk::AccessBits::transferWrite;
+	dependency.dstSubpass = 0u;
+	dependency.dstStageMask = vk::PipelineStageBits::allGraphics;
+	dependency.dstAccessMask = vk::AccessBits::uniformRead |
+		vk::AccessBits::vertexAttributeRead |
+		vk::AccessBits::indirectCommandRead;
+
 	vk::RenderPassCreateInfo renderPassInfo;
 	renderPassInfo.attachmentCount = 1 + msaa;
 	renderPassInfo.pAttachments = attachments;
