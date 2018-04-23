@@ -61,4 +61,40 @@ protected:
 	bool slidingHue_ {};
 };
 
+class ColorButton : public Widget {
+public:
+	ColorButton(Gui&, const Rect2f& bounds,
+		const Vec2f& pickerSize = {autoSize, autoSize},
+		const Color& start = {20, 20, 20});
+	ColorButton(Gui&, const Rect2f& bounds, const Vec2f& pickerSize,
+		const Color& start, const ColorButtonStyle& style);
+
+	void size(Vec2f size) override;
+	using Widget::size;
+
+	void position(Vec2f pos) override;
+	using Widget::position;
+
+	void hide(bool hide) override;
+	bool hidden() const override;
+
+	void mouseOver(bool gained) override;
+	Widget* mouseButton(const MouseButtonEvent&) override;
+	void focus(bool gained) override;
+	void draw(const DrawInstance&) const override;
+
+	auto& colorPicker() const { return *cp_; }
+	const auto& style() const { return style_.get(); }
+
+protected:
+	std::reference_wrapper<const ColorButtonStyle> style_;
+
+	RectShape bg_;
+	RectShape color_;
+	ColorPicker* cp_ {};
+
+	bool hovered_;
+	bool pressed_;
+};
+
 } // namespace vui

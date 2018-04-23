@@ -55,11 +55,12 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	constexpr auto sampleCount = vk::SampleCountBits::e1;
 
 	// sampler
-	vk::SamplerCreateInfo samplerInfo;
+	vk::SamplerCreateInfo samplerInfo {};
 	samplerInfo.magFilter = vk::Filter::linear;
 	samplerInfo.minFilter = vk::Filter::linear;
 	samplerInfo.minLod = 0.f;
 	samplerInfo.maxLod = 0.25f;
+	samplerInfo.maxAnisotropy = 1.f;
 	samplerInfo.mipmapMode = vk::SamplerMipmapMode::nearest;
 	samplerInfo.addressModeU = vk::SamplerAddressMode::clampToEdge;
 	samplerInfo.addressModeV = vk::SamplerAddressMode::clampToEdge;

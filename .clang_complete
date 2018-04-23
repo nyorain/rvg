@@ -10,6 +10,11 @@
 -I./build/linux/subprojects/vpp/include
 -I./build/linux/assets
 -I./build/linux/src/
+-I./build/subprojects/vkpp/include
+-I./build/subprojects/ny/include
+-I./build/subprojects/vpp/include
+-I./build/assets
+-I./build/src
 -Wextra
 -Wall
 -Wpedantic

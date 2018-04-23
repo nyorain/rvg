@@ -69,6 +69,13 @@ struct ColorPickerStyle {
 	float hueWidth = 20.f;
 };
 
+struct ColorButtonStyle {
+	rvg::Paint* bg;
+	rvg::Paint* bgStroke {};
+	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
+	Vec2f padding {5.f, 5.f};
+};
+
 struct Styles {
 	ButtonStyle button {};
 	TextfieldStyle textfield {};
@@ -76,6 +83,7 @@ struct Styles {
 	SliderStyle slider {};
 	HintStyle hint {};
 	ColorPickerStyle colorPicker {};
+	ColorButtonStyle colorButton {};
 };
 
 } // namespace vui

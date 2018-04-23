@@ -5,7 +5,8 @@ namespace vui {
 
 // WidgetContainer
 Widget* WidgetContainer::mouseMove(const MouseMoveEvent& ev) {
-	for(auto& w : widgets_) {
+	for(auto it = widgets_.rbegin(); it != widgets_.rend(); ++it) {
+		auto& w = *it;
 		if(w->contains(ev.position)) {
 			if(w.get() != mouseOver_) {
 				if(mouseOver_) {

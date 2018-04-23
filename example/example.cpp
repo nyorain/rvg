@@ -163,11 +163,11 @@ int main() {
 
 	auto fontHeight = 16;
 	rvg::FontAtlas atlas(ctx);
-	rvg::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
-	rvg::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
+	rvg::Font osFont(atlas, "../example/OpenSans-Regular.ttf", fontHeight);
+	rvg::Font lsFont(atlas, "../example/LiberationSans-Regular.ttf", fontHeight);
 	atlas.bake(ctx);
 
-	rvg::Font lsSmall(atlas, "../../example/LiberationSans-Regular.ttf", 14);
+	rvg::Font lsSmall(atlas, "../example/LiberationSans-Regular.ttf", 14);
 	atlas.bake(ctx);
 
 	auto string = "yo, whaddup";
@@ -183,7 +183,7 @@ int main() {
 
 	// image stuff
 	rvg::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
-	auto foxTex = rvg::createTexture(device, "../../example/fox.jpg",
+	auto foxTex = rvg::createTexture(device, "../example/fox.jpg",
 		rvg::TextureType::rgba32);
 	auto iv = foxTex.vkImageView();
 
@@ -236,6 +236,9 @@ int main() {
 	// color picker
 	styles.colorPicker.marker = &hintBgPaint;
 
+	// colorButton
+	styles.colorButton.bg = &hintBgPaint;
+
 	// gui
 	vui::Gui gui(ctx, lsFont, std::move(styles));
 	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
@@ -252,6 +255,8 @@ int main() {
 	tf.onChange = [&](auto& tf) {
 		dlg_info("changed: {}", tf.utf8());
 	};
+
+	win.create<vui::ColorButton>();
 
 	svgPaint = {ctx, rvg::colorPaint(cp.picked())};
 

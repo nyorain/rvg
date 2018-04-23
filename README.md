@@ -46,10 +46,18 @@ Could easily be used for a gui library.
   - [x] separate path.hpp in separate library/utility
   - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
   - [ ] split sources (state/context/shapes/text/font)
+- [ ] vui: pane
+- [ ] vui: row
+- [ ] vui: don't make windows manage layouting. Make them (like panes) manage
+      exactly one embedded widget which may be a layout widget
+- [ ] vui: improve/fix hacked together ColorButton
 - [ ] rvg: make non-texture gradients make use of transform buffer span
 - [ ] nanovg like box gradient
 - [ ] readd vui::Slider (with (optional?) different style)
 - [ ] implement vui cursor image callback in gui listener (e.g. textfield hover)
+- [ ] vui: window scrolling
+- [ ] vui: label
+- [ ] vui: window names
 - [ ] split rvg and vui library
 - [ ] clipboard support (probably over Gui/GuiListener)
 - [ ] vui: horizontal splitting line

@@ -241,18 +241,17 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 
 	if(disable) {
 		upload140(context(), draw.pBuf, vpp::raw(cmd));
-		return rerecord;
+	} else {
+		auto points = vpp::raw(*draw.points.data(), draw.points.size());
+		upload140(context(), draw.pBuf, vpp::raw(cmd), points);
 	}
-
-	auto points = vpp::raw(*draw.points.data(), draw.points.size());
-	upload140(context(), draw.pBuf, vpp::raw(cmd), points);
 
 	// color
 	if(!color) {
 		return rerecord;
 	}
 
-	auto cneeded = (sizeof(draw.color[0])) * draw.color.size();
+	auto cneeded = color * (sizeof(draw.color[0])) * draw.color.size();
 	rerecord |= checkResize(draw.cBuf, cneeded,
 		vk::BufferUsageBits::vertexBuffer);
 	upload140(context(), draw.cBuf, vpp::raw(*draw.color.data(),
