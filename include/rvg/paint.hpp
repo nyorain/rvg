@@ -10,8 +10,10 @@
 
 #include <nytl/vec.hpp>
 #include <nytl/mat.hpp>
+#include <nytl/stringParam.hpp>
 #include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
+#include <vpp/image.hpp>
 
 #include <cstdint>
 
@@ -97,15 +99,51 @@ enum class TextureType {
 	a8
 };
 
-/// Creates a vulkan texture that loads its contents from the given
-/// file. Stores the viewable image in the returned image variable.
-/// The image be allocated on device local memory.
-/// It will start with general image layout.
-/// Throws std::runtime_error if something goes wrong.
-vpp::ViewableImage createTexture(const vpp::Device&,
-	const char* filename, TextureType);
-vpp::ViewableImage createTexture(const vpp::Device&, unsigned int width,
-	unsigned int height, const std::byte* data, TextureType);
+/// Texture on the device.
+class Texture : public DeviceObject {
+public:
+	using Type = TextureType;
+
+public:
+	Texture() = default;
+	~Texture() = default;
+
+	Texture(Texture&&) noexcept = default;
+	Texture& operator=(Texture&&) noexcept = default;
+
+	/// Attempts to load the texture from the given file.
+	/// Throws std::runtime_error if the file cannot be loaded.
+	/// The passed type will be forced.
+	Texture(Context&, nytl::StringParam filename, Type = Type::rgba32);
+
+	/// Creates the texture with given size, data and type.
+	/// data must reference at least size.x * size.y * formatSize(type) bytes,
+	/// where formatSize(Type::a8) = 1 and formatSize(Type::rgba32) = 4.
+	Texture(Context&, Vec2ui size, nytl::Span<const std::byte> data, Type);
+
+	/// Updates the given texture with the given data.
+	/// data must reference at least size.x * size.y * formatSize(type()) bytes,
+	/// where formatSize(Type::a8) = 1 and formatSize(Type::rgba32) = 4.
+	void update(std::vector<std::byte> data);
+
+	const auto& viewableImage() const { return image_; }
+	const auto& size() const { return size_; }
+	auto vkImage() const { return viewableImage().vkImage(); }
+	auto vkImageView() const { return viewableImage().vkImageView(); }
+	auto type() const { return type_; }
+
+	bool updateDevice();
+
+protected:
+	void create();
+	void upload(nytl::Span<const std::byte> data, vk::ImageLayout);
+
+protected:
+	vpp::ViewableImage image_;
+	Vec2ui size_ {};
+	Type type_ {};
+	std::vector<std::byte> pending_;
+};
 
 
 // - Paint -
@@ -150,7 +188,7 @@ PaintData pointColorPaint();
 class Paint : public DeviceObject {
 public:
 	Paint() = default;
-	Paint(Context&, const PaintData& data);
+	Paint(Context&, const PaintData& data, bool deviceLocal = true);
 
 	/// Binds the Paint object in the given DrawInstance.
 	/// Following calls to fill/stroke of a polygon-based shape

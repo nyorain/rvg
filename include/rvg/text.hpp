@@ -34,6 +34,12 @@ public:
 	bool disable(bool);
 	bool disabled() const { return disable_; }
 
+	/// Changes the device local state for this text.
+	/// If unequal the previous value, will always recreate the buffer and
+	/// trigger a rerecord.
+	void deviceLocal(bool set);
+	bool deviceLocal() const { return deviceLocal_; }
+
 	/// Computes which char index lies at the given relative x.
 	/// Returns the index of the char at the given x, or the index of
 	/// the next one if there isn't any. Returns text.length() if x is
@@ -65,9 +71,12 @@ protected:
 	} state_;
 
 	bool disable_ {};
+	bool deviceLocal_ {true};
+
 	std::vector<Vec2f> posCache_;
 	std::vector<Vec2f> uvCache_;
-	vpp::SubBuffer buf_;
+	vpp::SubBuffer posBuf_;
+	vpp::SubBuffer uvBuf_;
 	const Font* oldFont_ {};
 };
 

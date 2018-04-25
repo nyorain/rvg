@@ -1,11 +1,21 @@
+// Copyright (c) 2018 nyorain
+// Distributed under the Boost Software License, Version 1.0.
+// See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
+
+#include <rvg/util.hpp>
 #include <rvg/paint.hpp>
 #include <rvg/context.hpp>
 
 #include <vpp/vk.hpp>
+#include <vpp/imageOps.hpp>
+#include <vpp/formats.hpp>
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
 
-// Conversions sources:
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
+// color conversions sources:
 // https://stackoverflow.com/questions/2353211/
 // http://en.wikipedia.org/wiki/HSL_color_space
 // https://codeitdown.com/hsl-hsb-hsv-color/
@@ -14,12 +24,6 @@
 
 namespace rvg {
 namespace {
-
-template<typename T>
-void write(std::byte*& ptr, T&& data) {
-	std::memcpy(ptr, &data, sizeof(data));
-	ptr += sizeof(data);
-}
 
 template<typename... Args>
 bool normed(Args&&... args) {
@@ -307,7 +311,7 @@ PaintData pointColorPaint() {
 
 // Paint
 constexpr auto paintUboSize = sizeof(nytl::Mat4f) + sizeof(Vec4f) * 3 + 4;
-Paint::Paint(Context& ctx, const PaintData& xpaint) :
+Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 		DeviceObject(ctx), paint_(xpaint) {
 
 	if(!paint_.texture) {
@@ -315,9 +319,14 @@ Paint::Paint(Context& ctx, const PaintData& xpaint) :
 	}
 
 	oldView_ = paint_.texture;
-	auto memBits = ctx.device().hostMemoryTypes();
-	ubo_ = {ctx.bufferAllocator(), paintUboSize,
-		vk::BufferUsageBits::uniformBuffer, 0u, memBits};
+	auto usage = nytl::Flags{vk::BufferUsageBits::uniformBuffer};
+	if(deviceLocal) {
+		usage |= vk::BufferUsageBits::transferDst;
+	}
+	auto memBits = deviceLocal ?
+		context().device().deviceMemoryTypes() :
+		context().device().hostMemoryTypes();
+	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, 0u, memBits};
 
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
 	auto map = ubo_.memoryMap();
@@ -362,6 +371,129 @@ bool Paint::updateDevice() {
 	}
 
 	return re;
+}
+
+// Texture
+Texture::Texture(Context& ctx, nytl::StringParam filename, Type type) :
+		DeviceObject(ctx), type_(type) {
+
+	int width, height, channels;
+	unsigned char* data = stbi_load(filename.c_str(), &width, &height,
+		&channels, 4);
+	if(!data) {
+		dlg_warn("Failed to open texture file {}", filename);
+
+		std::string err = "Could not load image from ";
+		err += filename;
+		err += stbi_failure_reason();
+		throw std::runtime_error(err);
+	}
+
+	if((channels == 1 || channels == 3) && type == TextureType::a8) {
+		dlg_warn("Creating a8 texture from alpha-less image");
+	}
+
+	dlg_assert(width > 0 && height > 0);
+	std::vector<std::byte> alphaData;
+	auto ptr = reinterpret_cast<const std::byte*>(data);
+	size_t dataSize = width * height * 4u;
+	if(type == TextureType::a8) {
+		alphaData.resize(width * height);
+		ptr = alphaData.data();
+		dataSize /= 4;
+		for(auto i = 0u; i < unsigned(width * height); ++i) {
+			alphaData[i] = std::byte {data[4 * i + 3]};
+		}
+	}
+
+	size_.x = width;
+	size_.y = height;
+	create();
+	upload({ptr, dataSize}, vk::ImageLayout::undefined);
+	free(data);
+}
+
+Texture::Texture(Context& ctx, Vec2ui size, nytl::Span<const std::byte> data,
+		Type type) : DeviceObject(ctx), size_(size), type_(type) {
+	create();
+	upload(data, vk::ImageLayout::undefined);
+}
+
+void Texture::create() {
+	vk::Extent3D extent;
+	extent.width = size_.x;
+	extent.height = size_.y;
+	extent.depth = 1u;
+
+	vpp::ViewableImageCreateInfo info;
+	auto dataSize = extent.width * extent.height;
+	auto& dev = context().device();
+
+	if(type() == TextureType::rgba32) {
+		dataSize = dataSize * 4;
+		info = vpp::ViewableImageCreateInfo::color(dev, extent).value();
+	} else if(type() == TextureType::a8) {
+		info = vpp::ViewableImageCreateInfo::color(dev, extent,
+			vk::ImageUsageBits::transferDst |
+			vk::ImageUsageBits::sampled,
+			{vk::Format::r8Unorm}).value();
+		info.view.components = {
+			vk::ComponentSwizzle::zero,
+			vk::ComponentSwizzle::zero,
+			vk::ComponentSwizzle::zero,
+			vk::ComponentSwizzle::r,
+		};
+
+		dlg_assert(info.view.format == vk::Format::r8Unorm);
+		dlg_assert(info.img.format == vk::Format::r8Unorm);
+	} else {
+		throw std::runtime_error("Texture: Invalid rvg::TextureType");
+	}
+
+	info.img.imageType = vk::ImageType::e2d;
+	info.view.viewType = vk::ImageViewType::e2d;
+	auto memBits = dev.memoryTypeBits(vk::MemoryPropertyBits::deviceLocal);
+
+	image_ = {dev, info, memBits};
+}
+
+void Texture::upload(nytl::Span<const std::byte> data, vk::ImageLayout layout) {
+	auto cmdBuf = context().uploadCmdBuf();
+	vpp::changeLayout(cmdBuf, image_.image(),
+		layout, vk::PipelineStageBits::topOfPipe, {},
+		vk::ImageLayout::transferDstOptimal, vk::PipelineStageBits::transfer,
+		vk::AccessBits::transferWrite,
+		{vk::ImageAspectBits::color, 0, 1, 0, 1});
+	layout = vk::ImageLayout::transferDstOptimal;
+
+	auto size = vk::Extent3D{size_.x, size_.y, 1u};
+	auto format = type_ == Type::a8 ?
+		vk::Format::r8Unorm :
+		vk::Format::r8g8b8a8Unorm;
+	auto stage = vpp::fillStaging(cmdBuf, image_.image(), format, layout,
+		size, data, {vk::ImageAspectBits::color});
+
+	vpp::changeLayout(cmdBuf, image_.image(),
+		layout, vk::PipelineStageBits::transfer,
+		vk::AccessBits::transferWrite,
+		vk::ImageLayout::shaderReadOnlyOptimal,
+		vk::PipelineStageBits::allGraphics,
+		vk::AccessBits::shaderRead,
+		{vk::ImageAspectBits::color, 0, 1, 0, 1});
+
+	context().addStage(std::move(stage));
+	context().addCommandBuffer(this, std::move(cmdBuf));
+}
+
+void Texture::update(std::vector<std::byte> data) {
+	dlg_assert(size_.x * size_.y * (type_ == Type::a8 ? 1u : 4u) == data.size());
+	pending_ = std::move(data);
+	context().registerUpdateDevice(this);
+}
+
+bool Texture::updateDevice() {
+	upload(pending_, vk::ImageLayout::shaderReadOnlyOptimal);
+	return false;
 }
 
 } // namespace vgv

@@ -11,6 +11,9 @@
 #include <rvg/deviceObject.hpp>
 #include <rvg/util.hpp>
 
+#include <katachi/path.hpp>
+#include <katachi/curves.hpp>
+
 #include <vpp/vk.hpp>
 #include <vpp/queue.hpp>
 #include <dlg/dlg.hpp>
@@ -252,9 +255,9 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	// dummies
 	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
-	emptyImage_ = createTexture(dev, 1, 1,
-		reinterpret_cast<const std::byte*>(bytes),
-		TextureType::rgba32);
+	emptyImage_ = {*this, {1u, 1u},
+		{*reinterpret_cast<const std::byte*>(bytes), 4u},
+		TextureType::rgba32};
 
 	dummyTex_ = {dsAllocator(), dsLayoutFontAtlas_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
@@ -319,36 +322,57 @@ bool Context::updateDevice() {
 }
 
 vk::Semaphore Context::stageUpload() {
-	if(!recordedUpload_) {
-		return {};
+	vk::Semaphore ret {};
+	if(!currentFrame_.cmdBufs.empty()) {
+		// we currently record secondary buffers and then unify
+		// them here as one since we might need the ordering
+		// guarantees. Not really sure though (can currently
+		// only think of Texture and that might be solveable
+		// in a different way). Investigate/profile.
+		vk::beginCommandBuffer(uploadCmdBuf_, {});
+		for(auto& buf : currentFrame_.cmdBufs) {
+			vk::cmdExecuteCommands(uploadCmdBuf_, {buf.second});
+		}
+		vk::endCommandBuffer(uploadCmdBuf_);
+
+		vk::SubmitInfo info;
+		info.commandBufferCount = 1;
+		info.pCommandBuffers = &uploadCmdBuf_.vkHandle();
+		info.pSignalSemaphores = &uploadSemaphore_.vkHandle();
+		info.signalSemaphoreCount = 1u;
+		device().queueSubmitter().add(info);
+		ret = uploadSemaphore_;
 	}
 
-	vk::endCommandBuffer(uploadCmdBuf_);
-	recordedUpload_ = false;
-
-	vk::SubmitInfo info;
-	info.commandBufferCount = 1;
-	info.pCommandBuffers = &uploadCmdBuf_.vkHandle();
-	info.pSignalSemaphores = &uploadSemaphore_.vkHandle();
-	info.signalSemaphoreCount = 1u;
-	device().queueSubmitter().add(info);
-	return uploadSemaphore_;
+	oldFrame_ = std::move(currentFrame_);
+	return ret;
 }
 
-vk::CommandBuffer Context::uploadCmdBuf() {
-	if(!recordedUpload_) {
-		vk::beginCommandBuffer(uploadCmdBuf_, {});
-		recordedUpload_ = true;
-		stages_.clear();
-	}
+vpp::CommandBuffer Context::uploadCmdBuf() {
+	auto family = device().queueSubmitter().queue().family();
+	auto flags = vk::CommandPoolCreateBits::resetCommandBuffer |
+			vk::CommandPoolCreateBits::transient;
+	auto cmd = device().commandAllocator().get(family, flags,
+		vk::CommandBufferLevel::secondary);
 
-	return uploadCmdBuf_;
+	vk::CommandBufferInheritanceInfo inherit;
+	vk::CommandBufferBeginInfo info;
+	info.flags = vk::CommandBufferUsageBits::oneTimeSubmit;
+	info.pInheritanceInfo = &inherit;
+	vk::beginCommandBuffer(cmd, info);
+
+	return cmd;
 }
 
 void Context::addStage(vpp::SubBuffer&& buf) {
 	if(buf.size()) {
-		stages_.emplace_back(std::move(buf));
+		currentFrame_.stages.emplace_back(std::move(buf));
 	}
+}
+
+void Context::addCommandBuffer(DeviceObject obj, vpp::CommandBuffer&& buf) {
+	vk::endCommandBuffer(buf);
+	currentFrame_.cmdBufs.emplace_back(obj, std::move(buf));
 }
 
 void Context::registerUpdateDevice(DeviceObject obj) {
@@ -356,8 +380,19 @@ void Context::registerUpdateDevice(DeviceObject obj) {
 }
 
 bool Context::deviceObjectDestroyed(::rvg::DeviceObject& obj) noexcept {
+	// remove its command buffers since they might reference
+	// resources that just got destroyed.
+	auto compareVisitor = [&](auto* ud) {
+		return &obj == ud;
+	};
+
+	auto& bufs = currentFrame_.cmdBufs;
+	bufs.erase(std::remove_if(bufs.begin(), bufs.end(),
+		[&](auto& b) { return std::visit(compareVisitor, b.first); }), bufs.end());
+
+	// remove it from updateDevice_ vector
 	auto it = updateDevice_.begin();
-	auto visitor = [&](auto* ud) {
+	auto eraseVisitor = [&](auto* ud) {
 		if(&obj == ud) {
 			updateDevice_.erase(it);
 			return true;
@@ -367,7 +402,7 @@ bool Context::deviceObjectDestroyed(::rvg::DeviceObject& obj) noexcept {
 	};
 
 	for(; it != updateDevice_.end(); ++it) {
-		if(std::visit(visitor, *it)) {
+		if(std::visit(eraseVisitor, *it)) {
 			return true;
 		}
 	}
@@ -379,6 +414,19 @@ void Context::deviceObjectMoved(::rvg::DeviceObject& o,
 		::rvg::DeviceObject& n) noexcept {
 
 	auto it = updateDevice_.begin();
+
+	// move device object in currentFrame_.cmdBufs
+	for(auto& b : currentFrame_.cmdBufs) {
+		auto updateVisitor = [&](auto* ud) {
+			if(ud == &o) {
+				b.first = static_cast<decltype(ud)>(&n);
+			}
+		};
+
+		std::visit(updateVisitor, b.first);
+	}
+
+	// move it in updateDevice_
 	auto visitor = [&](auto* ud) {
 		if(&o == ud) {
 			updateDevice_.erase(it);

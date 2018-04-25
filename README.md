@@ -31,21 +31,21 @@ Could easily be used for a gui library.
   - [x] fix stroke caps
   - [x] better settings (Context, DrawMode)
   - [x] simplify Polygon
-- [ ] rvg: paint/transform/scissor on deviceLocal memory
-  - [ ] probably enough when specifiable on construction, must not be dynamic
-  - [ ] also text
+- [x] rvg: paint/transform/scissor on deviceLocal memory
+  - [x] probably enough when specifiable on construction, must not be dynamic
+  - [x] also text
   - [x] more efficient staging writes. Don't submit command buffer at once
     - [x] use semaphores (-> vpp: work chaining)
 	      NOTE: abandoned the vpp work chaining concept, too high-level, cost
 - [x] rvg: correct vulkan synchronization
   - [ ] probably best to require the user to set it in the render pass or
         otherwise handle it. Document this somewhere
-- [ ] better textures: use optimal layout, new context-based uploading cmdbuf
-- [ ] rvg: reorganize/split header/sources
+- [x] better textures: use optimal layout, new context-based uploading cmdbuf
+- [x] rvg: reorganize/split header/sources
   - [x] shapes/context/texture/transform/scissor headers
   - [x] separate path.hpp in separate library/utility
   - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
-  - [ ] split sources (state/context/shapes/text/font)
+  - [x] split sources (state/context/shapes/text/font)
 - [ ] vui: pane
 - [ ] vui: row
 - [ ] vui: don't make windows manage layouting. Make them (like panes) manage
@@ -73,6 +73,11 @@ Could easily be used for a gui library.
   - [ ] allow widgets to change it? needed?
 - [ ] dropdown menu
 - [ ] tooltip
+- [x] FIX! rvg: currently undefined behaviour when destroying an objects at
+	certain points: after updateDevice (cmd buf recording) and before
+	the cmd buf is executed.
+	- [ ] needs to be tested
+- [ ] general rvg tests
 - [ ] tabs (vui::TabbedPane or something as class)
 - [ ] better mouse/keyboard grabs
   - [ ] currently bugs when multiple button grabs
@@ -96,3 +101,12 @@ Could easily be used for a gui library.
 - [ ] graph widget, e.g. for frametimes
 - [ ] drag and drop stuff (not sure if needed at all)
 - [ ] helper for non-convex shapes (in rvg: stencil buffer? or decomposition?)
+
+- [ ] document stuff
+  - [ ] intro tutorial, getting started
+
+TODO(performance): use own BufferAllocator for staging buffer in context
+  and clear all allocations on frame end. Also own DescriptorAllocator?
+TODO(performance): use direct write for small updates in upload140?
+TODO(performance): reduce number of SubBuffers? In text/polygon.
+  will probably require the vpp::offset feature for upload140

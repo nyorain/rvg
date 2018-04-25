@@ -54,10 +54,13 @@ struct ContextSettings {
 /// draw any shapes.
 class Context {
 public:
+	// TODO: name duplication to rvg::DeviceObject probably
+	// bad idea for readability.
 	using DeviceObject = std::variant<
 		Polygon*,
 		Text*,
 		Paint*,
+		Texture*,
 		Transform*,
 		Scissor*>;
 
@@ -90,6 +93,7 @@ public:
 	/// Must be waited upon with the indirectDraw stage bit.
 	/// Used to make sure that new data was uploaded to deviceLocal
 	/// vulkan resources.
+	/// Must not be called again until rendering this frame completes.
 	vk::Semaphore stageUpload();
 
 	void rerecord() { rerecord_ = true; }
@@ -119,7 +123,9 @@ public:
 	const auto& settings() const { return settings_; }
 	bool antiAliasing() const { return settings().antiAliasing; }
 
-	vk::CommandBuffer uploadCmdBuf();
+	// internal DeviceObject communication
+	vpp::CommandBuffer uploadCmdBuf();
+	void addCommandBuffer(DeviceObject, vpp::CommandBuffer&&);
 	void addStage(vpp::SubBuffer&& buf);
 
 	void registerUpdateDevice(DeviceObject);
@@ -142,7 +148,7 @@ private:
 	vpp::Sampler fontSampler_;
 	vpp::Sampler texSampler_;
 
-	vpp::ViewableImage emptyImage_;
+	Texture emptyImage_;
 	vpp::TrDs dummyTex_;
 
 	Scissor defaultScissor_;
@@ -155,14 +161,18 @@ private:
 	std::unordered_set<DeviceObject> updateDevice_;
 	bool rerecord_ {};
 
-	// TODO(performance) just use an own BufferAllocator and clear all
-	// allocations. Should be more performant
-	std::vector<vpp::SubBuffer> stages_;
+	const ContextSettings settings_;
+
 	vpp::Semaphore uploadSemaphore_;
 	vpp::CommandBuffer uploadCmdBuf_;
-	bool recordedUpload_ {};
 
-	const ContextSettings settings_;
+	struct Temporaries {
+		std::vector<std::pair<DeviceObject, vpp::CommandBuffer>> cmdBufs;
+		std::vector<vpp::SubBuffer> stages;
+	};
+
+	Temporaries currentFrame_;
+	Temporaries oldFrame_;
 };
 
 } // namespace vgv

@@ -4,6 +4,7 @@
 
 #include <rvg/polygon.hpp>
 #include <rvg/context.hpp>
+#include <rvg/util.hpp>
 #include <katachi/stroke.hpp>
 #include <vpp/vk.hpp>
 #include <vpp/bufferOps.hpp>
@@ -11,36 +12,7 @@
 #include <dlg/dlg.hpp>
 #include <optional>
 
-// TODO: we currently assume that update is always called before
-// updateDevice but what if e.g. updateDevice was triggered by
-// a disable call?
-
-// TODO(performance): staging buffer uploadWork performance
-// TODO(performance): no need for a buffer barrier in EVERY fill/stroke
-//   call, the first one (per command buffer) should be enough.
-
 namespace rvg {
-namespace {
-
-template<typename T>
-void write(std::byte*& ptr, T&& data) {
-	std::memcpy(ptr, &data, sizeof(data));
-	ptr += sizeof(data);
-}
-
-template<typename... Args>
-void upload140(Context& ctx, const vpp::BufferSpan& buf, const Args&... args) {
-	// NOTE: we could also use direct writing for small updates
-	dlg_assert(buf.valid());
-	if(buf.buffer().mappable()) {
-		vpp::writeMap140(buf, args...);
-	} else {
-		ctx.addStage(vpp::writeStaging(ctx.uploadCmdBuf(), buf,
-			vpp::BufferLayout::std140, args...));
-	}
-}
-
-} // anon namespace
 
 // Polygon
 Polygon::Polygon(Context& ctx) : DeviceObject(ctx) {
@@ -217,10 +189,9 @@ bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
 			usage |= vk::BufferUsageBits::transferDst;
 		}
 
-		auto props = flags_.deviceLocal ?
-			vk::MemoryPropertyBits::deviceLocal :
-			vk::MemoryPropertyBits::hostVisible;
-		auto memBits = context().device().memoryTypeBits(props);
+		auto memBits = flags_.deviceLocal ?
+			context().device().deviceMemoryTypes() :
+			context().device().hostMemoryTypes();
 		buf = {context().bufferAllocator(), needed * 2, usage, 4u, memBits};
 		return true;
 	}
@@ -240,10 +211,10 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	cmd.instanceCount = 1;
 
 	if(disable) {
-		upload140(context(), draw.pBuf, vpp::raw(cmd));
+		upload140(*this, draw.pBuf, vpp::raw(cmd));
 	} else {
 		auto points = vpp::raw(*draw.points.data(), draw.points.size());
-		upload140(context(), draw.pBuf, vpp::raw(cmd), points);
+		upload140(*this, draw.pBuf, vpp::raw(cmd), points);
 	}
 
 	// color
@@ -254,7 +225,7 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	auto cneeded = color * (sizeof(draw.color[0])) * draw.color.size();
 	rerecord |= checkResize(draw.cBuf, cneeded,
 		vk::BufferUsageBits::vertexBuffer);
-	upload140(context(), draw.cBuf, vpp::raw(*draw.color.data(),
+	upload140(*this, draw.cBuf, vpp::raw(*draw.color.data(),
 		draw.color.size()));
 
 	return rerecord;
@@ -276,9 +247,9 @@ bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
 		auto data = vpp::raw(*stroke.aa.data(), stroke.aa.size());
 
 		if(mult) {
-			upload140(context(), stroke.aaBuf, *mult, data);
+			upload140(*this, stroke.aaBuf, *mult, data);
 		} else {
-			upload140(context(), stroke.aaBuf, data);
+			upload140(*this, stroke.aaBuf, data);
 		}
 	}
 
@@ -304,7 +275,13 @@ bool Polygon::updateDevice() {
 			flags_.aaStroke, &strokeMult_);
 
 		// check if buffer with our uniform was recreated
-		if(prev != stroke_.aaBuf.size()) {
+		auto next = stroke_.aaBuf.size();
+		if(prev != next || (!strokeDs_ && next > 0)) {
+			if(!strokeDs_) {
+				auto& layout = context().dsLayoutStrokeAA();
+				strokeDs_ = {context().dsAllocator(), layout};
+			}
+
 			auto& b = stroke_.aaBuf;
 			vpp::DescriptorSetUpdate update(strokeDs_);
 			update.uniform({{b.buffer(), b.offset(), sizeof(float)}});

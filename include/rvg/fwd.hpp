@@ -24,6 +24,7 @@ class RectShape;
 class CircleShape;
 class Shape;
 
+class Texture;
 class Paint;
 class Transform;
 class Scissor;

@@ -183,8 +183,7 @@ int main() {
 
 	// image stuff
 	rvg::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
-	auto foxTex = rvg::createTexture(device, "../example/fox.jpg",
-		rvg::TextureType::rgba32);
+	auto foxTex = rvg::Texture(ctx, "../example/fox.jpg");
 	auto iv = foxTex.vkImageView();
 
 	auto mat = nytl::identity<4, float>();
@@ -193,6 +192,7 @@ int main() {
 	mat[0][3] = -500.f / 300.f;
 	mat[1][3] = -100.f / 200.f;
 	rvg::Paint foxPaint = {ctx, rvg::texturePaintRGBA(mat, iv)};
+	// rvg::Paint foxPaint = {ctx, rvg::colorPaint({150, 200, 200})};
 
 	rvg::Paint svgPaint {ctx, rvg::colorPaint({150, 230, 200})};
 

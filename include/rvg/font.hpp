@@ -5,6 +5,7 @@
 #pragma once
 
 #include <rvg/fwd.hpp>
+#include <rvg/paint.hpp>
 
 #include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
@@ -30,8 +31,7 @@ public:
 protected:
 	std::unique_ptr<nk_font_atlas> atlas_;
 	vpp::TrDs ds_;
-	vpp::ViewableImage texture_;
-	unsigned width_ = 0, height_ = 0;
+	Texture texture_;
 };
 
 /// Represents information about one font in a font atlas.
