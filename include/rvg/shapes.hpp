@@ -53,7 +53,7 @@ class RectShape {
 public:
 	RectShape() = default;
 	RectShape(Context& ctx) : polygon_(ctx) {}
-	RectShape(Context&, Vec2f pos, Vec2f size, const DrawMode&,
+	RectShape(Context&, Vec2f pos, Vec2f size, DrawMode,
 		std::array<float, 4> round = {});
 
 	auto change() { return StateChange {*this, state_}; }

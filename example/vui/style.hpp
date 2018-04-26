@@ -8,18 +8,22 @@
 namespace vui {
 
 struct ButtonDraw {
-	rvg::PaintData label;
 	rvg::PaintData bg;
 	std::optional<rvg::PaintData> bgStroke;
 };
 
-struct ButtonStyle {
+struct BasicButtonStyle {
 	ButtonDraw normal;
 	ButtonDraw hovered;
 	ButtonDraw pressed;
-	Vec2f padding = Vec {20.f, 10.f};
 	std::array<float, 4> rounding = {};
-	Font* font;
+};
+
+struct LabeledButtonStyle {
+	rvg::Paint* label;
+	BasicButtonStyle* basic {};
+	Vec2f padding = Vec {20.f, 10.f};
+	const Font* font {};
 };
 
 struct TextfieldStyle {
@@ -32,7 +36,7 @@ struct TextfieldStyle {
 	float cursorWidth = 1.f;
 	Vec2f padding = Vec {10.f, 10.f};
 	std::array<float, 4> rounding = {};
-	Font* font {};
+	const Font* font {};
 };
 
 struct WindowStyle {
@@ -54,7 +58,7 @@ struct HintStyle {
 	rvg::Paint* bgStroke {}; /// (optional) background stroke (border)
 	Vec2f padding {5.f, 5.f}; /// padding, distance from label to border
 	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
-	Font* font {}; /// Font to use, falls back to guis default font
+	const Font* font {}; /// Font to use, falls back to guis default font
 };
 
 struct ColorPickerStyle {
@@ -70,20 +74,27 @@ struct ColorPickerStyle {
 };
 
 struct ColorButtonStyle {
-	rvg::Paint* bg;
-	rvg::Paint* bgStroke {};
-	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
+	BasicButtonStyle* button {};
 	Vec2f padding {5.f, 5.f};
 };
 
+struct PaneStyle {
+	rvg::Paint* bg;
+	rvg::Paint* bgStroke {};
+	std::array<float, 4> rounding {3.f, 3.f, 3.f, 3.f};
+	Vec2f padding = Vec {10.f, 10.f};
+};
+
 struct Styles {
-	ButtonStyle button {};
+	BasicButtonStyle basicButton {};
+	LabeledButtonStyle labeledButton {};
 	TextfieldStyle textfield {};
 	WindowStyle window {};
 	SliderStyle slider {};
 	HintStyle hint {};
 	ColorPickerStyle colorPicker {};
 	ColorButtonStyle colorButton {};
+	PaneStyle pane {};
 };
 
 } // namespace vui

@@ -12,15 +12,15 @@
 
 namespace vui {
 
-class Button : public Widget {
+class BasicButton : public Widget {
 public:
-	std::function<void(Button&)> onClick;
+	BasicButton(Gui&, Vec2f pos);
+	BasicButton(Gui&, const Rect2f& bounds, const BasicButtonStyle&);
 
-public:
-	Button(Gui&, Vec2f pos, std::string_view label);
-	Button(Gui&, const Rect2f& bounds, std::string_view label);
-	Button(Gui&, const Rect2f& bounds, std::string_view label,
-		const ButtonStyle&);
+	/// Sets/updates the hint for this button.
+	/// When an empty string view is passed, the hint
+	/// will be disabled.
+	void hint(std::string_view hint);
 
 	void size(Vec2f size) override;
 	using Widget::size;
@@ -34,23 +34,51 @@ public:
 	void draw(const DrawInstance&) const override;
 
 	const auto& style() const { return style_.get(); }
+	bool hovered() const { return hovered_; }
+	bool pressed() const { return pressed_; }
 
 protected:
-	void updatePaints();
+	virtual void updatePaints();
+	virtual void clicked(const MouseButtonEvent&) {}
 
 protected:
-	std::reference_wrapper<const ButtonStyle> style_;
-
-	Text label_;
-	Paint labelPaint_;
+	std::reference_wrapper<const BasicButtonStyle> style_;
 	RectShape bg_;
 	Paint bgFill_;
 	Paint bgStroke_;
-
 	bool hovered_ {};
 	bool pressed_ {};
+	DelayedHint* hint_ {};
+};
 
-	DelayedHint* hint_;
+class LabeledButton : public BasicButton {
+public:
+	std::function<void(LabeledButton&)> onClick;
+
+public:
+	LabeledButton(Gui&, Vec2f pos, std::string_view label);
+	LabeledButton(Gui&, const Rect2f& bounds, std::string_view label);
+	LabeledButton(Gui&, const Rect2f& bounds, std::string_view label,
+		const LabeledButtonStyle&);
+
+	void size(Vec2f size) override;
+	using Widget::size;
+
+	void hide(bool hide) override;
+	void draw(const DrawInstance&) const override;
+
+	const auto& style() const { return style_.get(); }
+
+protected:
+	virtual void clicked(const MouseButtonEvent&) override;
+
+protected:
+	std::reference_wrapper<const LabeledButtonStyle> style_;
+
+	Text label_;
+	RectShape bg_;
+	Paint bgFill_;
+	Paint bgStroke_;
 };
 
 } // namespace vui

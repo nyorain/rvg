@@ -12,7 +12,7 @@ class Gui;
 class Widget;
 struct Styles;
 
-class Button;
+class Pane;
 class Hint;
 class DelayedHint;
 

@@ -90,8 +90,13 @@ int main() {
 	instanceInfo.ppEnabledExtensionNames = iniExtensions.data();
 
 	if(useValidation) {
-		instanceInfo.enabledLayerCount = 1;
-		instanceInfo.ppEnabledLayerNames = &layerName;
+		auto layers = {
+			layerName,
+			"VK_LAYER_RENDERDOC_Capture",
+		};
+
+		instanceInfo.enabledLayerCount = layers.size();
+		instanceInfo.ppEnabledLayerNames = layers.begin();
 	}
 
 	vpp::Instance instance {};
@@ -212,19 +217,19 @@ int main() {
 	styles.hint.font = &lsSmall;
 
 	// button
-	styles.button.normal.label = labelPaintData;
-	styles.button.normal.bg = bgPaintData;
+	styles.basicButton.normal.bg = bgPaintData;
+	styles.basicButton.hovered.bg = rvg::colorPaint({20, 20, 20});
+	styles.basicButton.pressed.bg = rvg::colorPaint({35, 35, 35});
 
-	styles.button.hovered.label = labelPaintData;
-	styles.button.hovered.bg = rvg::colorPaint({20, 20, 20});
-
-	styles.button.pressed.label = labelPaintData;
-	styles.button.pressed.bg = rvg::colorPaint({35, 35, 35});
+	styles.labeledButton.label = &hintTextPaint;
 
 	// window
 	styles.window.bg = &hintBgPaint;
 	styles.window.rounding = {20.f, 20.f, 20.f, 20.f};
 	styles.window.outerPadding = {20.f, 20.f};
+
+	// pane
+	styles.pane.bg = &hintBgPaint;
 
 	// textfield
 	auto selectedPaint = rvg::Paint {ctx, rvg::colorPaint({50, 50, 50})};
@@ -236,27 +241,23 @@ int main() {
 	// color picker
 	styles.colorPicker.marker = &hintBgPaint;
 
-	// colorButton
-	styles.colorButton.bg = &hintBgPaint;
-
 	// gui
 	vui::Gui gui(ctx, lsFont, std::move(styles));
 	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
-	auto& button = win.create<vui::Button>("button, waddup");
+	auto& button = win.create<vui::LabeledButton>("button, waddup");
 	button.onClick = [&](auto&) { dlg_info("Clicked!"); };
-	auto& cp = win.create<vui::ColorPicker>();
+	auto& cp = win.create<vui::ColorButton>(
+		nytl::Vec2f{vui::autoSize, vui::autoSize}, rvg::Color {40, 40, 40});
 	cp.onChange = [&](auto& cp){
 		svgPaint.paint(rvg::colorPaint(cp.picked()));
 	};
 
-	win.create<vui::Button>("b#2");
+	win.create<vui::LabeledButton>("b#2");
 
 	auto& tf = win.createSized<vui::Textfield>(nytl::Vec {400.f, vui::autoSize});
 	tf.onChange = [&](auto& tf) {
 		dlg_info("changed: {}", tf.utf8());
 	};
-
-	win.create<vui::ColorButton>();
 
 	svgPaint = {ctx, rvg::colorPaint(cp.picked())};
 

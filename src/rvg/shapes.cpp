@@ -32,7 +32,7 @@ bool Shape::disabled(DrawType t) const {
 
 // Rect
 RectShape::RectShape(Context& ctx, Vec2f p, Vec2f s,
-	const DrawMode& d, std::array<float, 4> round) :
+	DrawMode d, std::array<float, 4> round) :
 		state_{p, s, std::move(d), round}, polygon_(ctx) {
 
 	update();

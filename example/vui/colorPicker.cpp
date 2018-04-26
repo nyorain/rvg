@@ -1,5 +1,7 @@
 #include "colorPicker.hpp"
 #include "gui.hpp"
+#include "window.hpp"
+
 #include <rvg/context.hpp>
 #include <dlg/dlg.hpp>
 #include <nytl/rectOps.hpp>
@@ -246,97 +248,91 @@ ColorButton::ColorButton(Gui& gui, const Rect2f& bounds,
 }
 
 ColorButton::ColorButton(Gui& gui, const Rect2f& bounds, const Vec2f& pickerSize,
-		const Color& start, const ColorButtonStyle& style) :
-			Widget(gui, bounds), style_(style) {
-	bg_ = {context()};
+	const Color& start, const ColorButtonStyle& style) :
+		BasicButton(gui, bounds, style.button ? *style.button :
+			gui.styles().basicButton), style_(style) {
+
+	// TODO: currently hiding & unhiding on every focus
+	// change (triggering an updateDevice)
+	class PopupPane : public Pane {
+	public:
+		using Pane::Pane;
+		void focus(bool gained) override {
+			hide(!gained);
+		}
+	};
+
+	// NOTE: makes this non movable!
+	auto updateColorPaint = [this](const auto& cp){
+		this->colorPaint_.paint(rvg::colorPaint(cp.picked()));
+		if(onChange) {
+			onChange(*this);
+		}
+	};
+
 	color_ = {context()};
-	cp_ = &gui.create<ColorPicker>(Rect2f{{}, pickerSize}, start);
-	cp_->hide(true);
+
+	auto cpBounds = Rect2f{{}, pickerSize};
+	auto cp = std::make_unique<ColorPicker>(gui, cpBounds, start);
+	cp_ = cp.get();
+	cp_->onChange = updateColorPaint;
+	colorPaint_ = {context(), rvg::colorPaint(cp_->picked())};
+
+	pane_ = &gui.create<PopupPane>(Rect2f{{}, {autoSize, autoSize}},
+		std::move(cp));
+	pane_->hide(true);
+
 	this->size(bounds.size);
 }
 
 void ColorButton::size(Vec2f size) {
 	if(size.x == autoSize && size.y == autoSize) {
-		size = {100.f, 30.f};
+		size = {100.f, 25.f};
+		size += 2 * style().padding;
 	} else if(size.x == autoSize) {
-		size.x = size.y * 3;
+		size.x = size.y * 4;
 	} else if(size.y == autoSize) {
-		size.y = size.x / 3;
+		size.y = size.x / 4;
 	}
-
-	auto bc = bg_.change();
-	bc->size = size;
-	bc->drawMode.fill = true;
-	bc->drawMode.stroke = style().bgStroke ? 2.f : 0.f;
 
 	auto cc = color_.change();
 	cc->position = style().padding;
 	cc->size = size - 2 * style().padding;
 	cc->drawMode.fill = true;
 
-	cp_->position(position() + Vec2f{0.f, size.y} + style().padding);
-	Widget::size(size);
+	pane_->position(position() + Vec2f{0.f, size.y});
+	BasicButton::size(size);
 }
 
 void ColorButton::position(Vec2f pos) {
 	Widget::position(pos);
-	cp_->position(position() + Vec2f{0.f, size().y} + style().padding);
+	pane_->position(position() + Vec2f{0.f, size().y});
 }
 
 void ColorButton::hide(bool hide) {
 	if(hide) {
-		cp_->hide(hide);
+		pane_->hide(hide);
 	}
 
-	bg_.disable(hide);
 	color_.disable(hide);
+	BasicButton::hide(hide);
 }
 
-bool ColorButton::hidden() const {
-	return bg_.disabled();
+void ColorButton::clicked(const MouseButtonEvent&) {
+	pane_->hide(false);
 }
 
-Widget* ColorButton::mouseButton(const MouseButtonEvent& event) {
-	if(event.button != MouseButton::left) {
-		return nullptr;
+void ColorButton::focus(bool gained) {
+	BasicButton::focus(gained);
+	if(!gained) {
+		pane_->hide(true);
 	}
-
-	if(event.pressed) {
-		pressed_ = true;
-		// updatePaints();
-	} else if(pressed_) {
-		pressed_ = false;
-		// updatePaints();
-		if(hovered_) {
-			cp_->hide(!cp_->hidden());
-		}
-	}
-
-	return this;
-}
-
-void ColorButton::mouseOver(bool gained) {
-	hovered_ = gained;
-}
-
-void ColorButton::focus(bool) {
-	// if(!gained) {
-		// cp_->hide(true);
-	// }
 }
 
 void ColorButton::draw(const DrawInstance& di) const {
-	bindState(di);
-	style().bg->bind(di);
-	bg_.fill(di);
-
-	if(style().bgStroke) {
-		style().bgStroke->bind(di);
-		bg_.stroke(di);
-	}
-
-
-	// color_.fill(di);
+	BasicButton::draw(di);
+	colorPaint_.bind(di);
+	color_.fill(di);
 }
 
 } // namespace vui

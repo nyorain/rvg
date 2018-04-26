@@ -46,11 +46,20 @@ Could easily be used for a gui library.
   - [x] separate path.hpp in separate library/utility
   - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
   - [x] split sources (state/context/shapes/text/font)
-- [ ] vui: pane
+- [ ] rvg testing
+	- [ ] lots of small unit tests, especially polygon, color conversion
+	- [ ] integration tests, try to draw everything onto a framebuffer
+	- [ ] especially test defined behaviour when moving/destructing
+	      objects
+- [x] vui: pane
 - [ ] vui: row
+- [ ] vui: non-drawing widgets (like row/column) should not create
+      transform/scissor objects
 - [ ] vui: don't make windows manage layouting. Make them (like panes) manage
       exactly one embedded widget which may be a layout widget
-- [ ] vui: improve/fix hacked together ColorButton
+	  - [ ] implement real layout-only container widgets
+- [ ] vui: validate styles passed to widgets (assert valid)
+- [x] vui: improve/fix hacked together ColorButton
 - [ ] rvg: make non-texture gradients make use of transform buffer span
 - [ ] nanovg like box gradient
 - [ ] readd vui::Slider (with (optional?) different style)
@@ -58,9 +67,9 @@ Could easily be used for a gui library.
 - [ ] vui: window scrolling
 - [ ] vui: label
 - [ ] vui: window names
-- [ ] split rvg and vui library
-- [ ] clipboard support (probably over Gui/GuiListener)
 - [ ] vui: horizontal splitting line
+- [ ] clipboard support (probably over Gui/GuiListener)
+- [ ] split rvg and vui library
 - [ ] vui: radio button
 - [ ] don't use that much paints and descriptors for widgets
   -> optional dynamic new ext descriptor support
@@ -72,12 +81,23 @@ Could easily be used for a gui library.
   - [ ] temporary raise on one layer (reorder in vector)
   - [ ] allow widgets to change it? needed?
 - [ ] dropdown menu
-- [ ] tooltip
+- [ ] vui: performance optimziations #2
+      - [ ] Especially don't call the size() function so often (in 
+	        deriving hirachies: every constructor again)
+	  - [ ] ColorButon pane hides/unhides too often
+	  - [ ] Eliminate redundant construct/change calls of rvg shapes as
+	        possible
+- [ ] vui: runtime style changing
+	- [ ] every widget has to implement support
+	- [ ] also change the gui style, all widgets (that use those styles)
+	      should update/be updated
+- [ ] rvg: radial gradients
+	- [ ] any other gradient types to implement?
+- [x] tooltip (note: implement as vui::(Delayed)Hint)
 - [x] FIX! rvg: currently undefined behaviour when destroying an objects at
 	certain points: after updateDevice (cmd buf recording) and before
 	the cmd buf is executed.
 	- [ ] needs to be tested
-- [ ] general rvg tests
 - [ ] tabs (vui::TabbedPane or something as class)
 - [ ] better mouse/keyboard grabs
   - [ ] currently bugs when multiple button grabs

@@ -3,6 +3,7 @@
 #include "fwd.hpp"
 #include "widget.hpp"
 #include "style.hpp"
+#include "button.hpp"
 
 #include <rvg/shapes.hpp>
 #include <rvg/paint.hpp>
@@ -61,7 +62,10 @@ protected:
 	bool slidingHue_ {};
 };
 
-class ColorButton : public Widget {
+class ColorButton : public BasicButton {
+public:
+	std::function<void(ColorButton&)> onChange;
+
 public:
 	ColorButton(Gui&, const Rect2f& bounds,
 		const Vec2f& pickerSize = {autoSize, autoSize},
@@ -69,32 +73,31 @@ public:
 	ColorButton(Gui&, const Rect2f& bounds, const Vec2f& pickerSize,
 		const Color& start, const ColorButtonStyle& style);
 
-	void size(Vec2f size) override;
 	using Widget::size;
-
-	void position(Vec2f pos) override;
 	using Widget::position;
 
-	void hide(bool hide) override;
-	bool hidden() const override;
+	void size(Vec2f size) override;
+	void position(Vec2f pos) override;
 
-	void mouseOver(bool gained) override;
-	Widget* mouseButton(const MouseButtonEvent&) override;
+	void hide(bool hide) override;
+
 	void focus(bool gained) override;
 	void draw(const DrawInstance&) const override;
 
-	auto& colorPicker() const { return *cp_; }
 	const auto& style() const { return style_.get(); }
+	const auto& cp() const { return *cp_; }
+	auto picked() const { return cp().picked(); }
+
+protected:
+	void clicked(const MouseButtonEvent&) override;
 
 protected:
 	std::reference_wrapper<const ColorButtonStyle> style_;
 
-	RectShape bg_;
+	Paint colorPaint_;
 	RectShape color_;
-	ColorPicker* cp_ {};
-
-	bool hovered_;
-	bool pressed_;
+	Pane* pane_;
+	ColorPicker* cp_;
 };
 
 } // namespace vui

@@ -2,6 +2,7 @@
 #include "widget.hpp"
 #include <dlg/dlg.hpp>
 #include <nytl/rectOps.hpp>
+#include <nytl/matOps.hpp>
 #include <cmath>
 
 namespace vui {
@@ -16,6 +17,7 @@ GuiListener& GuiListener::nop() {
 Gui::Gui(Context& ctx, const Font& font, Styles&& s, GuiListener& listener)
 	: WidgetContainer(*this),  context_(ctx), font_(font), listener_(listener),
 		styles_(std::move(s)) {
+	nytl::identity(transform_);
 }
 
 void Gui::transform(const nytl::Mat4f& mat) {
