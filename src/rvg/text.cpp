@@ -87,7 +87,7 @@ bool Text::updateDevice() {
 	dlg_assert(posCache_.size() == uvCache_.size());
 	auto checkResize = [&](auto& buf, auto needed) {
 		if(buf.size() == 0u || buf.size() < needed) {
-			needed = 2 * needed + 1;
+			needed = std::max<vk::DeviceSize>(2u * needed, 32u);
 			auto usage = nytl::Flags{vk::BufferUsageBits::vertexBuffer};
 			if(deviceLocal_) {
 				usage |= vk::BufferUsageBits::transferDst;
@@ -118,6 +118,9 @@ bool Text::updateDevice() {
 		// upload140(*this, uvBuf_, vpp::raw(uvCache_));
 		upload140(*this, uvBuf_, vpp::raw(*uvCache_.data(),
 			uvCache_.size()));
+	} else {
+		// write something for validation layers
+		upload140(*this, uvBuf_, vpp::raw(cmd));
 	}
 
 	return rerecord;

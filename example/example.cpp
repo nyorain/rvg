@@ -168,11 +168,11 @@ int main() {
 
 	auto fontHeight = 16;
 	rvg::FontAtlas atlas(ctx);
-	rvg::Font osFont(atlas, "../example/OpenSans-Regular.ttf", fontHeight);
-	rvg::Font lsFont(atlas, "../example/LiberationSans-Regular.ttf", fontHeight);
+	rvg::Font osFont(atlas, "../../example/OpenSans-Regular.ttf", fontHeight);
+	rvg::Font lsFont(atlas, "../../example/LiberationSans-Regular.ttf", fontHeight);
 	atlas.bake(ctx);
 
-	rvg::Font lsSmall(atlas, "../example/LiberationSans-Regular.ttf", 14);
+	rvg::Font lsSmall(atlas, "../../example/LiberationSans-Regular.ttf", 14);
 	atlas.bake(ctx);
 
 	auto string = "yo, whaddup";
@@ -188,7 +188,7 @@ int main() {
 
 	// image stuff
 	rvg::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
-	auto foxTex = rvg::Texture(ctx, "../example/fox.jpg");
+	auto foxTex = rvg::Texture(ctx, "../../example/fox.jpg");
 	auto iv = foxTex.vkImageView();
 
 	auto mat = nytl::identity<4, float>();

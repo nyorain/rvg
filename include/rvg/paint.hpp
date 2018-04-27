@@ -207,6 +207,9 @@ public:
 	bool updateDevice();
 
 protected:
+	void upload();
+
+protected:
 	PaintData paint_ {};
 	vpp::SubBuffer ubo_;
 	vpp::TrDs ds_;

@@ -39,14 +39,6 @@ float hue2rgb(float p, float q, float t) {
 	return p;
 }
 
-void uploadPaint(std::byte*& ptr, const DevicePaintData& data) {
-	write(ptr, data.transform);
-	write(ptr, data.frag.inner.rgbaNorm());
-	write(ptr, data.frag.outer.rgbaNorm());
-	write(ptr, data.frag.custom);
-	write(ptr, data.frag.type);
-}
-
 } // anon namespace
 
 // Color
@@ -329,10 +321,8 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, 0u, memBits};
 
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
-	auto map = ubo_.memoryMap();
-	auto ptr = map.ptr();
-	uploadPaint(ptr, paint_.data);
-
+	upload();
+	
 	vpp::DescriptorSetUpdate update(ds_);
 	auto m4 = sizeof(nytl::Mat4f);
 	update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});
@@ -343,6 +333,17 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 void Paint::update() {
 	dlg_assert(valid() && ds_ && ubo_.size());
 	context().registerUpdateDevice(this);
+}
+
+void Paint::upload() {
+	dlg_assert(valid() && ubo_.size());
+
+	upload140(*this, ubo_,
+		vpp::raw(paint_.data.transform),
+		vpp::raw(paint_.data.frag.inner.rgbaNorm()),
+		vpp::raw(paint_.data.frag.outer.rgbaNorm()),
+		vpp::raw(paint_.data.frag.custom),
+		vpp::raw(static_cast<std::uint32_t>(paint_.data.frag.type)));
 }
 
 void Paint::bind(const DrawInstance& di) const {
@@ -358,9 +359,7 @@ bool Paint::updateDevice() {
 		paint_.texture = context().emptyImage().vkImageView();
 	}
 
-	auto map = ubo_.memoryMap();
-	auto ptr = map.ptr();
-	uploadPaint(ptr, paint_.data);
+	upload();
 
 	if(oldView_ != paint_.texture) {
 		vpp::DescriptorSetUpdate update(ds_);
