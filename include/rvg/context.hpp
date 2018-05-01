@@ -42,6 +42,10 @@ struct ContextSettings {
 	/// always have to be set to false.
 	bool antiAliasing {true};
 
+	/// The pipeline cache to use.
+	/// Will use no cache if left empty.
+	vk::PipelineCache pipelineCache {};
+
 	// TODO
 	/// The QueueSubmitter to submit any upload work to.
 	/// Should be associated with the queue for rendering since
@@ -133,7 +137,21 @@ public:
 	void deviceObjectMoved(::rvg::DeviceObject&, ::rvg::DeviceObject&) noexcept;
 
 private:
+	// Per-frame objects mainly used to efficiently upload data
+	struct Temporaries {
+		std::vector<std::pair<DeviceObject, vpp::CommandBuffer>> cmdBufs;
+		std::vector<vpp::SubBuffer> stages;
+	};
+
+	// NOTE: order here is rather important since some of them depend
+	// on each other. Don't change unless you know what you
+	// are doing (so probably: don't change!).
 	const vpp::Device& device_;
+	const ContextSettings settings_;
+	std::unordered_set<DeviceObject> updateDevice_;
+
+	Temporaries currentFrame_;
+	Temporaries oldFrame_;
 
 	vpp::Pipeline fanPipe_;
 	vpp::Pipeline stripPipe_;
@@ -158,21 +176,10 @@ private:
 	vpp::SubBuffer defaultStrokeAABuf_;
 	vpp::TrDs defaultStrokeAA_;
 
-	std::unordered_set<DeviceObject> updateDevice_;
 	bool rerecord_ {};
-
-	const ContextSettings settings_;
 
 	vpp::Semaphore uploadSemaphore_;
 	vpp::CommandBuffer uploadCmdBuf_;
-
-	struct Temporaries {
-		std::vector<std::pair<DeviceObject, vpp::CommandBuffer>> cmdBufs;
-		std::vector<vpp::SubBuffer> stages;
-	};
-
-	Temporaries currentFrame_;
-	Temporaries oldFrame_;
 };
 
 } // namespace vgv

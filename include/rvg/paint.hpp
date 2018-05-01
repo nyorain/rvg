@@ -57,6 +57,10 @@ public:
 	const static Color blue;
 };
 
+// operators
+inline bool operator==(Color a, Color b) { return a.rgba() == b.rgba(); }
+inline bool operator!=(Color a, Color b) { return a.rgba() != b.rgba(); }
+
 // hsl
 Color hsl(u8 h, u8 s, u8 l, u8 a = 255);
 Color hslNorm(float h, float s, float l, float a = 1.f);

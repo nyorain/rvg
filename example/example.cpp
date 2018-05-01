@@ -92,7 +92,7 @@ int main() {
 	if(useValidation) {
 		auto layers = {
 			layerName,
-			"VK_LAYER_RENDERDOC_Capture",
+			// "VK_LAYER_RENDERDOC_Capture",
 		};
 
 		instanceInfo.enabledLayerCount = layers.size();

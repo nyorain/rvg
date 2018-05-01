@@ -10,6 +10,7 @@ project('rvg', ['cpp', 'c'],
 
 # TODO: settings
 build_example = true
+build_tests = true
 
 warnings = [
 	'-Wall',
@@ -69,6 +70,10 @@ rvg_dep = declare_dependency(
 
 if build_example
   subdir('example')
+endif
+
+if build_tests
+  subdir('docs/tests')
 endif
 
 # pkgconfig

@@ -36,8 +36,8 @@ namespace rvg {
 
 // Context
 Context::Context(vpp::Device& dev, const ContextSettings& settings) :
-	device_(dev), settings_(settings)
-{
+		device_(dev), settings_(settings) {
+
 	constexpr auto sampleCount = vk::SampleCountBits::e1;
 
 	// sampler
@@ -242,7 +242,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	stripAssemblyInfo.topology = vk::PrimitiveTopology::triangleStrip;
 	stripPipeInfo.pInputAssemblyState = &stripAssemblyInfo;
 
-	auto pipes = vk::createGraphicsPipelines(dev, {},
+	auto pipes = vk::createGraphicsPipelines(dev, settings.pipelineCache,
 		{fanPipeInfo, stripPipeInfo});
 	fanPipe_ = {dev, pipes[0]};
 	stripPipe_ = {dev, pipes[1]};

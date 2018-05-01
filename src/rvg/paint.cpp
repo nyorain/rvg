@@ -229,10 +229,10 @@ Vec3f hsv2hsl(Vec3f hsv) {
 // - further util -
 Color u32rgba(std::uint32_t val) {
 	return {
-		u8(val & 0xFF000000),
-		u8(val & 0x00FF0000),
-		u8(val & 0x0000FF00),
-		u8(val & 0x000000FF)};
+		u8((val & 0xFF000000u) >> 24),
+		u8((val & 0x00FF0000u) >> 16),
+		u8((val & 0x0000FF00u) >> 8),
+		u8((val & 0x000000FFu) >> 0)};
 }
 
 std::uint32_t u32rgba(const Color& c) {
@@ -322,7 +322,7 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
 	upload();
-	
+
 	vpp::DescriptorSetUpdate update(ds_);
 	auto m4 = sizeof(nytl::Mat4f);
 	update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});

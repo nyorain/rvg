@@ -46,6 +46,7 @@ Could easily be used for a gui library.
   - [x] separate path.hpp in separate library/utility
   - ~~ [ ] also make nk/font.h public header ~~ (bad idea)
   - [x] split sources (state/context/shapes/text/font)
+- [ ] rvg::Context: use vpps new pipeline creation info
 - [ ] rvg testing
 	- [ ] lots of small unit tests, especially polygon, color conversion
 	- [ ] integration tests, try to draw everything onto a framebuffer

@@ -1,0 +1,4 @@
+[wrap-git]
+directory=bugged
+url=https://github.com/nyorain/bugged.git
+revision=master
