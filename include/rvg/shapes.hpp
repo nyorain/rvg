@@ -16,6 +16,7 @@
 
 namespace rvg {
 
+// TODO: rename PointShape or something?
 /// Convex shape specifies by its outlining points.
 /// Can be filled or stroked.
 class Shape {

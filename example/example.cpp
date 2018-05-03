@@ -440,7 +440,7 @@ int main() {
 		auto wait = {
 			vpp::StageSemaphore {
 				semaphore,
-				vk::PipelineStageBits::drawIndirect,
+				vk::PipelineStageBits::allGraphics,
 			}
 		};
 

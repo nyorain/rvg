@@ -1,6 +1,7 @@
 #define BUGGED_NO_MAIN
-
 #include <bugged.hpp>
+
+#include <rvg/context.hpp>
 #include <vpp/vk.hpp>
 #include <vpp/memory.hpp>
 #include <vpp/device.hpp>
@@ -57,6 +58,7 @@ struct Globals {
 
 static Globals globals;
 
+constexpr vk::Extent3D fbExtent = {1920, 1080, 1};
 void initGlobals() {
 	constexpr const char* iniExtensions[] = {
 		VK_KHR_SURFACE_EXTENSION_NAME,
@@ -80,9 +82,8 @@ void initGlobals() {
 	dlg_info("Physical device info:\n\t{}",
 		vpp::description(globals.device->vkPhysicalDevice(), "\n\t"));
 
-	constexpr vk::Extent3D extent = {1920, 1080, 1};
 	globals.attachment = {dev, *vpp::ViewableImageCreateInfo::color(dev,
-		extent, vk::ImageUsageBits::colorAttachment)};
+		fbExtent, vk::ImageUsageBits::colorAttachment)};
 
 	vk::AttachmentDescription attachment;
 	attachment.format = vk::Format::r8g8b8a8Unorm;
@@ -115,8 +116,8 @@ void initGlobals() {
 	fbInfo.renderPass = globals.rp;
 	fbInfo.attachmentCount = 1;
 	fbInfo.pAttachments = &globals.attachment.vkImageView();
-	fbInfo.width = extent.width;
-	fbInfo.height = extent.height;
+	fbInfo.width = fbExtent.width;
+	fbInfo.height = fbExtent.height;
 	fbInfo.layers = 1u;
 
 	globals.fb = {dev, fbInfo};
@@ -148,4 +149,58 @@ int main() {
 	ret += globals.debugCallback->warnings;
 
 	return ret;
+}
+
+std::unique_ptr<rvg::Context> createContext() {
+	rvg::ContextSettings settings;
+	settings.renderPass = globals.rp;
+	settings.subpass = 0u;
+	settings.pipelineCache = globals.cache;
+	rvg::Context ctx(*globals.device, settings);
+}
+
+template<typename F>
+vpp::CommandBuffer record(Context& ctx, F&& renderer) {
+	auto& dev = ctx.device();
+	auto cmdBuf = dev.commandAllocator().get();
+
+	vk::beginCommandBuffer(cmdBuf, {});
+	vk::cmdBeginRenderPass(cmdBuf, {
+		globals.rp,
+		globals.fb,
+		{0u, 0u, fbExtent.width, fbExtent.height},
+		1,
+		&clearValue
+	}, {});
+
+	vk::Viewport vp {0.f, 0.f, (float) width, (float) height, 0.f, 1.f};
+	vk::cmdSetViewport(cmdBuf, 0, 1, vp);
+	vk::cmdSetScissor(cmdBuf, 0, 1, {0, 0, width, height});
+
+	auto di = ctx.record(cmdBuf);
+	renderer(di);
+
+	vk::cmdEndRenderPass(cmdBuf);
+	vk::endCommandBuffer(cmdBuf);
+
+	return cmdBuf;
+}
+
+void renderSubmit(Context& ctx, vk::CommandBuffer cmdBuf) {
+	auto semaphore = ctx.stageUpload();
+
+	vk::SubmitInfo submission;
+	submission.commandBufferCount = 1u;
+	submission.pCommandBuffers = &cmdBuf.vkHandle();
+
+	if(semaphore) {
+		static auto stage = vk::PipelineStageBits::allGraphics;
+		submission.pWaitSemaphores = &semaphore;
+		submission.waitSemaphoreCount = 1u;
+		submission.pWaitDstStageMask = &stage;
+	}
+
+	auto& qs = ctx.device().queueSubmitter();
+	auto id = qs.add(sumission);
+	qs.wait(id);
 }
