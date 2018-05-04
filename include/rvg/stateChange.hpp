@@ -9,7 +9,7 @@
 namespace rvg {
 
 /// Small RAII wrapper around changing a DeviceObjects contents.
-/// As long as the object is alived, the state can be changed. When
+/// As long as the object is alive, the state can be changed. When
 /// it gets destructed, the update function of the original object will
 /// be called, i.e. the changed state will be applied.
 template<typename T, typename S>
