@@ -60,8 +60,8 @@ the clipDistance feature is enabled for faster scissors), see rvg/context.hpp
 for a complete reference of ContextSettings.
 
 After you have a context, you can create new shapes (like RectShape, CircleShape or
-their lower-level alternative Polygon), Text objects, Paints, Transforms, 
-Scissors or Fonts (inside a FontAtlas) at any time. You can also update them 
+their lower-level alternative Polygon), Text objects, Paints, Transforms,
+Scissors or Fonts (inside a FontAtlas) at any time. You can also update them
 at any time, e.g. changing the size or position of a RectShape, the color of a paint
 or the stroke with of a Polygon.
 Then, when recording your command buffers, you can simply render/bind those
@@ -196,7 +196,7 @@ void mainLoop() {
 		// If you don't use this, you have to submit the QueueSubmitter
 		// used by rvg (the default vpp::Device::queueSubmitter()).
 		submitAndPresent(semaphore);
-		
+
 		// - host-side update -
 		// do stuff like updating logical state, receiving input
 		// or updating rvg shapes. Best to put cpu expensive stuff here since
@@ -221,6 +221,31 @@ void mainLoop() {
 You can clearly see that the rvg interface was highly optimized for efficient
 vulkan render loops, where you don't simply stall the cpu while waiting
 for the device to finish but use it. If used like this, rvg will perform
-all possible work (like computing curves, antialiased shape or stroke data, 
+all possible work (like computing curves, antialiased shape or stroke data,
 or filling staging buffers and recording their upload command buffers) while
 the device is busy rendering.
+
+There is another thing you have to care about when rendering using rvg:
+correct device-side synchronization. The command buffer that renders
+using rvg must in some way signal vulkan that it requires the content
+written into buffers/images by the rvg staging buffer/rvg memory maps.
+The recommended and really simple way to do this is to add an external render
+pass dependency. If you also render using any other resources that you
+might update during rendering you would already have to care about this
+and might already have (or might have needed) such a barrier.
+
+```cpp
+vk::SubpassDependency dependency;
+dependency.srcSubpass = vk::subpassExternal;
+dependency.dstSubpass = // the subpass you use rvg in, e.g. 0.
+dependency.srcStageMask =
+	vk::PipelineStageBits::host |
+	vk::PipelineStageBits::transfer;
+dependency.srcAccessMask = vk::AccessBits::hostWrite |
+	vk::AccessBits::transferWrite;
+dependency.dstStageMask = vk::PipelineStageBits::allGraphics;
+dependency.dstAccessMask = vk::AccessBits::uniformRead |
+	vk::AccessBits::vertexAttributeRead |
+	vk::AccessBits::indirectCommandRead |
+	vk::AccessBits::shaderRead;
+```

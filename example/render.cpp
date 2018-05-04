@@ -171,25 +171,29 @@ vpp::RenderPass createRenderPass(const vpp::Device& dev,
 	resolveReference.layout = vk::ImageLayout::colorAttachmentOptimal;
 
 	// deps
-	std::array<vk::SubpassDependency, 2> dependencies;
+	std::vector<vk::SubpassDependency> dependencies;
 
-	dependencies[0].srcSubpass = vk::subpassExternal;
-	dependencies[0].dstSubpass = 0;
-	dependencies[0].srcStageMask = vk::PipelineStageBits::bottomOfPipe;
-	dependencies[0].dstStageMask = vk::PipelineStageBits::colorAttachmentOutput;
-	dependencies[0].srcAccessMask = vk::AccessBits::memoryRead;
-	dependencies[0].dstAccessMask = vk::AccessBits::colorAttachmentRead |
-		vk::AccessBits::colorAttachmentWrite;
-	dependencies[0].dependencyFlags = vk::DependencyBits::byRegion;
+	if(msaa) {
+		dependencies.resize(2);
 
-	dependencies[1].srcSubpass = 0;
-	dependencies[1].dstSubpass = vk::subpassExternal;
-	dependencies[1].srcStageMask = vk::PipelineStageBits::colorAttachmentOutput;;
-	dependencies[1].dstStageMask = vk::PipelineStageBits::bottomOfPipe;
-	dependencies[1].srcAccessMask = vk::AccessBits::colorAttachmentRead |
-		vk::AccessBits::colorAttachmentWrite;
-	dependencies[1].dstAccessMask = vk::AccessBits::memoryRead;
-	dependencies[1].dependencyFlags = vk::DependencyBits::byRegion;
+		dependencies[0].srcSubpass = vk::subpassExternal;
+		dependencies[0].dstSubpass = 0;
+		dependencies[0].srcStageMask = vk::PipelineStageBits::bottomOfPipe;
+		dependencies[0].dstStageMask = vk::PipelineStageBits::colorAttachmentOutput;
+		dependencies[0].srcAccessMask = vk::AccessBits::memoryRead;
+		dependencies[0].dstAccessMask = vk::AccessBits::colorAttachmentRead |
+			vk::AccessBits::colorAttachmentWrite;
+		dependencies[0].dependencyFlags = vk::DependencyBits::byRegion;
+
+		dependencies[1].srcSubpass = 0;
+		dependencies[1].dstSubpass = vk::subpassExternal;
+		dependencies[1].srcStageMask = vk::PipelineStageBits::colorAttachmentOutput;;
+		dependencies[1].dstStageMask = vk::PipelineStageBits::bottomOfPipe;
+		dependencies[1].srcAccessMask = vk::AccessBits::colorAttachmentRead |
+			vk::AccessBits::colorAttachmentWrite;
+		dependencies[1].dstAccessMask = vk::AccessBits::memoryRead;
+		dependencies[1].dependencyFlags = vk::DependencyBits::byRegion;
+	}
 
 	// only subpass
 	vk::SubpassDescription subpass;
@@ -210,18 +214,17 @@ vpp::RenderPass createRenderPass(const vpp::Device& dev,
 	dependency.dstStageMask = vk::PipelineStageBits::allGraphics;
 	dependency.dstAccessMask = vk::AccessBits::uniformRead |
 		vk::AccessBits::vertexAttributeRead |
-		vk::AccessBits::indirectCommandRead;
+		vk::AccessBits::indirectCommandRead |
+		vk::AccessBits::shaderRead;
+	dependencies.push_back(dependency);
 
 	vk::RenderPassCreateInfo renderPassInfo;
 	renderPassInfo.attachmentCount = 1 + msaa;
 	renderPassInfo.pAttachments = attachments;
 	renderPassInfo.subpassCount = 1;
 	renderPassInfo.pSubpasses = &subpass;
-
-	if(msaa) {
-		renderPassInfo.dependencyCount = dependencies.size();
-		renderPassInfo.pDependencies = dependencies.data();
-	}
+	renderPassInfo.dependencyCount = dependencies.size();
+	renderPassInfo.pDependencies = dependencies.data();
 
 	return {dev, renderPassInfo};
 }

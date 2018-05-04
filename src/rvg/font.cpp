@@ -55,11 +55,11 @@ bool FontAtlas::bake(Context& ctx) {
 }
 
 // Font
-Font::Font(FontAtlas& atlas, const char* file, unsigned h) : atlas_(&atlas) {
-	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), file, h, nullptr);
+Font::Font(FontAtlas& atlas, StringParam f, unsigned h) : atlas_(&atlas) {
+	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), f.c_str(), h, nullptr);
 	if(!font_) {
 		std::string err = "Could not load font ";
-		err.append(file);
+		err.append(f);
 		throw std::runtime_error(err);
 	}
 }

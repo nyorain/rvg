@@ -15,25 +15,28 @@ Could easily be used for a gui library.
 ### rvg 0.1
 
 - [ ] basic documentation (like at least one page stating basic usage)
-	- [ ] also check at least a bit of inline docs
+	- [ ] also check that there are at enough inline docs
 - [x] rvg: correct vulkan synchronization
-  - [ ] probably best to require the user to set it in the render pass or
+  - [x] probably best to require the user to set it in the render pass or
         otherwise handle it. Document this somewhere
 - [ ] rvg::Context: use vpps new pipeline creation info (?)
 - [ ] clean up the DrawInstance mess
-- [ ] combine stageUpload and updateDevice. Also record uploading
+      or document why it is implemented that way.
+	  We could also call it rvg::Context::bindDefaults(cmdBuf) which
+	  matches it better. And change it if we really need something
+	  like a DrawInstance state.
+- [ ] combine stageUpload and updateDevice (if possible). Also record uploading
       command buffers in the respective update functions if possible
 - [ ] rvg testing
 	- [ ] lots of small unit tests, especially polygon, color conversion
 	- [ ] integration tests, try to draw everything onto a framebuffer
 	- [ ] especially test defined behaviour when moving/destructing
 	      objects
-- [ ] benchmark alternative pipelines, optimize default use cases
-  - [ ] performance optimizations, resolve performance todos
-  - [ ] rvg: better with more (but also more optimized) pipelines?
 - [ ] ctx.updateDevice() to return true when something was destroyed?
       probably not, right?
 - [ ] basic demos with screenshots
+- [ ] Context::updateDevice return semantics when device objects that are not
+      currently used are updates or new ones are created
 - [ ] split rvg and vui library
 - [ ] release public version
 
@@ -46,6 +49,9 @@ Could easily be used for a gui library.
 	- [ ] any other gradient types to implement?
 - [ ] multistop gradients (?), using small 1d textures
   - [ ] see discussion https://github.com/memononen/nanovg/pull/430
+- [ ] benchmark alternative pipelines, optimize default use cases
+  - [ ] performance optimizations, resolve performance todos
+  - [ ] rvg: better with more (but also more optimized) pipelines?
 
 TODO(performance): use own BufferAllocator for staging buffer in context
   and clear all allocations on frame end. Also own DescriptorAllocator?
@@ -90,7 +96,7 @@ TODO(performance): reduce number of SubBuffers? In text/polygon.
 - [ ] popups (needed for dropdown menu, tooltip)
 - [ ] dropdown menu
 - [ ] vui: performance optimziations #2
-      - [ ] Especially don't call the size() function so often (in 
+      - [ ] Especially don't call the size() function so often (in
 	        deriving hirachies: every constructor again)
 	  - [ ] ColorButon pane hides/unhides too often
 	  - [ ] Eliminate redundant construct/change calls of rvg shapes as
@@ -114,7 +120,7 @@ TODO(performance): reduce number of SubBuffers? In text/polygon.
 - [ ] graph widget, e.g. for frametimes
 - [ ] drag and drop stuff (not sure if needed at all)
 
-### done
+### previously done
 
 - [x] windows (basic panes, no operations)
 - [x] widget sizing options, Window::create auto sizing

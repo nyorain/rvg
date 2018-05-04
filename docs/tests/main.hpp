@@ -5,6 +5,8 @@
 #include <vpp/vk.hpp>
 #include <vpp/memory.hpp>
 #include <vpp/device.hpp>
+#include <vpp/submit.hpp>
+#include <vpp/queue.hpp>
 #include <vpp/pipeline.hpp>
 #include <vpp/instance.hpp>
 #include <vpp/renderPass.hpp>
@@ -156,19 +158,24 @@ std::unique_ptr<rvg::Context> createContext() {
 	settings.renderPass = globals.rp;
 	settings.subpass = 0u;
 	settings.pipelineCache = globals.cache;
-	rvg::Context ctx(*globals.device, settings);
+	return std::make_unique<rvg::Context>(*globals.device, settings);
 }
 
 template<typename F>
-vpp::CommandBuffer record(Context& ctx, F&& renderer) {
+vpp::CommandBuffer record(rvg::Context& ctx, F&& renderer) {
+	const auto clearValue = vk::ClearValue {{ 1.f, 1.f, 1.f, 1.f }};
+	auto width = fbExtent.width;
+	auto height = fbExtent.height;
+
 	auto& dev = ctx.device();
-	auto cmdBuf = dev.commandAllocator().get();
+	auto qf = dev.queueSubmitter().queue().family();
+	auto cmdBuf = dev.commandAllocator().get(qf);
 
 	vk::beginCommandBuffer(cmdBuf, {});
 	vk::cmdBeginRenderPass(cmdBuf, {
 		globals.rp,
 		globals.fb,
-		{0u, 0u, fbExtent.width, fbExtent.height},
+		{0u, 0u, width, height},
 		1,
 		&clearValue
 	}, {});
@@ -186,21 +193,21 @@ vpp::CommandBuffer record(Context& ctx, F&& renderer) {
 	return cmdBuf;
 }
 
-void renderSubmit(Context& ctx, vk::CommandBuffer cmdBuf) {
+void renderSubmit(rvg::Context& ctx, vk::CommandBuffer cmdBuf) {
 	auto semaphore = ctx.stageUpload();
 
 	vk::SubmitInfo submission;
 	submission.commandBufferCount = 1u;
-	submission.pCommandBuffers = &cmdBuf.vkHandle();
+	submission.pCommandBuffers = &cmdBuf;
 
 	if(semaphore) {
-		static auto stage = vk::PipelineStageBits::allGraphics;
+		static auto stage = nytl::Flags {vk::PipelineStageBits::allGraphics};
 		submission.pWaitSemaphores = &semaphore;
-		submission.waitSemaphoreCount = 1u;
 		submission.pWaitDstStageMask = &stage;
+		submission.waitSemaphoreCount = 1u;
 	}
 
 	auto& qs = ctx.device().queueSubmitter();
-	auto id = qs.add(sumission);
+	auto id = qs.add(submission);
 	qs.wait(id);
 }

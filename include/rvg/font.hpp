@@ -10,6 +10,7 @@
 #include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
 #include <vpp/image.hpp>
+#include <nytl/stringParam.hpp>
 
 #include <string>
 #include <string_view>
@@ -37,7 +38,7 @@ protected:
 /// Represents information about one font in a font atlas.
 class Font {
 public:
-	Font(FontAtlas&, const char* file, unsigned height);
+	Font(FontAtlas&, StringParam file, unsigned height);
 	Font(FontAtlas&, struct nk_font* font);
 
 	float width(std::string_view text) const;

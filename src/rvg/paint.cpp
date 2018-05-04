@@ -384,6 +384,7 @@ Texture::Texture(Context& ctx, nytl::StringParam filename, Type type) :
 
 		std::string err = "Could not load image from ";
 		err += filename;
+		err += ": ";
 		err += stbi_failure_reason();
 		throw std::runtime_error(err);
 	}
