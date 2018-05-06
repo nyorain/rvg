@@ -77,6 +77,11 @@ public:
 	static constexpr auto fringe() { return 1.5f; }
 
 public:
+	/// Creates a new context for given device and settings.
+	/// The device must remain valid for the lifetime of this context.
+	/// You should generally avoid to create multiple contexts for one
+	/// device since a context creates and manages expensive resources
+	/// like pipelines.
 	Context(vpp::Device&, const ContextSettings&);
 
 	/// Must be called once per frame when there is no command buffer
@@ -182,4 +187,4 @@ private:
 	vpp::CommandBuffer uploadCmdBuf_;
 };
 
-} // namespace vgv
+} // namespace rvg

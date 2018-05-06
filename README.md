@@ -27,16 +27,18 @@ Could easily be used for a gui library.
 	  like a DrawInstance state.
 - [ ] combine stageUpload and updateDevice (if possible). Also record uploading
       command buffers in the respective update functions if possible
+	- [ ] make sure that if update is called multiple times (e.g. on a polygon)
+	      per frame, old changes are discarded and only one upload executed
 - [ ] rvg testing
 	- [ ] lots of small unit tests, especially polygon, color conversion
 	- [ ] integration tests, try to draw everything onto a framebuffer
 	- [ ] especially test defined behaviour when moving/destructing
 	      objects
-- [ ] ctx.updateDevice() to return true when something was destroyed?
-      probably not, right?
-- [ ] basic demos with screenshots
 - [ ] Context::updateDevice return semantics when device objects that are not
       currently used are updates or new ones are created
+	- [ ] also ctx.updateDevice() to return true when something was destroyed?
+		  probably not, right?
+- [ ] basic demos with screenshots
 - [ ] split rvg and vui library
 - [ ] release public version
 
