@@ -156,6 +156,13 @@ void Textfield::focus(bool gained) {
 }
 
 Widget* Textfield::textInput(const TextInputEvent& ev) {
+	// When e.g. enter/escape was pressed we still receive events
+	// (since we still have focus from the guis perspective)
+	// although we don't want them anymore.
+	if(!focus_) {
+		return nullptr;
+	}
+
 	auto utf32 = toUtf32(ev.utf8);
 
 	{
@@ -175,6 +182,13 @@ Widget* Textfield::textInput(const TextInputEvent& ev) {
 }
 
 Widget* Textfield::key(const KeyEvent& ev) {
+	// When e.g. enter/escape was pressed we still receive events
+	// (since we still have focus from the guis perspective)
+	// although we don't want them anymore.
+	if(!focus_) {
+		return nullptr;
+	}
+
 	bool changed = false;
 	bool updateCursor = false;
 	if(ev.pressed) {
@@ -221,6 +235,16 @@ Widget* Textfield::key(const KeyEvent& ev) {
 			} else if(cursorPos_ < text_.utf32().length()) {
 				tc->utf32.erase(cursorPos_, 1);
 				changed = true;
+			}
+		} else if(ev.key == Key::escape) {
+			focus(false);
+			if(onCancel) {
+				onCancel(*this);
+			}
+		} else if(ev.key == Key::enter) {
+			focus(false);
+			if(onSubmit) {
+				onSubmit(*this);
 			}
 		}
 	}

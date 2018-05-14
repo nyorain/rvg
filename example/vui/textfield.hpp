@@ -16,7 +16,7 @@ class Textfield : public Widget {
 public:
 	std::function<void(Textfield&)> onChange;
 	std::function<void(Textfield&)> onCancel;
-	std::function<void(Textfield&)> onEnter;
+	std::function<void(Textfield&)> onSubmit;
 
 public:
 	Textfield(Gui&, Vec2f pos);

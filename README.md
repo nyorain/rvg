@@ -44,6 +44,8 @@ Could easily be used for a gui library.
 
 ### rvg later
 
+- [ ] bind initial paint that simply has dummy texture pattern to signal
+      that no paint is bound?
 - [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
 - [ ] helper for non-convex shapes (in rvg: stencil buffer? or decomposition?)
 	- [ ] evaluate first if this makes sense for the scope of rvg. It might not
@@ -65,7 +67,7 @@ TODO(performance): reduce number of SubBuffers? In text/polygon.
 
 - [ ] more advanced textfield
   - [x] scrolling, clipping
-  - [ ] enter/escape
+  - [x] enter/escape
   - [x] selection
   - [ ] some basic shortcuts like ctrl-a (might need ny fixes)
 - [ ] vui: row
@@ -74,6 +76,8 @@ TODO(performance): reduce number of SubBuffers? In text/polygon.
 - [ ] vui: don't make windows manage layouting. Make them (like panes) manage
       exactly one embedded widget which may be a layout widget
 	  - [ ] implement real layout-only container widgets
+- [ ] work on paddings and margins. Should not be hardcoded but depend
+      on font size (or overall scale, something like this)
 - [ ] vui: validate styles passed to widgets (assert valid)
 - [ ] rvg: make non-texture gradients make use of transform buffer span
 - [ ] nanovg like box gradient

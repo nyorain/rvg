@@ -10,6 +10,8 @@
 #include "vui/window.hpp"
 #include "vui/colorPicker.hpp"
 #include "vui/textfield.hpp"
+#include "vui/checkbox.hpp"
+#include "vui/dat.hpp"
 
 #include <rvg/context.hpp>
 #include <rvg/shapes.hpp>
@@ -94,7 +96,7 @@ int main() {
 	if(useValidation) {
 		auto layers = {
 			layerName,
-			// "VK_LAYER_RENDERDOC_Capture",
+			"VK_LAYER_RENDERDOC_Capture",
 		};
 
 		instanceInfo.enabledLayerCount = layers.size();
@@ -168,7 +170,7 @@ int main() {
 	rvg::Shape shape(ctx, {}, drawMode);
 	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
 
-	auto fontHeight = 16;
+	auto fontHeight = 14;
 	rvg::FontAtlas atlas(ctx);
 	rvg::Font osFont(atlas, baseResPath + "example/OpenSans-Regular.ttf",
 		fontHeight);
@@ -245,6 +247,10 @@ int main() {
 	// color picker
 	styles.colorPicker.marker = &hintBgPaint;
 
+	// checkbox
+	styles.checkbox.bg = &bgPaint;
+	styles.checkbox.fg = &svgPaint;
+
 	// gui
 	vui::Gui gui(ctx, lsFont, std::move(styles));
 	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
@@ -257,6 +263,7 @@ int main() {
 	};
 
 	win.create<vui::LabeledButton>("b#2");
+	win.create<vui::Checkbox>();
 
 	auto& tf = win.createSized<vui::Textfield>(nytl::Vec {400.f, vui::autoSize});
 	tf.onChange = [&](auto& tf) {
@@ -264,6 +271,18 @@ int main() {
 	};
 
 	svgPaint = {ctx, rvg::colorPaint(cp.picked())};
+
+	// dat
+	// https://www.reddit.com/r/leagueoflegends/comments/3nnm36
+	auto& panel = gui.create<vui::dat::Panel>(
+		nytl::Rect2f {800.f, 0.f, vui::autoSize, vui::autoSize});
+	panel.create<vui::dat::Button>("Unload the toad");
+	panel.create<vui::dat::Textfield>("Some textfield");
+	panel.create<vui::dat::Button>("Unclog the frog");
+	panel.create<vui::dat::Button>("Permit the kermit");
+	panel.create<vui::dat::Label>("Days since a linux install", "42");
+	panel.create<vui::dat::Checkbox>("I want an extra llama");
+	panel.create<vui::dat::Button>("Unstick the lick");
 
 	// gui
 	/*

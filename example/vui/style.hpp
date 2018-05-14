@@ -85,6 +85,15 @@ struct PaneStyle {
 	Vec2f padding = Vec {10.f, 10.f};
 };
 
+struct CheckboxStyle {
+	rvg::Paint* bg;
+	rvg::Paint* fg;
+	rvg::Paint* bgStroke {};
+	std::array<float, 4> bgRounding {0.f, 0.f, 0.f, 0.f};
+	std::array<float, 4> fgRounding {0.f, 0.f, 0.f, 0.f};
+	Vec2f padding = Vec {2.f, 2.f};
+};
+
 struct Styles {
 	BasicButtonStyle basicButton {};
 	LabeledButtonStyle labeledButton {};
@@ -95,6 +104,7 @@ struct Styles {
 	ColorPickerStyle colorPicker {};
 	ColorButtonStyle colorButton {};
 	PaneStyle pane {};
+	CheckboxStyle checkbox {};
 };
 
 } // namespace vui
