@@ -71,11 +71,17 @@ TODO(performance): reduce number of SubBuffers? In text/polygon.
   - [x] selection
   - [ ] some basic shortcuts like ctrl-a (might need ny fixes)
 - [ ] vui: row
+- [ ] probably not a good idea to make widgets use a transform by default.
+      cleaner implementation without? And better performance
 - [ ] vui: non-drawing widgets (like row/column) should not create
       transform/scissor objects
 - [ ] vui: don't make windows manage layouting. Make them (like panes) manage
       exactly one embedded widget which may be a layout widget
 	  - [ ] implement real layout-only container widgets
+- [ ] idea: vui::WidgetWrapper: widget container that contains exactly
+      one child widget (but can have additional stuff). Automatically
+	  handles events and stuff. Abstraction over Panel, multiple vui::dat
+	  Controllers
 - [ ] work on paddings and margins. Should not be hardcoded but depend
       on font size (or overall scale, something like this)
 - [ ] vui: validate styles passed to widgets (assert valid)

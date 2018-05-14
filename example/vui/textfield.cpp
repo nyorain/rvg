@@ -6,16 +6,16 @@
 
 namespace vui {
 
-Textfield::Textfield(Gui& gui, Vec2f pos) :
-	Textfield(gui, {pos, {autoSize, autoSize}}) {
+Textfield::Textfield(Gui& gui, Vec2f pos, std::string_view start) :
+	Textfield(gui, {pos, {autoSize, autoSize}}, start) {
 }
 
-Textfield::Textfield(Gui& gui, const Rect2f& bounds) :
-	Textfield(gui, bounds, gui.styles().textfield) {
+Textfield::Textfield(Gui& gui, const Rect2f& bounds, std::string_view start) :
+	Textfield(gui, bounds, start, gui.styles().textfield) {
 }
 
-Textfield::Textfield(Gui& gui, const Rect2f& bounds,
-		const TextfieldStyle& style) : Widget(gui, bounds), style_(style) {
+Textfield::Textfield(Gui& gui, const Rect2f& bounds, std::string_view start,
+	const TextfieldStyle& style) : Widget(gui, bounds), style_(style) {
 
 	auto font = style.font ? style.font : &gui.font();
 
@@ -23,7 +23,7 @@ Textfield::Textfield(Gui& gui, const Rect2f& bounds,
 	selection_.bg = {context(), {}, {}, {true, 0.f}};
 	selection_.bg.disable(true);
 
-	text_ = {context(), U"", *font, {}};
+	text_ = {context(), start, *font, {}};
 	selection_.text = {context(), U"", *font, {}};
 	selection_.text.disable(true);
 
@@ -58,6 +58,12 @@ void Textfield::size(Vec2f size) {
 	updateSelectionDraw();
 	updateCursorPosition();
 	Widget::size(size);
+}
+
+void Textfield::utf8(std::string_view) {
+}
+
+void Textfield::utf32(std::u32string_view) {
 }
 
 void Textfield::hide(bool hide) {

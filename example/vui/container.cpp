@@ -116,21 +116,24 @@ void ContainerWidget::hide(bool hide) {
 }
 
 void ContainerWidget::position(Vec2f pos) {
+	auto old = position();
+	Widget::position(pos);
+
 	for(auto& w : widgets_) {
 		dlg_assert(w);
-		auto rel = w->position() - position();
+		auto rel = w->position() - old;
 		w->position(pos + rel);
-		w->intersectScissor({pos, size()});
-	}
 
-	Widget::position(pos);
+		// TODO
+		// w->intersectScissor(scissor());
+	}
 }
 
 void ContainerWidget::size(Vec2f size) {
 	Widget::size(size);
 	for(auto& w : widgets_) {
 		dlg_assert(w);
-		w->intersectScissor(bounds_);
+		w->intersectScissor(scissor());
 	}
 }
 
@@ -143,7 +146,7 @@ void ContainerWidget::refreshTransform() {
 }
 
 Widget& ContainerWidget::add(std::unique_ptr<Widget> w) {
-	w->intersectScissor(bounds());
+	w->intersectScissor(scissor());
 	return WidgetContainer::add(std::move(w));
 }
 

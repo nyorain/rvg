@@ -85,9 +85,13 @@ public:
 	Gui& gui() const { return gui_; }
 	Context& context() const;
 
+	/// All positions are given in global space.
 	const auto& bounds() const { return bounds_; }
 	const auto& position() const { return bounds_.position; }
 	const auto& size() const { return bounds_.size; }
+
+	/// Returns the total scissor of this widget in global coordinates.
+	virtual Rect2f scissor() const;
 
 protected:
 	/// Registers this widgets for an update/updateDevice callback as soon

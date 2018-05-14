@@ -19,15 +19,19 @@ public:
 	std::function<void(Textfield&)> onSubmit;
 
 public:
-	Textfield(Gui&, Vec2f pos);
-	Textfield(Gui&, const Rect2f& bounds);
-	Textfield(Gui&, const Rect2f& bounds, const TextfieldStyle&);
+	Textfield(Gui&, Vec2f pos, std::string_view start = "");
+	Textfield(Gui&, const Rect2f& bounds, std::string_view start = "");
+	Textfield(Gui&, const Rect2f& bounds, std::string_view start,
+		const TextfieldStyle&);
 
 	std::u32string_view utf32() const;
 	std::string utf8() const;
 
 	std::u32string_view utf32Selected() const;
 	std::string utf8Selected() const;
+
+	void utf8(std::string_view);
+	void utf32(std::u32string_view);
 
 	void size(Vec2f size) override;
 	using Widget::size;

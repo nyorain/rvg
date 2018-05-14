@@ -73,4 +73,10 @@ Rect2f Widget::ownScissor() const {
 	return {{}, size()};
 }
 
+Rect2f Widget::scissor() const {
+	auto rect = scissor_.rect();
+	rect.position += position();
+	return rect;
+}
+
 } // namespace vui

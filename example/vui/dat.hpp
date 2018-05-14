@@ -8,6 +8,17 @@
 #include "widget.hpp"
 #include "textfield.hpp"
 #include "checkbox.hpp"
+#include "container.hpp"
+#include "button.hpp"
+
+// NOTES
+// - make color classifiers optional. dat.gui has them but they
+//   are not really needed.
+// - currently code duplication between folder and panel. Furthermore
+//   ugly refreshLayout hack
+// - missing intersectScissors. Needed here at all? test it
+// - reenable todo in ContainerWidget::position. Breaks nested folders
+// - still some clipping issues (probably related to scissor)
 
 namespace vui::dat {
 
@@ -15,30 +26,63 @@ class Panel;
 
 class Controller : public Widget {
 public:
-	Controller(Panel&, float yoff, std::string_view name,
-		const rvg::Paint& classPaint);
+	Controller(Panel&, Vec2f, std::string_view name);
 
-	// TODO
-	void hide(bool) override {}
-	bool hidden() const override { return false; }
-	void size(Vec2f) override {}
+	virtual const rvg::Paint& classPaint() const = 0;
+	virtual const rvg::Paint& bgPaint() const;
 
+	virtual void nameWidth(float) {}
+	auto& panel() const { return panel_; }
+
+	void hide(bool) override;
+	bool hidden() const override;
 	void draw(const rvg::DrawInstance&) const override;
-	auto yoff() const { return yoff_; }
+	void size(Vec2f) override;
+	using Widget::size;
 
 protected:
-	const Panel& panel_;
+	Panel& panel_;
+	rvg::RectShape bg_;
 	rvg::Shape classifier_;
 	rvg::Shape bottomLine_;
 	rvg::Text name_;
-	const rvg::Paint& classifierPaint_;
-	float yoff_;
 };
+
+class Button : public Controller {
+public:
+	std::function<void()> onClick;
+
+public:
+	Button(Panel&, Vec2f, std::string_view name);
+
+	const rvg::Paint& classPaint() const override;
+	const rvg::Paint& bgPaint() const override { return bgColor_; }
+
+	void mouseOver(bool) override;
+	Widget* mouseButton(const MouseButtonEvent&) override;
+
+protected:
+	rvg::Paint bgColor_;
+	bool hovered_ {};
+	bool pressed_ {};
+};
+
 
 class Textfield : public Controller {
 public:
-	Textfield(Panel&, float yoff, std::string_view name,
+	Textfield(Panel&, Vec2f, std::string_view name,
 		std::string_view start = "");
+
+	void size(Vec2f) override;
+	using Widget::size;
+
+	void position(Vec2f position) override;
+	void intersectScissor(const Rect2f& scissor) override;
+	using Controller::position;
+
+	const rvg::Paint& classPaint() const override;
+	void nameWidth(float) override;
+	void hide(bool hide) override;
 
 	Widget* key(const KeyEvent&) override;
 	Widget* textInput(const TextInputEvent&) override;
@@ -56,28 +100,13 @@ protected:
 	bool mouseOver_ {};
 };
 
-class Button : public Controller {
-public:
-	std::function<void()> onClick;
-
-public:
-	Button(Panel& panel, float yoff, std::string_view name);
-
-	void mouseOver(bool) override;
-	Widget* mouseButton(const MouseButtonEvent&) override;
-	void draw(const DrawInstance&) const override;
-
-protected:
-	rvg::RectShape bg_;
-	rvg::Paint bgColor_;
-	bool hovered_ {};
-	bool pressed_ {};
-};
-
 class Label : public Controller {
 public:
-	Label(Panel& panel, float yoff, std::string_view name,
+	Label(Panel&, Vec2f, std::string_view name,
 		std::string_view label);
+
+	const rvg::Paint& classPaint() const override;
+	void hide(bool hide) override;
 	void label(std::string_view label);
 	void draw(const DrawInstance&) const override;
 
@@ -87,52 +116,42 @@ protected:
 
 class Checkbox : public Controller {
 public:
-	Checkbox(Panel& panel, float yoff, std::string_view name);
+	Checkbox(Panel&, Vec2f, std::string_view name);
+
+	void hide(bool hide) override;
+	const rvg::Paint& classPaint() const override;
 	Widget* mouseButton(const MouseButtonEvent&) override;
 	void draw(const DrawInstance&) const override;
+
 	void refreshTransform() override;
+	void position(Vec2f position) override;
+	void intersectScissor(const Rect2f& scissor) override;
+	using Controller::position;
 
 protected:
 	std::optional<vui::Checkbox> checkbox_;
 };
 
-class Folder : public Widget {
-};
-
-class Panel : public Widget {
+class Panel : public ContainerWidget {
 public:
-	Panel(Gui& gui, const nytl::Rect2f& bounds,
-		float rowHeight = autoSize);
+	Panel(Gui& gui, const nytl::Rect2f& bounds, float rowHeight = autoSize);
 
 	template<typename T, typename... Args>
 	T& create(Args&&... args) {
-		auto yoff = rowHeight() * widgets_.size();
-		auto ctrl = std::make_unique<T>(*this, yoff,
+		auto pos = position();
+		pos.y += size().y - rowHeight();
+		auto ctrl = std::make_unique<T>(*this, pos,
 			std::forward<Args>(args)...);
 		auto& ret = *ctrl;
 		add(std::move(ctrl));
 		return ret;
 	}
 
-	void draw(const DrawInstance& di) const override;
-
-	bool hidden() const override { return false; }
-	void size(Vec2f) override {
-		throw std::runtime_error("vui::dat::Panel: Cannot be resized");
-	}
-	void hide(bool) override {
-		throw std::runtime_error("vui::dat::Panel: Cannot be hidden");
-	}
+	void hide(bool) override;
+	bool hidden() const override;
+	void size(Vec2f) override;
 
 	using Widget::size;
-
-	Widget* mouseButton(const MouseButtonEvent&) override;
-	Widget* mouseMove(const MouseMoveEvent&) override;
-	Widget* key(const KeyEvent&) override;
-	Widget* textInput(const TextInputEvent&) override;
-	void focus(bool focus) override;
-	void mouseOver(bool mouseOver) override;
-	void refreshTransform() override;
 
 	float rowHeight() const { return rowHeight_; }
 	float width() const { return size().x; }
@@ -144,6 +163,8 @@ public:
 	bool open() const { return open_; }
 	void toggle() { open(!open_); }
 
+	void refreshLayout();
+
 	// TODO
 	// void remove(Widget&);
 
@@ -152,26 +173,13 @@ public:
 	const auto& styles() const { return styles_; }
 
 protected:
-	void add(std::unique_ptr<Widget>);
+	Widget& add(std::unique_ptr<Widget>) override;
 
 protected:
-	Widget* mouseOver_ {};
-	Widget* focus_ {};
-
-	std::vector<std::unique_ptr<Widget>> widgets_;
 	float rowHeight_ {};
 	float nameWidth_ {150.f};
 	bool open_ {true};
-
-	rvg::RectShape bg_;
-
-	struct {
-		rvg::RectShape bg;
-		rvg::Paint paint;
-		bool pressed {};
-		bool hovered {};
-		rvg::Text text;
-	} toggleButton_;
+	LabeledButton* toggleButton_ {};
 
 	struct {
 		rvg::Paint bg;
@@ -192,6 +200,46 @@ protected:
 	struct {
 		TextfieldStyle textfield;
 	} styles_;
+};
+
+class Folder : public ContainerWidget {
+public:
+	static constexpr auto xoff = 5.f;
+
+public:
+	Folder(Panel& panel, Vec2f, std::string_view name);
+
+	void open(bool);
+	bool open() const { return open_; }
+	void toggle() { open(!open_); }
+
+	void hide(bool) override;
+	bool hidden() const override;
+	void size(Vec2f) override {} // TODO
+	using Widget::size;
+
+	template<typename T, typename... Args>
+	T& create(Args&&... args) {
+		auto pos = position();
+		pos.x += xoff;
+		pos.y += size().y;
+		auto ctrl = std::make_unique<T>(panel_, pos,
+			std::forward<Args>(args)...);
+		auto& ret = *ctrl;
+		add(std::move(ctrl));
+		return ret;
+	}
+
+	void refreshLayout();
+	auto& panel() const { return panel_; }
+
+protected:
+	Widget& add(std::unique_ptr<Widget> widget) override;
+
+protected:
+	Panel& panel_;
+	LabeledButton* button_;
+	bool open_ {true};
 };
 
 // TODO

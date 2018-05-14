@@ -279,50 +279,25 @@ int main() {
 	panel.create<vui::dat::Button>("Unload the toad");
 	panel.create<vui::dat::Textfield>("Some textfield");
 	panel.create<vui::dat::Button>("Unclog the frog");
-	panel.create<vui::dat::Button>("Permit the kermit");
-	panel.create<vui::dat::Label>("Days since a linux install", "42");
-	panel.create<vui::dat::Checkbox>("I want an extra llama");
-	panel.create<vui::dat::Button>("Unstick the lick");
 
-	// gui
-	/*
-	auto& row = win.create<Row>(Vec2f{});
-	row.create<Button>(Vec2f {}, "Row Button #1");
-	row.create<Button>(Vec2f {}, "Row Button #2");
+	auto& folder = panel.create<vui::dat::Folder>("Misc");
+	folder.create<vui::dat::Button>("Eyooo");
+	folder.create<vui::dat::Button>("Waddupp");
+	folder.create<vui::dat::Textfield>("Thiccness");
+	folder.create<vui::dat::Textfield>("Amount of parrots needed");
+	folder.create<vui::dat::Button>("Ayy");
 
-	auto colChangeFunc = [&](auto component) {
-		return [&, component](float val) {
-			auto col = svgPaint.paint.data.frag.inner;
-			col.*component = 255.f * val;
-			svgPaint.paint = rvg::colorPaint(col);
-			if(svgPaint.updateDevice(ctx)) {
-				dlg_warn("Unexpected rerecord");
-			}
+	auto& folder2 = panel.create<vui::dat::Folder>("Specifics");
+	folder2.create<vui::dat::Button>("Permit the kermit");
+	folder2.create<vui::dat::Label>("Days since a linux install", "42");
+	folder2.create<vui::dat::Checkbox>("I want an extra llama");
+	folder2.create<vui::dat::Button>("Unstick the lick");
 
-			cp.pick(col);
-		};
-	};
+	auto& nested = folder2.create<vui::dat::Folder>("Nested");
+	nested.create<vui::dat::Label>("Does this work?", "Hopefully");
 
-	auto& rslider = win.create<Slider>(Vec2f {}, 200);
-	auto& gslider = win.create<Slider>(Vec2f {}, 200);
-	auto& bslider = win.create<Slider>(Vec2f {}, 200);
-
-	rslider.onChange = colChangeFunc(&rvg::Color::r);
-	gslider.onChange = colChangeFunc(&rvg::Color::g);
-	bslider.onChange = colChangeFunc(&rvg::Color::b);
-
-	cp.onPick = [&](auto& cp) {
-		svgPaint.paint = rvg::colorPaint(cp.picked);
-		if(svgPaint.updateDevice(ctx)) {
-			dlg_warn("Unexpected rerecord");
-		}
-
-		rslider.current(cp.picked.r / 255.f);
-		gslider.current(cp.picked.g / 255.f);
-		bslider.current(cp.picked.b / 255.f);
-	};
-
-	*/
+	panel.create<vui::dat::Textfield>("Awesomeness", "Over 9000");
+	panel.create<vui::dat::Button>("Unclog the frog");
 
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer buf){
