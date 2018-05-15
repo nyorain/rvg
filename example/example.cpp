@@ -253,6 +253,7 @@ int main() {
 
 	// gui
 	vui::Gui gui(ctx, lsFont, std::move(styles));
+
 	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
 	auto& button = win.create<vui::LabeledButton>("button, waddup");
 	button.onClick = [&](auto&) { dlg_info("Clicked!"); };
@@ -307,8 +308,8 @@ int main() {
 		svgPaint.bind(di);
 		svgShape.fill(di);
 
-		foxPaint.bind(di);
-		foxRect.fill(di);
+		// foxPaint.bind(di);
+		// foxRect.fill(di);
 
 		paint.bind(di);
 		shape.stroke(di);

@@ -460,7 +460,11 @@ Folder::Folder(Panel& panel, Vec2f pos, std::string_view name) :
 }
 
 void Folder::hide(bool hide) {
-	ContainerWidget::hide(hide);
+	if(!hide && !open_) {
+		button_->hide(false);
+	} else {
+		ContainerWidget::hide(hide);
+	}
 }
 
 bool Folder::hidden() const {
