@@ -10,6 +10,7 @@
 #include <vpp/pipeline.hpp>
 #include <vpp/instance.hpp>
 #include <vpp/renderPass.hpp>
+#include <vpp/imageOps.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/image.hpp>
 #include <vpp/framebuffer.hpp>
@@ -60,7 +61,7 @@ struct Globals {
 
 static Globals globals;
 
-constexpr vk::Extent3D fbExtent = {1920, 1080, 1};
+constexpr vk::Extent3D fbExtent = {512, 512, 1};
 void initGlobals() {
 	constexpr const char* iniExtensions[] = {
 		VK_KHR_SURFACE_EXTENSION_NAME,
@@ -84,8 +85,10 @@ void initGlobals() {
 	dlg_info("Physical device info:\n\t{}",
 		vpp::description(globals.device->vkPhysicalDevice(), "\n\t"));
 
+	auto usage = vk::ImageUsageBits::colorAttachment |
+		vk::ImageUsageBits::transferSrc;
 	globals.attachment = {dev, *vpp::ViewableImageCreateInfo::color(dev,
-		fbExtent, vk::ImageUsageBits::colorAttachment)};
+		fbExtent, usage)};
 
 	vk::AttachmentDescription attachment;
 	attachment.format = vk::Format::r8g8b8a8Unorm;
@@ -95,7 +98,7 @@ void initGlobals() {
 	attachment.stencilLoadOp = vk::AttachmentLoadOp::dontCare;
 	attachment.stencilStoreOp = vk::AttachmentStoreOp::dontCare;
 	attachment.initialLayout = vk::ImageLayout::undefined;
-	attachment.finalLayout = vk::ImageLayout::presentSrcKHR;
+	attachment.finalLayout = vk::ImageLayout::transferSrcOptimal;
 
 	vk::AttachmentReference colorReference;
 	colorReference.attachment = 0;
@@ -161,9 +164,9 @@ std::unique_ptr<rvg::Context> createContext() {
 	return std::make_unique<rvg::Context>(*globals.device, settings);
 }
 
-template<typename F>
-vpp::CommandBuffer record(rvg::Context& ctx, F&& renderer) {
-	const auto clearValue = vk::ClearValue {{ 1.f, 1.f, 1.f, 1.f }};
+template<typename F1, typename F2 = bool>
+vpp::CommandBuffer record(rvg::Context& ctx, F1&& renderer, F2&& after = {}) {
+	const auto clearValue = vk::ClearValue {{0.f, 0.f, 0.f, 1.f }};
 	auto width = fbExtent.width;
 	auto height = fbExtent.height;
 
@@ -184,12 +187,16 @@ vpp::CommandBuffer record(rvg::Context& ctx, F&& renderer) {
 	vk::cmdSetViewport(cmdBuf, 0, 1, vp);
 	vk::cmdSetScissor(cmdBuf, 0, 1, {0, 0, width, height});
 
-	auto di = ctx.record(cmdBuf);
-	renderer(di);
+	ctx.bindDefaults(cmdBuf);
+	renderer(cmdBuf);
 
 	vk::cmdEndRenderPass(cmdBuf);
-	vk::endCommandBuffer(cmdBuf);
 
+	if constexpr(!std::is_same_v<F2, bool>) {
+		after(cmdBuf);
+	}
+
+	vk::endCommandBuffer(cmdBuf);
 	return cmdBuf;
 }
 
@@ -210,4 +217,14 @@ void renderSubmit(rvg::Context& ctx, vk::CommandBuffer cmdBuf) {
 	auto& qs = ctx.device().queueSubmitter();
 	auto id = qs.add(submission);
 	qs.wait(id);
+}
+
+vpp::SubBuffer readImage(vk::CommandBuffer cb) {
+	auto& a = globals.attachment;
+	auto range = vpp::retrieveStaging(cb, a.image(),
+		vk::Format::r8g8b8a8Unorm,
+		vk::ImageLayout::transferSrcOptimal, fbExtent,
+		{vk::ImageAspectBits::color, 0,  0});
+
+	return range;
 }

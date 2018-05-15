@@ -20,6 +20,7 @@
 namespace rvg {
 
 /// Represents text to be drawn.
+/// Also offers some utility for bounds querying.
 class Text : public DeviceObject {
 public:
 	Text() = default;

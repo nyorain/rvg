@@ -18,6 +18,8 @@
 namespace rvg {
 
 /// Holds a texture on the device to which multiple fonts can be uploaded.
+/// Just construct all fonts you need with a FontAtlas, then call
+/// bake on the FontAtlas.
 class FontAtlas {
 public:
 	FontAtlas(Context&);
@@ -38,7 +40,13 @@ protected:
 /// Represents information about one font in a font atlas.
 class Font {
 public:
+	/// Loads the font from a given file.
+	/// Throws on error (e.g. if the file does not exist).
 	Font(FontAtlas&, StringParam file, unsigned height);
+
+	/// Loads the font from a otf/ttf blob.
+	/// Throws on error.
+	Font(FontAtlas&, Span<const std::byte> font, unsigned height);
 	Font(FontAtlas&, struct nk_font* font);
 
 	float width(std::string_view text) const;

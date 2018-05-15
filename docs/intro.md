@@ -13,17 +13,21 @@ and compiled.
 
   - vulkan itself, naturally
   - vkpp: automatically generated c++ vulkan wrapper (header-only)
+  	- used instead of vulkan-hpp to avoid the >40loc madness,
+	  much more leightweight. I see that this could be a problem
+	  for people already using vulkan-hpp so please report
+	  ideas/suggestions/problems.
   - vpp: vulkan abstraction and utilities
   - nytl: small general C++ utility, provides e.g. matrix and vector classes
   - katachi: computes vertex arrays from curves & shapes.
       Used to compute stroke buffers, antialiase shapes and to compute
-	  rect roundings. You will want to use this to bake and render
+	  rect roundings. You might want to use this to bake and render
 	  bezier curves or arcs.
   - dlg: really small c library used for logging and debugging (also
     by most of the other projects).
 
 This may seem like quite a lot of dependencies, but this are all (those
-projects require nothing else). It allows to build rvg itself quite
+projects require nothing else). It allows to develop rvg itself quite
 modular and lightweight.
 Building this library without meson is probably a bad idea.
 You will also need a solid C++17 compiler for these projects and rvg itself,
@@ -180,7 +184,7 @@ void mainLoop() {
 
 	while(!exit) {
 		// - update device and render -
-		auto [rerecord, semaphore] = ctx.updateDevice();
+		auto [rerecord, semaphore] = ctx.upload();
 		if(rerecord) {
 			// rerecord command buffer(s)
 			// none of the command buffers previously recorded that

@@ -8,9 +8,8 @@ project('rvg', ['cpp', 'c'],
   		'warning_level=3',
   		'werror=true'])
 
-# TODO: settings
-build_example = true
-build_tests = true
+build_example = get_option('examples')
+build_tests = get_option('tests')
 
 warnings = [
 	'-Wall',
@@ -25,12 +24,8 @@ warnings = [
 	'-Wcast-align=strict',
 	'-Wlogical-op',
 
-	# disable some
+	# TODO: currently only for ny
 	'-Wno-non-virtual-dtor',
-
-	# TODO
-	'-Wno-unused-function',
-	'-Wno-deprecated-declarations',
 ]
 
 # default arrguments
@@ -44,10 +39,18 @@ add_project_arguments(
 source_root = meson.source_root().split('\\')
 add_project_arguments('-DDLG_BASE_PATH="' + '/'.join(source_root) + '/"', language: 'cpp')
 
-dep_vpp = dependency('vpp', fallback: ['vpp', 'vpp_dep'])
-dep_nytl = dependency('nytl MASTER', fallback: ['nytl', 'nytl_dep'])
-dep_dlg = dependency('dlg', fallback: ['dlg', 'dlg_dep'])
-dep_katachi = dependency('katachi', fallback: ['katachi', 'katachi_dep'])
+dep_vpp = dependency('vpp',
+		version: '>=0.2', # TODO 0.3
+		fallback: ['vpp', 'vpp_dep'])
+dep_nytl = dependency('nytl',
+		version: '>=0.5', # TODO 0.6
+		fallback: ['nytl', 'nytl_dep'])
+dep_dlg = dependency('dlg',
+		version: '>=0.2',
+		fallback: ['dlg', 'dlg_dep'])
+dep_katachi = dependency('katachi',
+		version: '>=0.1',
+		fallback: ['katachi', 'katachi_dep'])
 dep_vulkan = dependency('vulkan')
 
 src_inc = include_directories('src') # for shaders, internal headers
@@ -82,7 +85,7 @@ pkg = import('pkgconfig')
 pkg_dirs = ['.']
 pkg.generate(
 	name: 'rvg',
-	requires: ['vulkan', 'vpp', 'nytl'],
+	requires: ['vulkan', 'katachi', 'vpp', 'nytl', 'dlg'],
 	libraries: rvg_lib,
 	filebase: 'rvg',
 	subdirs: pkg_dirs,

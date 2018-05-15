@@ -11,9 +11,10 @@
 
 namespace rvg {
 
-constexpr auto vertIndex0 = 2;
-constexpr auto vertIndex2 = 3;
+constexpr auto vertIndex0 = 2; // vertex index on the left
+constexpr auto vertIndex2 = 3; // vertex index on the right
 
+// Text
 Text::Text(Context& ctx, std::string_view xtext, const Font& f, Vec2f xpos) :
 	Text(ctx, toUtf32(xtext), f, xpos) {
 }

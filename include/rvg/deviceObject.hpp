@@ -19,9 +19,15 @@ public:
 	DeviceObject(DeviceObject&& rhs) noexcept;
 	DeviceObject& operator=(DeviceObject&& rhs) noexcept;
 
-	Context& context() const { return *context_; }
+	/// Returns whether this object is valid.
+	/// It is not valid when it was default constructed or moved from.
+	/// Performing any operations on invalid objects triggers
+	/// undefined behavior.
 	bool valid() const { return context_; }
-	void update();
+
+	/// Returns the associated context.
+	/// Only defined if valid.
+	Context& context() const { return *context_; }
 
 private:
 	Context* context_ {};

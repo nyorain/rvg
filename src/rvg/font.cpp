@@ -64,6 +64,17 @@ Font::Font(FontAtlas& atlas, StringParam f, unsigned h) : atlas_(&atlas) {
 	}
 }
 
+Font::Font(FontAtlas& atlas, Span<const std::byte> blob, unsigned h) :
+		atlas_(&atlas) {
+
+	font_ = nk_font_atlas_add_from_memory(&atlas.nkAtlas(),
+		const_cast<std::byte*>(blob.data()), blob.size(), h, nullptr);
+	if(!font_) {
+		auto err = "Failed to create font from memory";
+		throw std::runtime_error(err);
+	}
+}
+
 Font::Font(FontAtlas& atlas, struct nk_font* font) :
 	atlas_(&atlas), font_(font) {
 }

@@ -2,17 +2,11 @@
 // Distributed under the Boost Software License, Version 1.0.
 // See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
 
+// Example utility for creating window and vulkan swapchain setup
 #include "render.hpp"
 #include "window.hpp"
 
-#include "vui/gui.hpp"
-#include "vui/button.hpp"
-#include "vui/window.hpp"
-#include "vui/colorPicker.hpp"
-#include "vui/textfield.hpp"
-#include "vui/checkbox.hpp"
-#include "vui/dat.hpp"
-
+// the used rvg headers.
 #include <rvg/context.hpp>
 #include <rvg/shapes.hpp>
 #include <rvg/paint.hpp>
@@ -20,23 +14,28 @@
 #include <rvg/font.hpp>
 #include <rvg/text.hpp>
 
+// katachi to build our bezier curves or use svg
 #include <katachi/path.hpp>
 #include <katachi/svg.hpp>
 
+// ny to create a backend, event processing, window.
 #include <ny/backend.hpp>
 #include <ny/appContext.hpp>
 #include <ny/key.hpp>
 #include <ny/mouseButton.hpp>
 #include <ny/event.hpp>
 
+// vpp to allow more high-level vulkan usage.
 #include <vpp/instance.hpp>
 #include <vpp/debug.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/physicalDevice.hpp>
 
+// some matrix/vector utilities
 #include <nytl/vecOps.hpp>
 #include <nytl/matOps.hpp>
 
+// logging/debugging
 #include <dlg/dlg.hpp>
 
 #include <chrono>
@@ -186,8 +185,6 @@ int main() {
 	auto textWidth = lsFont.width(string);
 
 	// svg path
-	// auto svgSubpath = rvg::parseSvgSubpath({300, 200},
-		// "h -150 a150 150 0 1 0 150 -150 z");
 	auto svgSubpath = ktc::parseSvgSubpath("h 1920 v 1080 h -1920 z");
 
 	rvg::Shape svgShape(ctx, ktc::flatten(svgSubpath), {true, 0.f});
@@ -203,7 +200,6 @@ int main() {
 	mat[0][3] = -500.f / 300.f;
 	mat[1][3] = -100.f / 200.f;
 	rvg::Paint foxPaint = {ctx, rvg::texturePaintRGBA(mat, iv)};
-	// rvg::Paint foxPaint = {ctx, rvg::colorPaint({150, 200, 200})};
 
 	rvg::Paint svgPaint {ctx, rvg::colorPaint({150, 230, 200})};
 
@@ -215,91 +211,6 @@ int main() {
 
 	auto bgPaint = rvg::Paint(ctx, bgPaintData);
 
-	vui::Styles styles;
-
-	// hint
-	styles.hint.bg = &hintBgPaint;
-	styles.hint.text = &hintTextPaint;
-	styles.hint.font = &lsSmall;
-
-	// button
-	styles.basicButton.normal.bg = bgPaintData;
-	styles.basicButton.hovered.bg = rvg::colorPaint({20, 20, 20});
-	styles.basicButton.pressed.bg = rvg::colorPaint({35, 35, 35});
-
-	styles.labeledButton.label = &hintTextPaint;
-
-	// window
-	styles.window.bg = &hintBgPaint;
-	styles.window.rounding = {20.f, 20.f, 20.f, 20.f};
-	styles.window.outerPadding = {20.f, 20.f};
-
-	// pane
-	styles.pane.bg = &hintBgPaint;
-
-	// textfield
-	auto selectedPaint = rvg::Paint {ctx, rvg::colorPaint({50, 50, 50})};
-	styles.textfield.bg = &bgPaint;
-	styles.textfield.text = &hintTextPaint;
-	styles.textfield.selected = &selectedPaint;
-	styles.textfield.cursor = &hintTextPaint;
-
-	// color picker
-	styles.colorPicker.marker = &hintBgPaint;
-
-	// checkbox
-	styles.checkbox.bg = &bgPaint;
-	styles.checkbox.fg = &svgPaint;
-
-	// gui
-	vui::Gui gui(ctx, lsFont, std::move(styles));
-
-	auto& win = gui.create<vui::Window>(nytl::Rect2f {100, 100, 500, 880});
-	auto& button = win.create<vui::LabeledButton>("button, waddup");
-	button.onClick = [&](auto&) { dlg_info("Clicked!"); };
-	auto& cp = win.create<vui::ColorButton>(
-		nytl::Vec2f{vui::autoSize, vui::autoSize}, rvg::Color {40, 40, 40});
-	cp.onChange = [&](auto& cp){
-		svgPaint.paint(rvg::colorPaint(cp.picked()));
-	};
-
-	win.create<vui::LabeledButton>("b#2");
-	win.create<vui::Checkbox>();
-
-	auto& tf = win.createSized<vui::Textfield>(nytl::Vec {400.f, vui::autoSize});
-	tf.onChange = [&](auto& tf) {
-		dlg_info("changed: {}", tf.utf8());
-	};
-
-	svgPaint = {ctx, rvg::colorPaint(cp.picked())};
-
-	// dat
-	// https://www.reddit.com/r/leagueoflegends/comments/3nnm36
-	auto& panel = gui.create<vui::dat::Panel>(
-		nytl::Rect2f {800.f, 0.f, vui::autoSize, vui::autoSize});
-	panel.create<vui::dat::Button>("Unload the toad");
-	panel.create<vui::dat::Textfield>("Some textfield");
-	panel.create<vui::dat::Button>("Unclog the frog");
-
-	auto& folder = panel.create<vui::dat::Folder>("Misc");
-	folder.create<vui::dat::Button>("Eyooo");
-	folder.create<vui::dat::Button>("Waddupp");
-	folder.create<vui::dat::Textfield>("Thiccness");
-	folder.create<vui::dat::Textfield>("Amount of parrots needed");
-	folder.create<vui::dat::Button>("Ayy");
-
-	auto& folder2 = panel.create<vui::dat::Folder>("Specifics");
-	folder2.create<vui::dat::Button>("Permit the kermit");
-	folder2.create<vui::dat::Label>("Days since a linux install", "42");
-	folder2.create<vui::dat::Checkbox>("I want an extra llama");
-	folder2.create<vui::dat::Button>("Unstick the lick");
-
-	auto& nested = folder2.create<vui::dat::Folder>("Nested");
-	nested.create<vui::dat::Label>("Does this work?", "Hopefully");
-
-	panel.create<vui::dat::Textfield>("Awesomeness", "Over 9000");
-	panel.create<vui::dat::Button>("Unclog the frog");
-
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer buf){
 		ctx.bindDefaults(buf);
@@ -308,14 +219,12 @@ int main() {
 		svgPaint.bind(buf);
 		svgShape.fill(buf);
 
-		// foxPaint.bind(di);
-		// foxRect.fill(di);
+		foxPaint.bind(buf);
+		foxRect.fill(buf);
 
 		paint.bind(buf);
 		shape.stroke(buf);
 		text.draw(buf);
-
-		gui.draw(buf);
 	};
 
 	ctx.updateDevice();
@@ -325,13 +234,7 @@ int main() {
 	auto run = true;
 	window.onClose = [&](const auto&) { run = false; };
 	window.onKey = [&](const auto& ev) {
-		auto processed = false;
-		processed |= (gui.key({(vui::Key) ev.keycode, ev.pressed}) != nullptr);
-		if(ev.pressed && !ev.utf8.empty() && !ny::specialKey(ev.keycode)) {
-			processed |= (gui.textInput({ev.utf8.c_str()}) != nullptr);
-		}
-
-		if(ev.pressed && !processed) {
+		if(ev.pressed) {
 			if(ev.keycode == ny::Keycode::escape) {
 				dlg_info("Escape pressed, exiting");
 				run = false;
@@ -358,6 +261,7 @@ int main() {
 			}
 		}
 	};
+
 	window.onResize = [&](const auto& ev) {
 		renderer.resize(ev.size);
 
@@ -370,7 +274,6 @@ int main() {
 		scale(mat, s);
 		translate(mat, {-1, -1, 0});
 		*transform.change() = mat;
-		gui.transform(mat);
 	};
 
 	ktc::Subpath subpath;
@@ -378,10 +281,6 @@ int main() {
 
 	window.onMouseButton = [&](const auto& ev) {
 		auto p = static_cast<nytl::Vec2f>(ev.position);
-		if(gui.mouseButton({ev.pressed,
-				static_cast<vui::MouseButton>(ev.button), p})) {
-			return;
-		}
 
 		if(!ev.pressed) {
 			return;
@@ -395,13 +294,10 @@ int main() {
 				subpath.sqBezier(p);
 				shape.change()->points = ktc::flatten(subpath);
 			}
-		} else if(ev.button == ny::MouseButton::right) {
-			win.position(p);
 		}
 	};
 
-	window.onMouseMove = [&](const auto& ev) {
-		gui.mouseMove({static_cast<nytl::Vec2f>(ev.position)});
+	window.onMouseMove = [&](const auto&) {
 	};
 
 	// - main loop -
@@ -423,28 +319,22 @@ int main() {
 			return 0;
 		}
 
-		gui.update(deltaCount);
+		auto [rec, seph] = ctx.upload();
 
-		if(gui.updateDevice()) {
-			dlg_info("gui rerecord");
-			renderer.invalidate();
-		}
-
-		if(ctx.updateDevice()) {
+		if(rec) {
 			dlg_info("ctx rerecord");
 			renderer.invalidate();
 		}
 
-		auto semaphore = ctx.stageUpload();
 		auto wait = {
 			vpp::StageSemaphore {
-				semaphore,
+				seph,
 				vk::PipelineStageBits::allGraphics,
 			}
 		};
 
 		vpp::RenderInfo info;
-		if(semaphore) {
+		if(seph) {
 			info.wait = wait;
 		}
 

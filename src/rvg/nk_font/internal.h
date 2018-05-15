@@ -31,7 +31,7 @@ struct nk_allocator {
 };
 
 
-static struct nk_vec2
+static inline struct nk_vec2
 nk_vec2(float x, float y)
 {
     struct nk_vec2 ret;
@@ -39,8 +39,8 @@ nk_vec2(float x, float y)
     return ret;
 }
 
-static int nk_ifloorf(float x) { return (int) floorf(x); }
-static int nk_iceilf(float x) { return (int) ceilf(x); }
+static inline int nk_ifloorf(float x) { return (int) floorf(x); }
+static inline int nk_iceilf(float x) { return (int) ceilf(x); }
 
 #define nk_zero_struct(s) memset(&s, 0, sizeof(s))
 

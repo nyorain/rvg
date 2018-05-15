@@ -15,16 +15,34 @@ namespace rvg {
 
 /// Specifies in which way a polygon can be drawn.
 struct DrawMode {
-	bool fill {}; /// Whether it can be filled
-	float stroke {}; /// Whether it can be stroked
+	/// Whether polygon/shape can be filled.
+	/// While this is set to false for a polygon/shape you must not
+	/// use a command buffer that fills the polygon/shape.
+	/// So you want to set this to true whenever the polygon might
+	/// be filled. If you then don't want to fill it, use the disable
+	/// functionality.
+	bool fill {};
 
-	bool loop {}; /// Whether to loop the stroked points
+	/// Whether this polygon/shape can be stroked (and how thick).
+	/// Semantics are similar to the fill attribute but you
+	/// additionally have to specify the stroke thickness. Setting
+	/// this to 0.f means that the shape/polygon must never be used
+	/// for stroking. Otherwise its stroke data will be maintained
+	/// for the given thickness so it can be stroked.
+	/// Must not be negative.
+	float stroke {};
+
+	/// Whether to loop the stroked points
+	/// Has no effect for filling.
+	bool loop {};
 
 	/// Defines per-point color values.
 	/// If the polygon is then filled/stroked with a pointColorPaint,
 	/// will use those points.
 	struct {
-		std::vector<Vec4u8> points {}; /// the per-point color values
+		/// The per-point color values. Should have the same size
+		/// as the points span passed to the polygon.
+		std::vector<Vec4u8> points {};
 		bool fill {}; /// whether they can be used when filling
 		bool stroke {}; /// whether they can be used when stroking
 	} color {};
@@ -43,7 +61,7 @@ struct DrawMode {
 
 	/// Whether to use deviceLocal memory.
 	/// Usually makes updates slower and draws faster so use this
-	/// for polygons that don't change often.
+	/// for polygons that don't change often but are drawn.
 	/// If this is false, hostVisible memory will be used.
 	bool deviceLocal {};
 };
@@ -74,14 +92,16 @@ public:
 	bool disabled(DrawType = DrawType::strokeFill) const;
 
 	/// Records commands to fill this polygon into the given DrawInstance.
-	/// Undefined behaviour if it was updates without fill support.
+	/// Undefined behaviour if it was updated without fill support in
+	/// the DrawMode.
 	void fill(vk::CommandBuffer) const;
 
 	/// Records commands to stroke this polygon into the given DrawInstance.
-	/// Undefined behaviour if it was updates without stroke support.
+	/// Undefined behaviour if it was updates without stroke support in
+	/// the DrawMode.
 	void stroke(vk::CommandBuffer) const;
 
-	/// Usually only automatically called from context.
+	/// Usually only automatically called from context when needed.
 	/// Uploads data to the device. Must not be called while a command
 	/// buffer drawing the Polygon is executing.
 	/// Returns whether a command buffer rerecord is needed.

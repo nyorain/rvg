@@ -4,17 +4,6 @@ example_src = [
 	'example.cpp',
 	'render.cpp',
 	'window.cpp',
-
-	'vui/gui.cpp',
-	'vui/button.cpp',
-	'vui/widget.cpp',
-	'vui/hint.cpp',
-	'vui/container.cpp',
-	'vui/window.cpp',
-	'vui/colorPicker.cpp',
-	'vui/textfield.cpp',
-	'vui/checkbox.cpp',
-	'vui/dat.cpp',
 ]
 
 example_deps = [
@@ -22,5 +11,6 @@ example_deps = [
 	dep_ny
 ]
 
-executable('example', example_src,
+executable('example',
+	sources: example_src,
 	dependencies: example_deps)

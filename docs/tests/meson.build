@@ -7,6 +7,7 @@ test_deps = [
 tests = [
 	'context',
 	'color',
+	'render',
 ]
 
 foreach test_name : tests

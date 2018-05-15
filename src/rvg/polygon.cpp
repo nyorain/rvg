@@ -123,6 +123,7 @@ void Polygon::updateFill(Span<const Vec2f> points, const DrawMode& mode) {
 
 void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 	dlg_assertm(valid(), "Polygon must not be in invalid state");
+	dlg_assertm(mode.stroke >= 0.f, "DrawMode::stroke must not be negative");
 
 	fill_.points.clear();
 	fill_.color.clear();

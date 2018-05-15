@@ -8,6 +8,7 @@
 #include <rvg/polygon.hpp>
 #include <rvg/shapes.hpp>
 #include <rvg/state.hpp>
+#include <rvg/stateChange.hpp>
 #include <rvg/deviceObject.hpp>
 #include <rvg/util.hpp>
 
@@ -28,10 +29,6 @@
 #include <shaders/fill.frag.plane_scissor.h>
 #include <shaders/fill.frag.frag_scissor.edge_aa.h>
 #include <shaders/fill.frag.plane_scissor.edge_aa.h>
-
-// TODO(performance): cache points vec in {Circle, Rect}Shape::update
-// TODO: something like default font(atlas) in context instead of dummy
-//   texture?
 
 namespace rvg {
 
@@ -243,12 +240,6 @@ void Context::bindDefaults(vk::CommandBuffer cmdb) {
 	}
 }
 
-DrawInstance Context::record(vk::CommandBuffer cmdb) {
-	DrawInstance ret { *this, cmdb };
-	bindDefaults(cmdb);
-	return ret;
-}
-
 bool Context::updateDevice() {
 	auto visitor = [&](auto* obj) {
 		dlg_assert(obj);
@@ -263,6 +254,12 @@ bool Context::updateDevice() {
 	auto ret = rerecord_;
 	rerecord_ = false;
 	return ret;
+}
+
+std::pair<bool, vk::Semaphore> Context::upload() {
+	auto rerecord = updateDevice();
+	auto seph = stageUpload();
+	return {rerecord, seph};
 }
 
 vk::Semaphore Context::stageUpload() {
@@ -314,12 +311,12 @@ void Context::addStage(vpp::SubBuffer&& buf) {
 	}
 }
 
-void Context::addCommandBuffer(DeviceObject obj, vpp::CommandBuffer&& buf) {
+void Context::addCommandBuffer(DevRes obj, vpp::CommandBuffer&& buf) {
 	vk::endCommandBuffer(buf);
 	currentFrame_.cmdBufs.emplace_back(obj, std::move(buf));
 }
 
-void Context::registerUpdateDevice(DeviceObject obj) {
+void Context::registerUpdateDevice(DevRes obj) {
 	updateDevice_.insert(obj);
 }
 
@@ -419,5 +416,12 @@ DeviceObject::~DeviceObject() {
 	}
 }
 
+// util
+namespace detail {
 
+void outputException(const std::exception& err) {
+	dlg_error("~StageChange: object.update() threw: {}", err.what());
+}
+
+} // namespace detail
 } // namespace rvg

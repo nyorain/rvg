@@ -16,9 +16,8 @@
 
 namespace rvg {
 
-// TODO: rename PointShape or something?
-/// Convex shape specifies by its outlining points.
-/// Can be filled or stroked.
+/// Shape manually specified by its outlining points.
+/// Can only fill convex shapes correctly.
 class Shape {
 public:
 	Shape() = default;
@@ -49,7 +48,6 @@ protected:
 };
 
 /// Rectangle shape that can be filled or stroked.
-/// Can also have rounded corners.
 class RectShape {
 public:
 	RectShape() = default;

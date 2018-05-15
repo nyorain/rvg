@@ -49,9 +49,6 @@ TEST(basicSetup) {
 	// paints/transforms/polygons that are just not used yet without
 	// unneeded rerecording.
 	// But here we also called update on polygons.
-	// TODO: think about ctx.updateDevice() semantics for unused
-	// device objects.
-	// EXPECT(ctx.updateDevice(), false);
 	ctx.updateDevice();
 
 

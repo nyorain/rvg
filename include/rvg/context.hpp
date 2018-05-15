@@ -19,18 +19,9 @@
 
 namespace rvg {
 
-/// Represents a render pass drawing (recording) instance using a context.
-/// Makes sure the recording function calls context.
-struct [[deprecated("Just use Context::bindDefaults (if needed)")]]
-DrawInstance {
-	Context& context;
-	vk::CommandBuffer cmdBuf;
-
-	operator vk::CommandBuffer() const {
-		return cmdBuf;
-	}
-};
-
+/// Control various aspects of a context.
+/// You have to set those members that have no default value to valid
+/// values.
 struct ContextSettings {
 	/// The renderpass and subpass in which it will be used.
 	/// Must be specified for pipeline creation.
@@ -54,22 +45,16 @@ struct ContextSettings {
 
 	/// The multisample bits to use for the pipelines.
 	vk::SampleCountBits samples {};
-
-	// TODO
-	/// The QueueSubmitter to submit any upload work to.
-	/// Should be associated with the queue for rendering since
-	/// otherwise Context::waitSemaphore cannot be used for rendering.
-	/// In this case, one could still synchronize using fences.
-	// vpp::QueueSubmitter& submitter;
 };
 
 /// Drawing context. Manages all pipelines and layouts needed to
-/// draw any shapes.
+/// draw any shapes. There is usually no need for multiple Contexts
+/// for a single device.
 class Context {
 public:
-	// TODO: name duplication to rvg::DeviceObject probably
-	// bad idea for readability.
-	using DeviceObject = std::variant<
+	/// All resources with data on the device that might
+	/// register themselves for update device calls.
+	using DevRes = std::variant<
 		Polygon*,
 		Text*,
 		Paint*,
@@ -77,12 +62,16 @@ public:
 		Transform*,
 		Scissor*>;
 
+	/// Descriptor set bindings.
 	static constexpr auto transformBindSet = 0u;
 	static constexpr auto paintBindSet = 1u;
 	static constexpr auto fontBindSet = 2u;
 	static constexpr auto scissorBindSet = 3u;
 	static constexpr auto aaStrokeBindSet = 4u;
 
+	/// Specifies the thickness of the anti aliasing area.
+	/// A greater fringe may result in smoother but also
+	/// more blurry edges.
 	static constexpr auto fringe() { return 1.5f; }
 
 public:
@@ -93,24 +82,17 @@ public:
 	/// like pipelines.
 	Context(vpp::Device&, const ContextSettings&);
 
-	/// Must be called once per frame when there is no command buffer
-	/// executing that references objects associated with this context.
-	/// Will update device objects (like buffers).
-	/// Returns whether a rerecord is needed. Submitting a previously
-	/// recorded command buffer referencing objects associated with this
-	/// Context when this returns true results in undefined behaviour.
-	bool updateDevice();
-
 	/// Binds default state on the given command buffer (which must be
 	/// in recording state). Can then be used for rendering without
 	/// the need for binding a custom scissor or transform.
-	/// Does NOT bind a paint. [TODO]
+	/// Does NOT bind a paint. [TODO(v0.2)]
 	void bindDefaults(vk::CommandBuffer);
 
-	/// Starts a command buffer recording.
-	/// The DrawInstance can then be used to draw objects associated
-	/// with this context.
-	DrawInstance record(vk::CommandBuffer);
+	/// Calls stageUpload and updateDevice.
+	/// Returns whether a rerecord is needed (from updateDevice) and
+	/// the semaphore (or a null handle) that rendering must
+	/// wait upon (with allGraphics stage bit).
+	std::pair<bool, vk::Semaphore> upload();
 
 	/// Queues all pending upload operations and returns the semaphore to wait
 	/// upon for the next render call.
@@ -120,11 +102,19 @@ public:
 	/// Must not be called again until rendering this frame completes.
 	vk::Semaphore stageUpload();
 
-	// [WIP]
-	std::pair<bool, vk::Semaphore> updateDevice2();
+	/// Must be called once per frame when there is no command buffer
+	/// executing that references objects associated with this context.
+	/// Will update device objects (like buffers).
+	/// Returns whether a rerecord is needed. Submitting a previously
+	/// recorded command buffer referencing objects associated with this
+	/// Context when this returns true results in undefined behaviour.
+	bool updateDevice();
 
+	/// Signal that a rerecord is needed.
 	void rerecord() { rerecord_ = true; }
 
+
+	// internal resources, mainly used by other rvg classes for rendering
 	const auto& device() const { return device_; };
 	const auto& pipeLayout() const { return pipeLayout_; }
 	const auto& fanPipe() const { return fanPipe_; }
@@ -152,26 +142,26 @@ public:
 
 	// internal DeviceObject communication
 	vpp::CommandBuffer uploadCmdBuf();
-	void addCommandBuffer(DeviceObject, vpp::CommandBuffer&&);
+	void addCommandBuffer(DevRes, vpp::CommandBuffer&&);
 	void addStage(vpp::SubBuffer&& buf);
 
-	void registerUpdateDevice(DeviceObject);
+	void registerUpdateDevice(DevRes);
 	bool deviceObjectDestroyed(::rvg::DeviceObject&) noexcept;
 	void deviceObjectMoved(::rvg::DeviceObject&, ::rvg::DeviceObject&) noexcept;
 
 private:
 	// Per-frame objects mainly used to efficiently upload data
 	struct Temporaries {
-		std::vector<std::pair<DeviceObject, vpp::CommandBuffer>> cmdBufs;
+		std::vector<std::pair<DevRes, vpp::CommandBuffer>> cmdBufs;
 		std::vector<vpp::SubBuffer> stages;
 	};
 
 	// NOTE: order here is rather important since some of them depend
 	// on each other. Don't change unless you know what you
-	// are doing (so probably: don't change!).
+	// are doing (so probably: don't change period).
 	const vpp::Device& device_;
 	const ContextSettings settings_;
-	std::unordered_set<DeviceObject> updateDevice_;
+	std::unordered_set<DevRes> updateDevice_;
 
 	Temporaries currentFrame_;
 	Temporaries oldFrame_;
