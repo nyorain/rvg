@@ -16,6 +16,7 @@
 
 #include <vpp/vk.hpp>
 #include <vpp/queue.hpp>
+#include <vpp/pipelineInfo.hpp>
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
 #include <nytl/vecOps.hpp>
@@ -37,8 +38,6 @@ namespace rvg {
 // Context
 Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		device_(dev), settings_(settings) {
-
-	constexpr auto sampleCount = vk::SampleCountBits::e1;
 
 	// sampler
 	vk::SamplerCreateInfo samplerInfo {};
@@ -131,19 +130,16 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	auto fillVertex = vpp::ShaderModule(dev, vertData);
 	auto fillFragment = vpp::ShaderModule(dev, fragData);
 
-	vpp::ShaderProgram fillStages({
-		{fillVertex, vk::ShaderStageBits::vertex},
-		{fillFragment, vk::ShaderStageBits::fragment}
-	});
+	auto samples = settings.samples == vk::SampleCountBits {} ?
+		vk::SampleCountBits::e1 : settings.samples;
+	vpp::GraphicsPipelineInfo fanPipeInfo(settings.renderPass,
+		pipeLayout_, {{
+			{fillVertex, vk::ShaderStageBits::vertex},
+			{fillFragment, vk::ShaderStageBits::fragment}
+		}}, settings.subpass, samples);
 
-	vk::GraphicsPipelineCreateInfo fanPipeInfo;
 
-	fanPipeInfo.renderPass = settings.renderPass;
-	fanPipeInfo.subpass = settings.subpass;
-	fanPipeInfo.layout = pipeLayout_;
-	fanPipeInfo.stageCount = fillStages.vkStageInfos().size();
-	fanPipeInfo.pStages = fillStages.vkStageInfos().data();
-	fanPipeInfo.flags = vk::PipelineCreateBits::allowDerivatives;
+	fanPipeInfo.flags(vk::PipelineCreateBits::allowDerivatives);
 
 	// vertex attribs: vec2 pos, vec2 uv, vec4u8 color
 	std::array<vk::VertexInputAttributeDescription, 3> vertexAttribs = {};
@@ -174,76 +170,20 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	vertexBindings[2].stride = sizeof(u8) * 4; // color
 	vertexBindings[2].binding = 2;
 
-	vk::PipelineVertexInputStateCreateInfo vertexInfo {};
-	vertexInfo.pVertexAttributeDescriptions = vertexAttribs.data();
-	vertexInfo.vertexAttributeDescriptionCount = vertexAttribs.size();
-	vertexInfo.pVertexBindingDescriptions = vertexBindings.data();
-	vertexInfo.vertexBindingDescriptionCount = vertexBindings.size();
-	fanPipeInfo.pVertexInputState = &vertexInfo;
+	fanPipeInfo.vertex.pVertexAttributeDescriptions = vertexAttribs.data();
+	fanPipeInfo.vertex.vertexAttributeDescriptionCount = vertexAttribs.size();
+	fanPipeInfo.vertex.pVertexBindingDescriptions = vertexBindings.data();
+	fanPipeInfo.vertex.vertexBindingDescriptionCount = vertexBindings.size();
 
-	vk::PipelineInputAssemblyStateCreateInfo assemblyInfo;
-	assemblyInfo.topology = vk::PrimitiveTopology::triangleFan;
-	fanPipeInfo.pInputAssemblyState = &assemblyInfo;
-
-	vk::PipelineRasterizationStateCreateInfo rasterizationInfo;
-	rasterizationInfo.polygonMode = vk::PolygonMode::fill;
-	rasterizationInfo.cullMode = vk::CullModeBits::none;
-	rasterizationInfo.frontFace = vk::FrontFace::counterClockwise;
-	rasterizationInfo.depthClampEnable = false;
-	rasterizationInfo.rasterizerDiscardEnable = false;
-	rasterizationInfo.depthBiasEnable = false;
-	rasterizationInfo.lineWidth = 1.f;
-	fanPipeInfo.pRasterizationState = &rasterizationInfo;
-
-	vk::PipelineMultisampleStateCreateInfo multisampleInfo;
-	multisampleInfo.rasterizationSamples = sampleCount;
-	multisampleInfo.sampleShadingEnable = false;
-	multisampleInfo.alphaToCoverageEnable = false;
-	fanPipeInfo.pMultisampleState = &multisampleInfo;
-
-	vk::PipelineColorBlendAttachmentState blendAttachment;
-	blendAttachment.blendEnable = true;
-	blendAttachment.alphaBlendOp = vk::BlendOp::add;
-	blendAttachment.srcColorBlendFactor = vk::BlendFactor::srcAlpha;
-	blendAttachment.dstColorBlendFactor = vk::BlendFactor::oneMinusSrcAlpha;
-	blendAttachment.srcAlphaBlendFactor = vk::BlendFactor::one;
-	blendAttachment.dstAlphaBlendFactor = vk::BlendFactor::zero;
-	blendAttachment.colorWriteMask =
-		vk::ColorComponentBits::r |
-		vk::ColorComponentBits::g |
-		vk::ColorComponentBits::b |
-		vk::ColorComponentBits::a;
-
-	vk::PipelineColorBlendStateCreateInfo blendInfo;
-	blendInfo.attachmentCount = 1;
-	blendInfo.pAttachments = &blendAttachment;
-	fanPipeInfo.pColorBlendState = &blendInfo;
-
-	vk::PipelineViewportStateCreateInfo viewportInfo;
-	viewportInfo.scissorCount = 1;
-	viewportInfo.viewportCount = 1;
-	fanPipeInfo.pViewportState = &viewportInfo;
-
-	const auto dynStates = {
-		vk::DynamicState::viewport,
-		vk::DynamicState::scissor};
-
-	vk::PipelineDynamicStateCreateInfo dynamicInfo;
-	dynamicInfo.dynamicStateCount = dynStates.size();
-	dynamicInfo.pDynamicStates = dynStates.begin();
-	fanPipeInfo.pDynamicState = &dynamicInfo;
+	fanPipeInfo.assembly.topology = vk::PrimitiveTopology::triangleFan;
 
 	// stripPipe
 	auto stripPipeInfo = fanPipeInfo;
-	stripPipeInfo.flags = vk::PipelineCreateBits::derivative;
-	stripPipeInfo.basePipelineIndex = 0;
-
-	auto stripAssemblyInfo = assemblyInfo;
-	stripAssemblyInfo.topology = vk::PrimitiveTopology::triangleStrip;
-	stripPipeInfo.pInputAssemblyState = &stripAssemblyInfo;
+	stripPipeInfo.base(0);
+	stripPipeInfo.assembly.topology = vk::PrimitiveTopology::triangleStrip;
 
 	auto pipes = vk::createGraphicsPipelines(dev, settings.pipelineCache,
-		{fanPipeInfo, stripPipeInfo});
+		{fanPipeInfo.info(), stripPipeInfo.info()});
 	fanPipe_ = {dev, pipes[0]};
 	stripPipe_ = {dev, pipes[1]};
 
@@ -290,10 +230,10 @@ vpp::BufferAllocator& Context::bufferAllocator() const {
 	return device().bufferAllocator();
 }
 
-DrawInstance Context::record(vk::CommandBuffer cmdb) {
-	DrawInstance ret { *this, cmdb };
-	identityTransform_.bind(ret);
-	defaultScissor_.bind(ret);
+void Context::bindDefaults(vk::CommandBuffer cmdb) {
+	identityTransform_.bind(cmdb);
+	defaultScissor_.bind(cmdb);
+
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 		pipeLayout(), fontBindSet, {dummyTex_}, {});
 
@@ -301,7 +241,11 @@ DrawInstance Context::record(vk::CommandBuffer cmdb) {
 		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
 			pipeLayout(), aaStrokeBindSet, {defaultStrokeAA_}, {});
 	}
+}
 
+DrawInstance Context::record(vk::CommandBuffer cmdb) {
+	DrawInstance ret { *this, cmdb };
+	bindDefaults(cmdb);
 	return ret;
 }
 

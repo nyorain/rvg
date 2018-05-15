@@ -81,10 +81,10 @@ void WidgetContainer::mouseOver(bool gained) {
 	}
 }
 
-void WidgetContainer::draw(const DrawInstance& di) const {
+void WidgetContainer::draw(vk::CommandBuffer cb) const {
 	for(auto& widget : widgets_) {
 		dlg_assert(widget);
-		widget->draw(di);
+		widget->draw(cb);
 	}
 }
 
@@ -178,8 +178,8 @@ void ContainerWidget::mouseOver(bool gained) {
 	return WidgetContainer::mouseOver(gained);
 }
 
-void ContainerWidget::draw(const DrawInstance& di) const {
-	WidgetContainer::draw(di);
+void ContainerWidget::draw(vk::CommandBuffer cb) const {
+	WidgetContainer::draw(cb);
 }
 
 } // namespace vui

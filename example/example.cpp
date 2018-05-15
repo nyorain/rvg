@@ -302,20 +302,20 @@ int main() {
 
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer buf){
-		auto di = ctx.record(buf);
+		ctx.bindDefaults(buf);
 
-		transform.bind(di);
-		svgPaint.bind(di);
-		svgShape.fill(di);
+		transform.bind(buf);
+		svgPaint.bind(buf);
+		svgShape.fill(buf);
 
 		// foxPaint.bind(di);
 		// foxRect.fill(di);
 
-		paint.bind(di);
-		shape.stroke(di);
-		text.draw(di);
+		paint.bind(buf);
+		shape.stroke(buf);
+		text.draw(buf);
 
-		gui.draw(di);
+		gui.draw(buf);
 	};
 
 	ctx.updateDevice();

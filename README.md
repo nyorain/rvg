@@ -19,17 +19,18 @@ Could easily be used for a gui library.
 - [x] rvg: correct vulkan synchronization
   - [x] probably best to require the user to set it in the render pass or
         otherwise handle it. Document this somewhere
-- [ ] rvg::Context: use vpps new pipeline creation info (?)
-- [ ] clean up the DrawInstance mess
+- [x] rvg::Context: use vpps new pipeline creation info (?)
+- [x] clean up the DrawInstance mess
       or document why it is implemented that way.
 	  We could also call it rvg::Context::bindDefaults(cmdBuf) which
 	  matches it better. And change it if we really need something
-	  like a DrawInstance state.
+	  like a DrawInstance state
+	  [ended up deprecatng/removing DrawInstance. Not needed (atm)]
 - [ ] combine stageUpload and updateDevice (if possible). Also record uploading
       command buffers in the respective update functions if possible
 	- [ ] make sure that if update is called multiple times (e.g. on a polygon)
 	      per frame, old changes are discarded and only one upload executed
-- [ ] rvg testing
+- [ ] more rvg testing
 	- [ ] lots of small unit tests, especially polygon, color conversion
 	- [ ] integration tests, try to draw everything onto a framebuffer
 	- [ ] especially test defined behaviour when moving/destructing

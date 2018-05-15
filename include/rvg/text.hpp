@@ -28,7 +28,7 @@ public:
 
 	/// Draws this text with the bound draw resources (transform,
 	/// scissor, paint).
-	void draw(const DrawInstance&) const;
+	void draw(vk::CommandBuffer) const;
 
 	auto change() { return StateChange {*this, state_}; }
 	bool disable(bool);

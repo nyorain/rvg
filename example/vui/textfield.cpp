@@ -267,34 +267,34 @@ Widget* Textfield::key(const KeyEvent& ev) {
 	return this;
 }
 
-void Textfield::draw(const DrawInstance& di) const {
-	Widget::bindState(di);
+void Textfield::draw(vk::CommandBuffer cb) const {
+	Widget::bindState(cb);
 
 	dlg_assert(style().bg);
-	style().bg->bind(di);
-	bg_.fill(di);
+	style().bg->bind(cb);
+	bg_.fill(cb);
 
 	if(style().bgStroke) {
-		style().bgStroke->bind(di);
-		bg_.stroke(di);
+		style().bgStroke->bind(cb);
+		bg_.stroke(cb);
 	}
 
 	dlg_assert(style().selected);
-	style().selected->bind(di);
-	selection_.bg.fill(di);
+	style().selected->bind(cb);
+	selection_.bg.fill(cb);
 
 	dlg_assert(style().text);
-	style().text->bind(di);
-	text_.draw(di);
+	style().text->bind(cb);
+	text_.draw(cb);
 
 	if(style().selectedText) {
-		style().selectedText->bind(di);
-		selection_.text.draw(di);
+		style().selectedText->bind(cb);
+		selection_.text.draw(cb);
 	}
 
 	dlg_assert(style().cursor);
-	style().cursor->bind(di);
-	cursor_.fill(di);
+	style().cursor->bind(cb);
+	cursor_.fill(cb);
 }
 
 void Textfield::update(double delta) {

@@ -28,10 +28,10 @@ public:
 	Transform(Context& ctx, bool deviceLocal = true); // uses identity matrix
 	Transform(Context& ctx, const Mat4f&, bool deviceLocal = true);
 
-	/// Binds the transform in the given DrawInstance.
+	/// Binds the transform in the given command buffer.
 	/// All following stroke/fill calls are affected by this transform object,
 	/// until another transform is bound.
-	void bind(const DrawInstance&) const;
+	void bind(vk::CommandBuffer) const;
 
 	auto change() { return StateChange {*this, matrix_}; }
 	auto& matrix() const { return matrix_; }
@@ -66,7 +66,7 @@ public:
 	/// Binds the scissor in the given DrawInstance.
 	/// All following stroke/fill calls are affected by this scissor object,
 	/// until another scissor is bound.
-	void bind(const DrawInstance&) const;
+	void bind(vk::CommandBuffer) const;
 
 	auto change() { return StateChange {*this, rect_}; }
 	void rect(const Rect2f& rect) { *change() = rect; }

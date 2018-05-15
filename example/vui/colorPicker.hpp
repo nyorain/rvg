@@ -30,7 +30,7 @@ public:
 
 	Widget* mouseButton(const MouseButtonEvent&) override;
 	Widget* mouseMove(const MouseMoveEvent&) override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	void pick(const Color&);
 	Color picked() const;
@@ -82,7 +82,7 @@ public:
 	void hide(bool hide) override;
 
 	void focus(bool gained) override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	const auto& style() const { return style_.get(); }
 	const auto& cp() const { return *cp_; }

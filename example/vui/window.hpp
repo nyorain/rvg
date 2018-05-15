@@ -29,7 +29,7 @@ public:
 
 	void hide(bool hide) override;
 	bool hidden() const override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 	void refreshTransform() override;
 
 	Widget* mouseMove(const MouseMoveEvent&) override;
@@ -59,7 +59,7 @@ public:
 
 	void hide(bool hide) override;
 	bool hidden() const override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	const auto& style() const { return style_.get(); }
 

@@ -48,20 +48,20 @@ Controller::Controller(Panel& panel, Vec2f pos,
 	bg_ = {ctx, {}, size(), {true, 0.f}};
 }
 
-void Controller::draw(const rvg::DrawInstance& di) const {
-	Widget::bindState(di);
+void Controller::draw(vk::CommandBuffer cb) const {
+	Widget::bindState(cb);
 
-	bgPaint().bind(di);
-	bg_.fill(di);
+	bgPaint().bind(cb);
+	bg_.fill(cb);
 
-	classPaint().bind(di);
-	classifier_.stroke(di);
+	classPaint().bind(cb);
+	classifier_.stroke(cb);
 
-	panel_.paints().name.bind(di);
-	name_.draw(di);
+	panel_.paints().name.bind(cb);
+	name_.draw(cb);
 
-	panel_.paints().line.bind(di);
-	bottomLine_.stroke(di);
+	panel_.paints().line.bind(cb);
+	bottomLine_.stroke(cb);
 }
 
 const rvg::Paint& Controller::bgPaint() const {
@@ -159,9 +159,9 @@ void Textfield::hide(bool hide) {
 	Controller::hide(hide);
 }
 
-void Textfield::draw(const DrawInstance& di) const {
-	Controller::draw(di);
-	textfield_->draw(di);
+void Textfield::draw(vk::CommandBuffer cb) const {
+	Controller::draw(cb);
+	textfield_->draw(cb);
 }
 
 void Textfield::refreshTransform() {
@@ -264,11 +264,11 @@ void Label::hide(bool hide) {
 	Controller::hide(hide);
 }
 
-void Label::draw(const DrawInstance& di) const {
-	Controller::draw(di);
+void Label::draw(vk::CommandBuffer cb) const {
+	Controller::draw(cb);
 
-	panel_.paints().name.bind(di);
-	label_.draw(di);
+	panel_.paints().name.bind(cb);
+	label_.draw(cb);
 }
 
 // Checkbox
@@ -298,9 +298,9 @@ Widget* Checkbox::mouseButton(const MouseButtonEvent& ev) {
 	return this;
 }
 
-void Checkbox::draw(const DrawInstance& di) const {
-	Controller::draw(di);
-	checkbox_->draw(di);
+void Checkbox::draw(vk::CommandBuffer cb) const {
+	Controller::draw(cb);
+	checkbox_->draw(cb);
 }
 void Checkbox::refreshTransform() {
 	Controller::refreshTransform();

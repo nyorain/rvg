@@ -31,7 +31,7 @@ public:
 	Widget* mouseButton(const MouseButtonEvent&) override;
 	Widget* mouseMove(const MouseMoveEvent&) override;
 	void mouseOver(bool gained) override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	const auto& style() const { return style_.get(); }
 	bool hovered() const { return hovered_; }
@@ -65,7 +65,7 @@ public:
 	using Widget::size;
 
 	void hide(bool hide) override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	const auto& style() const { return style_.get(); }
 

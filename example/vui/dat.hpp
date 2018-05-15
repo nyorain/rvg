@@ -36,7 +36,7 @@ public:
 
 	void hide(bool) override;
 	bool hidden() const override;
-	void draw(const rvg::DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 	void size(Vec2f) override;
 	using Widget::size;
 
@@ -91,7 +91,7 @@ public:
 	void mouseOver(bool) override;
 	void focus(bool) override;
 
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 	void refreshTransform() override;
 
 protected:
@@ -108,7 +108,7 @@ public:
 	const rvg::Paint& classPaint() const override;
 	void hide(bool hide) override;
 	void label(std::string_view label);
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 protected:
 	rvg::Text label_;
@@ -121,7 +121,7 @@ public:
 	void hide(bool hide) override;
 	const rvg::Paint& classPaint() const override;
 	Widget* mouseButton(const MouseButtonEvent&) override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	void refreshTransform() override;
 	void position(Vec2f position) override;

@@ -126,20 +126,18 @@ bool Text::updateDevice() {
 	return rerecord;
 }
 
-void Text::draw(const DrawInstance& ini) const {
+void Text::draw(vk::CommandBuffer cb) const {
 	dlg_assert(valid());
 
-	auto& ctx = ini.context;
-	auto& cmdb = ini.cmdBuf;
-
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
-	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		ctx.pipeLayout(), Context::fontBindSet,
+	vk::cmdBindPipeline(cb, vk::PipelineBindPoint::graphics,
+		context().stripPipe());
+	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
+		context().pipeLayout(), Context::fontBindSet,
 		{state_.font->atlas().ds()}, {});
 
 	static constexpr auto type = uint32_t(1);
-	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &type);
+	vk::cmdPushConstants(cb, context().pipeLayout(),
+		vk::ShaderStageBits::fragment, 0, 4, &type);
 
 	auto ioff = sizeof(vk::DrawIndirectCommand);
 	auto off = posBuf_.offset() + ioff;
@@ -147,9 +145,9 @@ void Text::draw(const DrawInstance& ini) const {
 	// use a dummy color buffer
 	auto pBuf = posBuf_.buffer().vkHandle();
 	auto uvBuf = uvBuf_.buffer().vkHandle();
-	vk::cmdBindVertexBuffers(cmdb, 0, {pBuf, uvBuf, pBuf},
+	vk::cmdBindVertexBuffers(cb, 0, {pBuf, uvBuf, pBuf},
 		{off, uvBuf_.offset(), off});
-	vk::cmdDrawIndirect(cmdb, posBuf_.buffer(), posBuf_.offset(), 1, 0);
+	vk::cmdDrawIndirect(cb, posBuf_.buffer(), posBuf_.offset(), 1, 0);
 }
 
 unsigned Text::charAt(float x) const {

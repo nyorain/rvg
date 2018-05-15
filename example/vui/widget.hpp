@@ -59,9 +59,8 @@ public:
 	/// update rendering resources.
 	virtual bool updateDevice() { return false; }
 
-	/// Called during a drawing instance.
 	/// The widget should draw itself.
-	virtual void draw(const DrawInstance&) const {}
+	virtual void draw(vk::CommandBuffer) const {}
 
 	/// The z order of this widget.
 	/// Widgets	with a lower z order are drawn first.
@@ -103,7 +102,7 @@ protected:
 	void updateScissor();
 
 	/// Utility to bind scissor and transform to the given DrawInstance.
-	void bindState(const DrawInstance&) const;
+	void bindState(vk::CommandBuffer) const;
 
 	/// Returns its own scissor rect in local coordinates.
 	virtual Rect2f ownScissor() const;

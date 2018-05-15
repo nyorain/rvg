@@ -98,19 +98,19 @@ void Pane::refreshTransform() {
 	Widget::refreshTransform();
 }
 
-void Pane::draw(const DrawInstance& di) const {
-	Widget::bindState(di);
+void Pane::draw(vk::CommandBuffer cb) const {
+	Widget::bindState(cb);
 
-	style().bg->bind(di);
-	bg_.fill(di);
+	style().bg->bind(cb);
+	bg_.fill(cb);
 
 	if(style().bgStroke) {
-		style().bgStroke->bind(di);
-		bg_.stroke(di);
+		style().bgStroke->bind(cb);
+		bg_.stroke(cb);
 	}
 
 	if(widget_) {
-		widget_->draw(di);
+		widget_->draw(cb);
 	}
 }
 
@@ -201,20 +201,20 @@ bool Window::hidden() const {
 	return bg_.disabled();
 }
 
-void Window::draw(const DrawInstance& di) const {
-	Widget::bindState(di);
+void Window::draw(vk::CommandBuffer cb) const {
+	Widget::bindState(cb);
 
 	if(style().bg) {
-		style().bg->bind(di);
-		bg_.fill(di);
+		style().bg->bind(cb);
+		bg_.fill(cb);
 	}
 
 	if(style().bgStroke) {
-		style().bgStroke->bind(di);
-		bg_.stroke(di);
+		style().bgStroke->bind(cb);
+		bg_.stroke(cb);
 	}
 
-	LayoutWidget::draw(di);
+	LayoutWidget::draw(cb);
 }
 
 Vec2f Window::nextSize() const {

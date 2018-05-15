@@ -24,22 +24,22 @@ Hint::Hint(Gui& gui, const Rect2f& bounds, std::string_view text,
 	size(bounds.size);
 }
 
-void Hint::draw(const DrawInstance& di) const {
-	bindState(di);
+void Hint::draw(vk::CommandBuffer cb) const {
+	bindState(cb);
 
 	if(style().bg) {
-		style().bg->bind(di);
-		bg_.fill(di);
+		style().bg->bind(cb);
+		bg_.fill(cb);
 	}
 
 	if(style().bgStroke) {
-		style().bgStroke->bind(di);
-		bg_.stroke(di);
+		style().bgStroke->bind(cb);
+		bg_.stroke(cb);
 	}
 
 	if(style().text) {
-		style().text->bind(di);
-		text_.draw(di);
+		style().text->bind(cb);
+		text_.draw(cb);
 	}
 }
 

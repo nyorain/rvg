@@ -162,26 +162,26 @@ void ColorPicker::pick(const Color& color) {
 	cmc->radius = {style().colorMarkerRadius, style().colorMarkerRadius};
 }
 
-void ColorPicker::draw(const DrawInstance& di) const {
-	Widget::bindState(di);
+void ColorPicker::draw(vk::CommandBuffer cb) const {
+	Widget::bindState(cb);
 
 	for(auto* p : {&basePaint_, &sGrad_, &vGrad_}) {
-		p->bind(di);
-		selector_.fill(di);
+		p->bind(cb);
+		selector_.fill(cb);
 	}
 
-	context().pointColorPaint().bind(di);
-	hue_.stroke(di);
+	context().pointColorPaint().bind(cb);
+	hue_.stroke(cb);
 
 	if(style().stroke) {
-		style().stroke->bind(di);
-		selector_.stroke(di);
+		style().stroke->bind(cb);
+		selector_.stroke(cb);
 	}
 
 	dlg_assert(style().marker);
-	style().marker->bind(di);
-	hueMarker_.stroke(di);
-	colorMarker_.stroke(di);
+	style().marker->bind(cb);
+	hueMarker_.stroke(cb);
+	colorMarker_.stroke(cb);
 }
 
 void ColorPicker::click(Vec2f pos, bool real) {
@@ -329,10 +329,10 @@ void ColorButton::focus(bool gained) {
 	}
 }
 
-void ColorButton::draw(const DrawInstance& di) const {
-	BasicButton::draw(di);
-	colorPaint_.bind(di);
-	color_.fill(di);
+void ColorButton::draw(vk::CommandBuffer cb) const {
+	BasicButton::draw(cb);
+	colorPaint_.bind(cb);
+	color_.fill(cb);
 }
 
 } // namespace vui

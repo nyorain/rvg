@@ -112,15 +112,15 @@ void BasicButton::mouseOver(bool gained) {
 	updatePaints();
 }
 
-void BasicButton::draw(const DrawInstance& di) const {
-	bindState(di);
+void BasicButton::draw(vk::CommandBuffer cb) const {
+	bindState(cb);
 
-	bgFill_.bind(di);
-	bg_.fill(di);
+	bgFill_.bind(cb);
+	bg_.fill(cb);
 
 	if(bgStroke_.valid()) {
-		bgStroke_.bind(di);
-		bg_.stroke(di);
+		bgStroke_.bind(cb);
+		bg_.stroke(cb);
 	}
 }
 
@@ -176,10 +176,10 @@ void LabeledButton::hide(bool hide) {
 	label_.disable(hide);
 }
 
-void LabeledButton::draw(const DrawInstance& di) const {
-	BasicButton::draw(di);
-	style().label->bind(di);
-	label_.draw(di);
+void LabeledButton::draw(vk::CommandBuffer cb) const {
+	BasicButton::draw(cb);
+	style().label->bind(cb);
+	label_.draw(cb);
 }
 
 } // namespace vui

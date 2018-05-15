@@ -20,9 +20,15 @@
 namespace rvg {
 
 /// Represents a render pass drawing (recording) instance using a context.
-struct DrawInstance {
+/// Makes sure the recording function calls context.
+struct [[deprecated("Just use Context::bindDefaults (if needed)")]]
+DrawInstance {
 	Context& context;
 	vk::CommandBuffer cmdBuf;
+
+	operator vk::CommandBuffer() const {
+		return cmdBuf;
+	}
 };
 
 struct ContextSettings {
@@ -45,6 +51,9 @@ struct ContextSettings {
 	/// The pipeline cache to use.
 	/// Will use no cache if left empty.
 	vk::PipelineCache pipelineCache {};
+
+	/// The multisample bits to use for the pipelines.
+	vk::SampleCountBits samples {};
 
 	// TODO
 	/// The QueueSubmitter to submit any upload work to.
@@ -92,6 +101,12 @@ public:
 	/// Context when this returns true results in undefined behaviour.
 	bool updateDevice();
 
+	/// Binds default state on the given command buffer (which must be
+	/// in recording state). Can then be used for rendering without
+	/// the need for binding a custom scissor or transform.
+	/// Does NOT bind a paint. [TODO]
+	void bindDefaults(vk::CommandBuffer);
+
 	/// Starts a command buffer recording.
 	/// The DrawInstance can then be used to draw objects associated
 	/// with this context.
@@ -104,6 +119,9 @@ public:
 	/// vulkan resources.
 	/// Must not be called again until rendering this frame completes.
 	vk::Semaphore stageUpload();
+
+	// [WIP]
+	std::pair<bool, vk::Semaphore> updateDevice2();
 
 	void rerecord() { rerecord_ = true; }
 

@@ -68,19 +68,19 @@ Widget* Checkbox::mouseButton(const MouseButtonEvent& ev) {
 	return this;
 }
 
-void Checkbox::draw(const DrawInstance& di) const {
-	Widget::bindState(di);
+void Checkbox::draw(vk::CommandBuffer cb) const {
+	Widget::bindState(cb);
 
-	style().bg->bind(di);
-	bg_.fill(di);
+	style().bg->bind(cb);
+	bg_.fill(cb);
 
 	if(style().bgStroke) {
-		style().bgStroke->bind(di);
-		bg_.stroke(di);
+		style().bgStroke->bind(cb);
+		bg_.stroke(cb);
 	}
 
-	style().fg->bind(di);
-	fg_.fill(di);
+	style().fg->bind(cb);
+	fg_.fill(cb);
 }
 
 } // namespace vui

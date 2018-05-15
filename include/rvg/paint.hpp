@@ -198,7 +198,7 @@ public:
 	/// Following calls to fill/stroke of a polygon-based shape
 	/// or Text::draw will use this bound paint until another
 	/// Paint is bound.
-	void bind(const DrawInstance&) const;
+	void bind(vk::CommandBuffer cb) const;
 
 	auto change() { return StateChange {*this, paint_}; }
 	void paint(const PaintData& data) { *change() = data; }

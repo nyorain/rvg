@@ -47,10 +47,10 @@ void Transform::update() {
 	context().registerUpdateDevice(this);
 }
 
-void Transform::bind(const DrawInstance& di) const {
+void Transform::bind(vk::CommandBuffer cb) const {
 	dlg_assert(valid() && ubo_.size() && ds_);
-	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), Context::transformBindSet, {ds_}, {});
+	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
+		context().pipeLayout(), Context::transformBindSet, {ds_}, {});
 }
 
 // Scissor
@@ -87,10 +87,10 @@ bool Scissor::updateDevice() {
 	return false;
 }
 
-void Scissor::bind(const DrawInstance& di) const {
+void Scissor::bind(vk::CommandBuffer cmdb) const {
 	dlg_assert(ubo_.size() && ds_);
-	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), Context::scissorBindSet, {ds_}, {});
+	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
+		context().pipeLayout(), Context::scissorBindSet, {ds_}, {});
 }
 
 } // namespace rvg

@@ -346,10 +346,10 @@ void Paint::upload() {
 		vpp::raw(static_cast<std::uint32_t>(paint_.data.frag.type)));
 }
 
-void Paint::bind(const DrawInstance& di) const {
+void Paint::bind(vk::CommandBuffer cb) const {
 	dlg_assert(valid() && ds_ && ubo_.size());
-	vk::cmdBindDescriptorSets(di.cmdBuf, vk::PipelineBindPoint::graphics,
-		di.context.pipeLayout(), Context::paintBindSet, {ds_}, {});
+	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
+		context().pipeLayout(), Context::paintBindSet, {ds_}, {});
 }
 
 bool Paint::updateDevice() {

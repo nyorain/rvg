@@ -18,7 +18,7 @@ public:
 
 	void size(Vec2f size) override;
 	void hide(bool hide) override;
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 	bool hidden() const override;
 	int zOrder() const override { return 1000; }
 

@@ -75,11 +75,11 @@ public:
 
 	/// Records commands to fill this polygon into the given DrawInstance.
 	/// Undefined behaviour if it was updates without fill support.
-	void fill(const DrawInstance&) const;
+	void fill(vk::CommandBuffer) const;
 
 	/// Records commands to stroke this polygon into the given DrawInstance.
 	/// Undefined behaviour if it was updates without stroke support.
-	void stroke(const DrawInstance&) const;
+	void stroke(vk::CommandBuffer) const;
 
 	/// Usually only automatically called from context.
 	/// Uploads data to the device. Must not be called while a command
@@ -107,7 +107,7 @@ protected:
 	void updateStroke(Span<const Vec2f>, const DrawMode&);
 	void updateFill(Span<const Vec2f>, const DrawMode&);
 
-	void stroke(const DrawInstance&, const Stroke&, bool aa, bool color,
+	void stroke(vk::CommandBuffer, const Stroke&, bool aa, bool color,
 		vk::DescriptorSet, unsigned aaOff) const;
 
 	bool checkResize(vpp::SubBuffer&, vk::DeviceSize needed,

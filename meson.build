@@ -30,6 +30,7 @@ warnings = [
 
 	# TODO
 	'-Wno-unused-function',
+	'-Wno-deprecated-declarations',
 ]
 
 # default arrguments

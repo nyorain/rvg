@@ -27,8 +27,8 @@ public:
 
 	auto change() { return StateChange {*this, state_}; }
 
-	void fill(const DrawInstance& di) const { return polygon_.fill(di); }
-	void stroke(const DrawInstance& di) const { return polygon_.stroke(di); }
+	void fill(vk::CommandBuffer cb) const { polygon_.fill(cb); }
+	void stroke(vk::CommandBuffer cb) const { polygon_.stroke(cb); }
 
 	auto& context() const { return polygon_.context(); }
 	void disable(bool d, DrawType t = DrawType::strokeFill);
@@ -59,8 +59,8 @@ public:
 
 	auto change() { return StateChange {*this, state_}; }
 
-	void fill(const DrawInstance& di) const { return polygon_.fill(di); }
-	void stroke(const DrawInstance& di) const { return polygon_.stroke(di); }
+	void fill(vk::CommandBuffer cb) const { polygon_.fill(cb); }
+	void stroke(vk::CommandBuffer cb) const { polygon_.stroke(cb); }
 
 	auto& context() const { return polygon_.context(); }
 	void disable(bool d, DrawType t = DrawType::strokeFill);
@@ -98,8 +98,8 @@ public:
 
 	auto change() { return StateChange {*this, state_}; }
 
-	void fill(const DrawInstance& di) const { return polygon_.fill(di); }
-	void stroke(const DrawInstance& di) const { return polygon_.stroke(di); }
+	void fill(vk::CommandBuffer cb) const { polygon_.fill(cb); }
+	void stroke(vk::CommandBuffer cb) const { polygon_.stroke(cb); }
 
 	auto& context() const { return polygon_.context(); }
 	void disable(bool d, DrawType t = DrawType::strokeFill);

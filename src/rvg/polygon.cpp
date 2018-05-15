@@ -291,65 +291,58 @@ bool Polygon::updateDevice() {
 	return rerecord;
 }
 
-void Polygon::fill(const DrawInstance& di) const {
+void Polygon::fill(vk::CommandBuffer cb) const {
 	dlg_assertm(flags_.fill, "Polygon has no fill data");
 	dlg_assertm(valid(), "Polygon must not be in an invalid state");
-	dlg_assertm(&di.context == &context(),
-		"Cannot stroke Polygon for another context");
-
-	auto& ctx = di.context;
-	auto& cmdb = di.cmdBuf;
 
 	// fill
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.fanPipe());
+	vk::cmdBindPipeline(cb, vk::PipelineBindPoint::graphics,
+		context().fanPipe());
 
 	static constexpr auto type = uint32_t(0);
-	vk::cmdPushConstants(cmdb, ctx.pipeLayout(), vk::ShaderStageBits::fragment,
-		0, 4, &type);
+	vk::cmdPushConstants(cb, context().pipeLayout(),
+		vk::ShaderStageBits::fragment, 0, 4, &type);
 
 	auto& b = fill_.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
-	vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off}); // dummy uv
+	vk::cmdBindVertexBuffers(cb, 0, {b.buffer()}, {off});
+	vk::cmdBindVertexBuffers(cb, 1, {b.buffer()}, {off}); // dummy uv
 
 	if(flags_.colorFill) {
 		auto& c = fill_.cBuf;
 		dlg_assert(c.size());
-		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
+		vk::cmdBindVertexBuffers(cb, 2, {c.buffer()}, {c.offset()});
 	} else {
-		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
+		vk::cmdBindVertexBuffers(cb, 2, {b.buffer()}, {off}); // dummy color
 	}
 
-	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
+	vk::cmdDrawIndirect(cb, b.buffer(), b.offset(), 1, 0);
 
 	// aa stroke
 	if(flags_.aaFill) {
-		stroke(di, fillAA_, true, flags_.colorFill, ctx.defaultStrokeAA(), 0u);
+		stroke(cb, fillAA_, true, flags_.colorFill, context().defaultStrokeAA(), 0u);
 	}
 }
 
-void Polygon::stroke(const DrawInstance& di) const {
+void Polygon::stroke(vk::CommandBuffer cb) const {
 	dlg_assertm(flags_.stroke, "Polygon has no stroke data");
 	dlg_assertm(valid(), "Polygon must not be in an invalid state");
-	dlg_assertm(&di.context == &context(),
-		"Cannot stroke Polygon for another context");
 
-	stroke(di, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 4u);
+	stroke(cb, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 4u);
 }
 
-void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
+void Polygon::stroke(vk::CommandBuffer cb, const Stroke& stroke, bool aa,
 		bool color, vk::DescriptorSet aaDs, unsigned aaOff) const {
 
 	dlg_assert(stroke.pBuf.size());
 
-	auto& ctx = di.context;
-	auto& cmdb = di.cmdBuf;
-	vk::cmdBindPipeline(cmdb, vk::PipelineBindPoint::graphics, ctx.stripPipe());
+	vk::cmdBindPipeline(cb, vk::PipelineBindPoint::graphics,
+		context().stripPipe());
 
 	// position and dummy uv buffer
 	auto& b = stroke.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cmdb, 0, {b.buffer()}, {off});
+	vk::cmdBindVertexBuffers(cb, 0, {b.buffer()}, {off});
 
 	// aa
 	auto type = uint32_t(0);
@@ -359,28 +352,28 @@ void Polygon::stroke(const DrawInstance& di, const Stroke& stroke, bool aa,
 		dlg_assert(a.size());
 		dlg_assert(aaDs);
 
-		vk::cmdBindVertexBuffers(cmdb, 1, {a.buffer()}, {a.offset() + aaOff});
-		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-			ctx.pipeLayout(), Context::aaStrokeBindSet,
+		vk::cmdBindVertexBuffers(cb, 1, {a.buffer()}, {a.offset() + aaOff});
+		vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
+			context().pipeLayout(), Context::aaStrokeBindSet,
 			{aaDs}, {});
 	} else {
-		vk::cmdBindVertexBuffers(cmdb, 1, {b.buffer()}, {off}); // dummy aa uv
+		vk::cmdBindVertexBuffers(cb, 1, {b.buffer()}, {off}); // dummy aa uv
 	}
 
 	// used to determine whether aa alpha blending is used
-	vk::cmdPushConstants(cmdb, ctx.pipeLayout(),
+	vk::cmdPushConstants(cb, context().pipeLayout(),
 		vk::ShaderStageBits::fragment, 0, 4, &type);
 
 	// color
 	if(color) {
 		auto& c = stroke.cBuf;
 		dlg_assert(c.size());
-		vk::cmdBindVertexBuffers(cmdb, 2, {c.buffer()}, {c.offset()});
+		vk::cmdBindVertexBuffers(cb, 2, {c.buffer()}, {c.offset()});
 	} else {
-		vk::cmdBindVertexBuffers(cmdb, 2, {b.buffer()}, {off}); // dummy color
+		vk::cmdBindVertexBuffers(cb, 2, {b.buffer()}, {off}); // dummy color
 	}
 
-	vk::cmdDrawIndirect(cmdb, b.buffer(), b.offset(), 1, 0);
+	vk::cmdDrawIndirect(cb, b.buffer(), b.offset(), 1, 0);
 }
 
 } // namespace rvg

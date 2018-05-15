@@ -19,9 +19,9 @@ Widget::Widget(Gui& gui, const Rect2f& bounds) :
 	scissor_ = {context(), b};
 }
 
-void Widget::bindState(const DrawInstance& di) const {
-	scissor_.bind(di);
-	transform_.bind(di);
+void Widget::bindState(vk::CommandBuffer cb) const {
+	scissor_.bind(cb);
+	transform_.bind(cb);
 }
 
 void Widget::size(Vec2f size) {

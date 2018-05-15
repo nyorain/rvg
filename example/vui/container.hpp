@@ -20,7 +20,7 @@ public:
 	void mouseOver(bool gained);
 
 	/// Just draws all owned widgets.
-	void draw(const DrawInstance&) const;
+	void draw(vk::CommandBuffer) const;
 	void refreshTransform();
 
 	auto& gui() const { return gui_; }
@@ -78,7 +78,7 @@ public:
 	void focus(bool) override;
 	void mouseOver(bool) override;
 
-	void draw(const DrawInstance&) const override;
+	void draw(vk::CommandBuffer) const override;
 
 	using Widget::gui;
 
