@@ -72,7 +72,7 @@ protected:
 	} state_;
 
 	bool disable_ {};
-	bool deviceLocal_ {true};
+	bool deviceLocal_ {false};
 
 	std::vector<Vec2f> posCache_;
 	std::vector<Vec2f> uvCache_;

@@ -12,8 +12,13 @@
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
 
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-align"
+#pragma GCC diagnostic ignored "-Wunused-parameter"
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
+#pragma GCC diagnostic pop
 
 // color conversions sources:
 // https://stackoverflow.com/questions/2353211/
