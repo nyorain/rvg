@@ -40,6 +40,8 @@
 
 ### later
 
+- [ ] care about texture srgb. You probably want srgb textures.
+	- [ ] add srgb support for vpp/formats
 - [ ] check if DeviceObject/DevRes impl mess in Context can be cleaned up
 	- [ ] currently rather error prone and (over-?)complicated with visitors
 - [ ] improve font/fontAtlas handling

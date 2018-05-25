@@ -25,6 +25,13 @@ constexpr struct Norm {} norm;
 
 /// RGBA32 color tuple.
 /// Offers various utility and conversion functions below.
+/// rvg (e.g. the Paint class) interprets the given data as in
+/// the srgb colorspace (i.e. the same way html/css do it).
+/// So when using a color here it should appear the same
+/// way on the screen as in would in a browser (given that you
+/// use a srgb framebuffer or otherwise manually gamma correct).
+/// Therefore color values should NEVER be directly used
+/// for blending/mixing.
 class Color {
 public:
 	u8 r {0};
@@ -60,6 +67,11 @@ public:
 // operators
 inline bool operator==(Color a, Color b) { return a.rgba() == b.rgba(); }
 inline bool operator!=(Color a, Color b) { return a.rgba() != b.rgba(); }
+
+// srgb rgb (gamma-based approximations, you might need real conversion!)
+// will not convert alpha range
+Vec4f linearize(const Color&, float gamma = 2.2);
+Color srgb(Vec4f rgbLinearNorm, float gamma = 2.2);
 
 // hsl
 Color hsl(u8 h, u8 s, u8 l, u8 a = 255);

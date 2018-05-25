@@ -70,6 +70,6 @@ void main() {
 	}
 #endif
 
-	float gamma = 1 / 2.2;
-	out_color.rgb = pow(out_color.rgb, vec3(1.0 / gamma));
+	// float gamma = 2.2;
+	// out_color.rgb = pow(out_color.rgb, vec3(gamma));
 }

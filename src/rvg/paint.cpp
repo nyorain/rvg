@@ -244,6 +244,7 @@ std::uint32_t u32rgba(const Color& c) {
 	return c.r << 24 | c.g << 16 | c.b << 8 | c.a;
 }
 
+// TODO: linearize for mixing
 Color mix(const Color& a, const Color& b, float fac) {
 	return static_cast<Vec3u8>(fac * a.rgba() + (1 - fac) * b.rgba());
 }
@@ -342,11 +343,13 @@ void Paint::update() {
 
 void Paint::upload() {
 	dlg_assert(valid() && ubo_.size());
+	auto inner = linearize(paint_.data.frag.inner);
+	auto outer = linearize(paint_.data.frag.outer);
 
 	upload140(*this, ubo_,
 		vpp::raw(paint_.data.transform),
-		vpp::raw(paint_.data.frag.inner.rgbaNorm()),
-		vpp::raw(paint_.data.frag.outer.rgbaNorm()),
+		vpp::raw(inner),
+		vpp::raw(outer),
 		vpp::raw(paint_.data.frag.custom),
 		vpp::raw(static_cast<std::uint32_t>(paint_.data.frag.type)));
 }
@@ -375,6 +378,18 @@ bool Paint::updateDevice() {
 	}
 
 	return re;
+}
+
+Vec4f linearize(const Color& c, float gamma) {
+	auto r = Vec4f(nytl::vec::cw::pow(c.rgbNorm(), gamma));
+	r[3] = c.a / 255.f;
+	return r;
+}
+
+Color srgb(Vec4f rgbLinearNorm, float gamma) {
+	return {norm,
+		nytl::vec::cw::pow(Vec3f(rgbLinearNorm), 1 / gamma),
+		rgbLinearNorm[3]};
 }
 
 // Texture
