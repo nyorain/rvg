@@ -4,6 +4,7 @@ About Color and color Spaces
 Great resources and discussions regarding color spaces and gamma correction:
 - http://blog.johnnovak.net/2016/09/21/what-every-coder-should-know-about-gamma/
 - https://github.com/ocornut/imgui/issues/578
+- https://blackhole12.com/blog/everyone-does-srgb-wrong-because/
 
 
 *Issue*: should the colors passed to paints be in rgb or srgb color space?

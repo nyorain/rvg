@@ -103,8 +103,12 @@ Vec3f hsv2hsl(Vec3f hsv);
 Color u32rgba(std::uint32_t);
 std::uint32_t u32rgba(const Color&);
 
-/// Returns (fac * a + (1 - fac) * b), i.e. mixes the given colors
-/// with the given factor (which should be in range [0,1]).
+/// Conceptuablly returns (fac * a + (1 - fac) * b), i.e. mixes the given
+/// colors with the given factor (which should be in range [0,1]).
+/// But since all colors in rvg are srgb, will linearize them before
+/// mixing (and convert back to srgb after), which is the right way
+/// for gradients (NOTE: this is different from css since css "does"
+/// it wrong).
 Color mix(const Color& a, const Color& b, float fac);
 
 

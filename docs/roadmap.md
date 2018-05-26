@@ -2,13 +2,15 @@
 
 ### v0.1
 
-- [ ] basic documentation (like at least one page stating basic usage)
+- [x] basic documentation (like at least one page stating basic usage)
   - [x] also check that there are at enough inline docs
-  - [ ] proof read
+  - [x] proof read
 - [x] rvg: correct vulkan synchronization
   - [x] probably best to require the user to set it in the render pass or
         otherwise handle it. Document this somewhere
 - [x] rvg::Context: use vpps new pipeline creation info (?)
+- [x] srgb colors
+	- [x] fix color mixing
 - [x] clean up the DrawInstance mess
       or document why it is implemented that way.
 	  We could also call it rvg::Context::bindDefaults(cmdBuf) which
@@ -17,9 +19,10 @@
 	  [ended up deprecatng/removing DrawInstance. Not needed (atm)]
 - [x] combine stageUpload and updateDevice (if possible).
 - [ ] more rvg testing
-	- [ ] lots of small unit tests, especially polygon, color conversion
-	- [ ] integration tests, try to draw everything onto a framebuffer
-	- [ ] especially test defined behaviour when moving/destructing
+	- [ ] some color conversion, mixing tests
+	- [ ] test where all shapes are drawn once with possible settings
+	      and paints and stuff
+	- [x] especially test defined behaviour when moving/destructing
 	      objects
 - [x] Context::updateDevice return semantics when device objects that are not
       currently used are updated or new ones are created
@@ -28,9 +31,11 @@
 	- [x] also ctx.updateDevice() to return true when something was destroyed?
 		  probably not, right?
 - [ ] stable (update) deps
-	- [ ] nytl
+	- [x] nytl
 	- [ ] vpp
-	- [ ] put them in meson
+	- [ ] katachi
+	- [x] dlg
+	- [ ] put their minimum versions in meson
 - [ ] basic demos with screenshots
 	- [ ] heavily documented basic example
 	- [ ] try to use every feature once (in extra functions/modules)

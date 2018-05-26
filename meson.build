@@ -43,10 +43,10 @@ dep_vpp = dependency('vpp',
 		version: '>=0.2', # TODO 0.3
 		fallback: ['vpp', 'vpp_dep'])
 dep_nytl = dependency('nytl',
-		version: '>=0.5', # TODO 0.6
+		version: '>=0.6.0',
 		fallback: ['nytl', 'nytl_dep'])
 dep_dlg = dependency('dlg',
-		version: '>=0.2',
+		version: '>=0.2.2',
 		fallback: ['dlg', 'dlg_dep'])
 dep_katachi = dependency('katachi',
 		version: '>=0.1',

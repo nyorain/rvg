@@ -1,12 +1,41 @@
 # Intro to rvg
 
-This provides a small intro, or gettings started guide, for using rvg.
-Feel free to ask any questions or bring on suggestions.
+This provides a small intro - or getting started guide - for using rvg.
+Feel free to ask any questions or bring on suggestions (github.com/nyorain/rvg).
+Apart from this as an intro, the best source of documentation are the rvg
+headers itself. If they leave any questions unanswered, please tell us with
+a github issue.
+
+## Goal
+
+The goals of rvg is simple: provide a rather high level vulkan abstraction
+for drawing 2 dimensional shapes. But instead of providing an immediate api,
+rvg provides an object oriented retained mode api that can make full
+use of vulkan performance (mainly/especially on host (cpu) side).
+This can be useful e.g. for quick 2d prototypes or a vulkan gui library.
+It can also be useful for small simple things like a quick start into
+text rendering which is some effort to write from scratch (rvg reuses
+the font handling from [nuklear](https://github.com/vurtun/nuklar)).
+
+You can think of it like a more lightweight and (at least on host side)
+more efficient counterpart to the graphics library of sfml (rvg does
+*not* and will never include stuff like a window, input or audio
+abstraction, libraries should be kept modular where possible IMO) for vulkan.
+One difference is that rvg was more inspired by vector graphics oriented
+libraries and concepts, providing gradients, pulling a svg-like path
+library as dependency and implementing shape-based antialiasing (so you
+don't have to use multisampling just to get e.g. a smooth ui).
+Granted, rvg is probably a thinner abstraction in some places. You still
+have to manually manage command buffers, queue submissions and synchronization.
+
+The library is literately licensed under the Boost license
+(see the LICENSE file) which does not even require you to include
+the license when you just ship binaries and otherwise is comparable to MIT.
 
 ## Building
 
-rvg is built modular and things that don't strictly belong in
-this library are splitted into separate projects (most of them are written
+rvg is built modular and functionality that doesn't strictly belong in
+this library is split into separate projects (most of them are written
 by me as well so will be maintained while this project is).
 When building with meson, those projects will automatically be downloaded
 and compiled.
@@ -18,11 +47,13 @@ and compiled.
 	  for people already using vulkan-hpp so please report
 	  ideas/suggestions/problems.
   - vpp: vulkan abstraction and utilities
+  	- e.g. provides functionality for sharing device memory and buffer objects,
+	  batching device submissions or upload to a buffer via a staging buffer
   - nytl: small general C++ utility, provides e.g. matrix and vector classes
   - katachi: computes vertex arrays from curves & shapes.
-      Used to compute stroke buffers, antialiase shapes and to compute
-	  rect roundings. You might want to use this to bake and render
-	  bezier curves or arcs.
+      - Used to compute stroke buffers, antialiase shapes and to compute
+	  	rect roundings. You might want to use this to bake and render
+	  	bezier curves or arcs. Provides a really lightweight svg-like path api.
   - dlg: really small c library used for logging and debugging (also
     by most of the other projects).
 
@@ -59,7 +90,7 @@ with a vulkan device, will create all needed layouts and pipelines and also
 manages efficient data uploading. Aside from the vulkan device, you have
 to pass the Context that renderPass and its subpass to use for rendering
 (although this might be somewhat limiting, it is needed for pipeline creation).
-There are much more settings (antiAliasing/pipelineCache to use/whether
+There are much more settings (antiAliasing/a pipelineCache to use/whether
 the clipDistance feature is enabled for faster scissors), see rvg/context.hpp
 for a complete reference of ContextSettings.
 
@@ -90,7 +121,7 @@ this purpose the semaphore can be used, wait for it simply using
 the allGraphics stage when submitting you rendering command buffers).
 
 This allows you to easily integrate rvg rendering into any rendering
-engine. A simple pseudo codish example below:
+engine. A simple pseudo-codish example below:
 
 ```cpp
 // Assuming this is the function in which you initialize the stuff
@@ -229,6 +260,8 @@ all possible work (like computing curves, antialiased shape or stroke data,
 or filling staging buffers and recording their upload command buffers) while
 the device is busy rendering.
 
+## Synchronization
+
 There is another thing you have to care about when rendering using rvg:
 correct device-side synchronization. The command buffer that renders
 using rvg must in some way signal vulkan that it requires the content
@@ -253,3 +286,14 @@ dependency.dstAccessMask = vk::AccessBits::uniformRead |
 	vk::AccessBits::indirectCommandRead |
 	vk::AccessBits::shaderRead;
 ```
+
+Other than that you should not have to care about synchronization.
+But no rvg classes are internally synchronized so they should always
+just be used from one thread. This strict requirement will probably be
+relaxed in a future version, you can probably already call update, draw/bind
+and updateDevice on Polygon/Shape/Text/Paint etc from any thread as long
+as there is never more than one thread calling it. But this was not fully
+tested yet.
+
+
+From here on, just lookup the

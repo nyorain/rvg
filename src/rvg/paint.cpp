@@ -244,9 +244,10 @@ std::uint32_t u32rgba(const Color& c) {
 	return c.r << 24 | c.g << 16 | c.b << 8 | c.a;
 }
 
-// TODO: linearize for mixing
 Color mix(const Color& a, const Color& b, float fac) {
-	return static_cast<Vec3u8>(fac * a.rgba() + (1 - fac) * b.rgba());
+	auto la = linearize(a);
+	auto lb = linearize(b);
+	return srgb(fac * la + (1 - fac) * lb);
 }
 
 // Paint functions
