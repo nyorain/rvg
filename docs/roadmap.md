@@ -63,6 +63,8 @@
 	// vpp::QueueSubmitter& submitter;
 - [ ] bind initial paint that simply has dummy texture pattern to signal
       that no paint is bound?
+- [ ] rvg: make non-texture gradients make use of transform buffer span
+- [ ] nanovg like box gradient
 - [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
 - [ ] helper for non-convex shapes (in rvg: stencil buffer? or decomposition?)
 	- [ ] evaluate first if this makes sense for the scope of rvg. It might not
