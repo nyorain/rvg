@@ -314,7 +314,6 @@ void PendulumWidget::changeCenter(nytl::Vec2f nc) {
 }
 
 void PendulumWidget::left(bool pressed) {
-	dlg_info("left: {}", pressed);
 	left_ = pressed;
 }
 
@@ -484,7 +483,6 @@ void App::draw(vk::CommandBuffer cb) {
 void App::clicked(Vec2f pos) {
 	auto in = [&](Vec2f p, Vec2f size) {
 		using namespace nytl::vec::cw;
-		dlg_info("{} {} {}", pos, p, pos+size);
 		return pos == clamp(pos, p, p + size);
 	};
 
@@ -707,7 +705,7 @@ int main() {
 		auto [rec, seph] = ctx.upload();
 
 		if(rec) {
-			dlg_info("ctx rerecord");
+			dlg_info("Rerecording due to context");
 			renderer.invalidate();
 		}
 

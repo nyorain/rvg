@@ -24,12 +24,12 @@
 	   our business to handle new/destroyed device objects]
 	- [x] also ctx.updateDevice() to return true when something was destroyed?
 		  probably not, right?
-- [ ] stable (update) deps
+- [x] stable (update) deps
 	- [x] nytl
-	- [ ] vpp
+	- [x] vpp
 	- [x] katachi
 	- [x] dlg
-	- [ ] put their minimum versions in meson
+	- [x] put their minimum versions in meson
 - [ ] basic demos with screenshots
 - [x] split rvg and vui library
 - [ ] create real readme

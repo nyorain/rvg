@@ -40,7 +40,7 @@ source_root = meson.source_root().split('\\')
 add_project_arguments('-DDLG_BASE_PATH="' + '/'.join(source_root) + '/"', language: 'cpp')
 
 dep_vpp = dependency('vpp',
-		version: '>=0.2', # TODO 0.3
+		version: '>=0.3.0',
 		fallback: ['vpp', 'vpp_dep'])
 dep_nytl = dependency('nytl',
 		version: '>=0.6.0',
@@ -49,7 +49,7 @@ dep_dlg = dependency('dlg',
 		version: '>=0.2.2',
 		fallback: ['dlg', 'dlg_dep'])
 dep_katachi = dependency('katachi',
-		version: '>=0.1',
+		version: '>=0.1.0',
 		fallback: ['katachi', 'katachi_dep'])
 dep_vulkan = dependency('vulkan')
 
