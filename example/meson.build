@@ -11,6 +11,15 @@ example_deps = [
 	dep_ny
 ]
 
+example_args = []
+
+if build_machine.system() == 'windows'
+	example_args += '-DRVG_EXAMPLE_WIN'
+elif build_machine.system() == 'linux'
+	example_args += '-DRVG_EXAMPLE_UNIX'
+endif
+
 executable('example',
+	cpp_args: example_args,
 	sources: example_src,
 	dependencies: example_deps)

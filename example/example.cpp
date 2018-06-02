@@ -41,15 +41,16 @@
 #include <chrono>
 #include <array>
 
+// where the resources are located.
 static const std::string baseResPath = "../";
 
-// using namespace vui;
+using namespace nytl;
 using namespace nytl::vec::operators;
 using namespace nytl::vec::cw::operators;
 
 // settings
 constexpr auto appName = "rvg-example";
-constexpr auto engineName = "vpp,rvg";
+constexpr auto engineName = "vpp;rvg";
 constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
 constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
@@ -57,7 +58,138 @@ constexpr auto printFrames = true;
 constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
 
-// TODO: move to nytl
+struct Context {
+	rvg::Context& ctx;
+	rvg::Font& font;
+};
+
+/// Visualizes correctly and wrongly interpolated gradients.
+/// It displays three horizontal gradients: the first manually
+/// mixed correctly (by using rvg::mix), the second by using a rvg
+/// linear gradient. The third is mixed manually but incorrectly, by
+/// simply calculating 'fac * colorA + (1 - fac) * colorB' which will
+/// result in a somewhat uglier (and obviously different and incorrect)
+/// gradient (as is sadly currently the default in most software).
+class GradientWidget {
+public:
+	GradientWidget() = default;
+	GradientWidget(const Context&, Vec2f pos,
+		rvg::Color start, rvg::Color end);
+	void draw(vk::CommandBuffer cmdBuf);
+
+protected:
+	struct Rect {
+		rvg::RectShape shape;
+		rvg::Paint paint;
+	};
+
+	rvg::Text topText_;
+	std::vector<Rect> topRects_;
+
+	rvg::Text middleText_;
+	rvg::RectShape middleShape_;
+	rvg::Paint gradient_;
+	rvg::Paint textPaint_;
+
+	rvg::Text bottomText_;
+	std::vector<Rect> bottomRects_;
+};
+
+class PathWidget {
+public:
+	PathWidget() = default;
+	PathWidget(const Context&, Vec2f pos, Vec2f size);
+	void draw(vk::CommandBuffer);
+	void clicked(Vec2f pos);
+
+	Vec2f pos() const { return pos_; }
+	Vec2f size() const { return size_; }
+
+protected:
+	bool first_ {true};
+	Vec2f pos_;
+	Vec2f size_;
+
+	ktc::Subpath path_;
+	rvg::Scissor scissor_;
+	rvg::Shape shape_;
+	rvg::RectShape bg_;
+	rvg::Paint paint_;
+	rvg::Text text_;
+};
+
+class PendulumWidget {
+public:
+	struct {
+		float j {0.05};
+		float c {0.05};
+		float l {0.5};
+		float m {0.5};
+		float g {-9.81}; // we work in window coordinates
+	} constants;
+
+	float screenLength {320.f};
+	float angle {0.01f};
+	float avel {0.f};
+
+	// in last step
+	float accel {0.f};
+
+public:
+	PendulumWidget() = default;
+	PendulumWidget(rvg::Context& ctx, nytl::Vec2f pos);
+	void update(float dt);
+	nytl::Vec2f massPos() const;
+	void changeCenter(nytl::Vec2f nc);
+	void draw(vk::CommandBuffer cb);
+
+	void left(bool pressed);
+	void right(bool pressed);
+
+protected:
+	bool left_ {}, right_ {};
+	nytl::Vec2f center_;
+	rvg::Text text_;
+	rvg::CircleShape fixture_;
+	rvg::CircleShape mass_;
+	rvg::Shape connection_;
+
+	rvg::Paint whitePaint_;
+	rvg::Paint redPaint_;
+
+	float xVel_ {};
+	float xFriction_ {8.f}; // not as it should be...
+};
+
+class App {
+public:
+	App(rvg::Context& ctx);
+
+	void update(double dt);
+	void draw(vk::CommandBuffer);
+	void resize(Vec2ui size);
+
+	void clicked(Vec2f pos);
+	void key(ny::Keycode, bool pressed);
+
+protected:
+	rvg::Context& ctx_;
+	rvg::FontAtlas fontAtlas_;
+
+	rvg::Font font_;
+
+	GradientWidget gradWidget_;
+	PendulumWidget pendulum_;
+	PathWidget path_;
+
+	rvg::Paint paint_;
+	rvg::Transform transform_;
+	rvg::CircleShape circle_;
+	rvg::Shape antiAliased_;
+	rvg::Text bottomText_;
+};
+
+// - implementation -
 template<typename T>
 void scale(nytl::Mat4<T>& mat, nytl::Vec3<T> fac) {
 	for(auto i = 0; i < 3; ++i) {
@@ -72,6 +204,335 @@ void translate(nytl::Mat4<T>& mat, nytl::Vec3<T> move) {
 	}
 }
 
+enum class HorzAlign {
+	left,
+	center,
+	right
+};
+
+enum class VertAlign {
+	top,
+	middle,
+	bottom
+};
+
+/// Returns the position to align the text in the given rect
+Vec2f alignText(std::string_view text, const rvg::Font& font,
+		Rect2f rect, HorzAlign halign, VertAlign valign) {
+
+	auto size = Vec2f{font.width(text), font.height()};
+
+	Vec2f ret = rect.position;
+	if(halign == HorzAlign::center) {
+		ret.x += (rect.size.x - size.x) / 2.f;
+	} else if(halign == HorzAlign::right) {
+		ret.x += rect.size.x - size.x;
+	}
+
+	if(valign == VertAlign::middle) {
+		ret.y += (rect.size.y - size.y) / 2.f;
+	} else if(valign == VertAlign::bottom) {
+		ret.y += rect.size.y - size.y;
+	}
+
+	return ret;
+}
+
+// Pendulum
+PendulumWidget::PendulumWidget(rvg::Context& ctx, nytl::Vec2f pos) : center_(pos) {
+	constexpr auto centerRadius = 10.f;
+	constexpr auto massRadius = 20.f;
+
+	auto end = massPos();
+	auto drawMode = rvg::DrawMode {};
+	drawMode.aaFill = true;
+	drawMode.fill = true;
+	fixture_ = {ctx, pos, centerRadius, drawMode};
+	mass_ = {ctx, end, massRadius, drawMode};
+
+	drawMode.fill = false;
+	drawMode.stroke = 3.f;
+	drawMode.aaStroke = true;
+	connection_ = {ctx, {pos, end}, drawMode};
+
+	whitePaint_ = {ctx, rvg::colorPaint(rvg::Color::white)};
+	redPaint_ = {ctx, rvg::colorPaint(rvg::Color::red)};
+}
+
+void PendulumWidget::update(float dt) {
+	constexpr auto leftBound = 750.f;
+	constexpr auto rightBound = 1600.f;
+
+	float u = -xFriction_ * xVel_;
+	if(center_.x < leftBound) {
+		center_.x = leftBound;
+		u = -xVel_ / dt;
+	} else if(left_) {
+		u -= 5.f;
+	}
+
+	if(center_.x > rightBound) {
+		center_.x = rightBound;
+		u = -xVel_ / dt;
+	} else if(right_) {
+		u += 5.f;
+	}
+
+	xVel_ += dt * u;
+
+	auto scale = 400.f;
+	center_.x += scale * dt * xVel_;
+	changeCenter(center_);
+
+	// logic
+	angle += dt * avel;
+
+	auto& c = constants;
+	accel = c.m * c.l * (u * std::cos(angle) + c.g * std::sin(angle));
+	accel -= c.c * avel;
+	accel /= (c.j + c.m * c.l * c.l);
+	avel += dt * accel;
+
+	// rendering
+	auto end = massPos();
+	mass_.change()->center = end;
+	connection_.change()->points[1] = end;
+}
+
+nytl::Vec2f PendulumWidget::massPos() const {
+	float c = std::cos(angle + 0.5 * nytl::constants::pi);
+	float s = std::sin(angle + 0.5 * nytl::constants::pi);
+	return center_ + screenLength * nytl::Vec2f{c, s};
+}
+
+void PendulumWidget::changeCenter(nytl::Vec2f nc) {
+	center_ = nc;
+	auto end = massPos();
+	mass_.change()->center = end;
+	connection_.change()->points = {nc, end};
+	fixture_.change()->center = nc;
+}
+
+void PendulumWidget::left(bool pressed) {
+	dlg_info("left: {}", pressed);
+	left_ = pressed;
+}
+
+void PendulumWidget::right(bool pressed) {
+	right_ = pressed;
+}
+
+void PendulumWidget::draw(vk::CommandBuffer cb) {
+	whitePaint_.bind(cb);
+	fixture_.fill(cb);
+	connection_.stroke(cb);
+
+	redPaint_.bind(cb);
+	mass_.fill(cb);
+}
+
+// GradientWidget
+GradientWidget::GradientWidget(const Context& ctx, Vec2f pos,
+		rvg::Color start, rvg::Color end) {
+
+	constexpr auto lineHeight = 100;
+	constexpr auto textWidth = 250;
+	constexpr auto gradientWidth = 300;
+	constexpr auto gradientSteps = 32;
+	constexpr auto stepWidth = float(gradientWidth) / gradientSteps;
+
+	auto& rctx = ctx.ctx;
+	auto dm = rvg::DrawMode {true, false};
+
+	auto yoff = (lineHeight - ctx.font.height()) / 2;
+	auto p = pos + Vec{10, yoff};
+	topText_ = {rctx, "[Stepped] Using rvg::mix:", ctx.font, p};
+
+	p.y += lineHeight;
+	middleText_ = {rctx, "Using a linear gradient:", ctx.font, p};
+	auto mpos = pos + Vec {textWidth, lineHeight};
+	auto msize = Vec2f {gradientWidth, lineHeight};
+	middleShape_ = {rctx, mpos, msize, dm};
+	gradient_ = {rctx, rvg::linearGradient(mpos,
+		mpos + Vec {gradientWidth, 0.f}, start, end)};
+	textPaint_ = {rctx, rvg::colorPaint(rvg::mix(start, end, 0.5f))};
+
+	p.y += lineHeight;
+	bottomText_ = {rctx, "[Stepped] Using incorrect mixing", ctx.font, p};
+
+	auto rsize = Vec {stepWidth, lineHeight};
+	auto topy = pos.y;
+	auto boty = pos.y + 2 * lineHeight;
+	for(auto i = 0u; i < gradientSteps; ++i) {
+		auto fac = float(i) / (gradientSteps - 1);
+		auto x = pos.x + textWidth + i * stepWidth;
+
+		topRects_.emplace_back();
+		auto p1 = rvg::colorPaint(rvg::mix(start, end, 1 - fac));
+		topRects_.back().paint = {rctx, p1};
+		topRects_.back().shape = {rctx, {x, topy}, rsize, dm};
+
+		bottomRects_.emplace_back();
+		auto col = (1 - fac) * start.rgbaNorm() + fac * end.rgbaNorm();
+		auto p2 = rvg::colorPaint({rvg::norm, col});
+		bottomRects_.back().paint = {rctx, p2};
+		bottomRects_.back().shape = {rctx, {x, boty}, rsize, dm};
+	}
+}
+
+void GradientWidget::draw(vk::CommandBuffer cb) {
+	dlg_assert(topRects_.size() == bottomRects_.size());
+	for(auto i = 0u; i < topRects_.size(); ++i) {
+		topRects_[i].paint.bind(cb);
+		topRects_[i].shape.fill(cb);
+
+		bottomRects_[i].paint.bind(cb);
+		bottomRects_[i].shape.fill(cb);
+	}
+
+	gradient_.bind(cb);
+	middleShape_.fill(cb);
+
+	textPaint_.bind(cb);
+	topText_.draw(cb);
+	middleText_.draw(cb);
+	bottomText_.draw(cb);
+}
+
+// Path
+PathWidget::PathWidget(const Context& ctx, Vec2f pos, Vec2f size) {
+	pos_ = pos;
+	size_ = size;
+
+	auto drawMode = rvg::DrawMode {false, 1.f};
+	drawMode.aaStroke = true;
+	drawMode.deviceLocal = true;
+	shape_ = {ctx.ctx, {}, drawMode};
+	scissor_ = {ctx.ctx, {pos, size}};
+
+	drawMode.stroke = 4.f;
+	bg_ = {ctx.ctx, pos + Vec {2.f, 2.f}, size - Vec {4.f, 4.f},
+		drawMode, {4.f, 4.f, 4.f, 4.f}};
+	paint_ = {ctx.ctx, rvg::colorPaint(rvg::Color::white)};
+}
+
+void PathWidget::draw(vk::CommandBuffer cb) {
+	scissor_.bind(cb);
+	paint_.bind(cb);
+	bg_.stroke(cb);
+	shape_.stroke(cb);
+	scissor_.context().defaultScissor().bind(cb);
+}
+
+void PathWidget::clicked(Vec2f pos) {
+	if(first_) {
+		first_ = false;
+		path_.start = pos;
+	} else {
+		path_.sqBezier(pos);
+		shape_.change()->points = ktc::flatten(path_);
+	}
+}
+
+// App
+App::App(rvg::Context& ctx) : ctx_(ctx), fontAtlas_(ctx),
+		font_(fontAtlas_, baseResPath + "example/OpenSans-Regular.ttf", 16) {
+
+	fontAtlas_.bake(ctx);
+
+	constexpr auto gradPos = Vec {50.f, 50.f};
+	constexpr auto pathPos = Vec {50.f, 400.f};
+	constexpr auto pathSize = Vec {400.f, 400.f};
+	constexpr auto pendulumPos = Vec {900.f, 200.f};
+
+	transform_ = {ctx};
+	gradWidget_ = {{ctx, font_}, gradPos, rvg::Color::red, rvg::Color::green};
+	path_ = {{ctx, font_}, pathPos, pathSize};
+	pendulum_ = {ctx, pendulumPos};
+	bottomText_ = {ctx, "https://github.com/nyorain/rvg", font_, {}};
+	paint_ = {ctx, rvg::colorPaint(rvg::Color::white)};
+}
+
+void App::update(double dt) {
+	pendulum_.update(dt);
+}
+
+void App::resize(Vec2ui size) {
+	// setup a matrix that will transform from window coords to vulkan coords
+	auto mat = nytl::identity<4, float>();
+	auto s = nytl::Vec {2.f / size.x, 2.f / size.y, 1};
+	scale(mat, s);
+	translate(mat, {-1, -1, 0});
+	*transform_.change() = mat;
+
+	auto textWidth = bottomText_.width();
+	auto tchange = bottomText_.change();
+	tchange->position.x = (size[0] - textWidth) / 2;
+	tchange->position.y = size[1] - font_.height() - 20;
+}
+
+void App::draw(vk::CommandBuffer cb) {
+	transform_.bind(cb);
+	gradWidget_.draw(cb);
+	path_.draw(cb);
+	pendulum_.draw(cb);
+
+	paint_.bind(cb);
+	bottomText_.draw(cb);
+}
+
+void App::clicked(Vec2f pos) {
+	auto in = [&](Vec2f p, Vec2f size) {
+		using namespace nytl::vec::cw;
+		dlg_info("{} {} {}", pos, p, pos+size);
+		return pos == clamp(pos, p, p + size);
+	};
+
+	if(in(bottomText_.position(), {bottomText_.width(), font_.height()})) {
+		// ikr, std::system isn't a good choice, generally.
+		// But here, i feel like it's enough
+#ifdef RVG_EXAMPLE_UNIX
+		std::system("xdg-open https://www.github.com/nyorain/rvg");
+#elif defined(RVG_EXAMPLE_WIN)
+		// https://stackoverflow.com/questions/3739327
+		std::system("explorer https://www.github.com/nyorain/rvg");
+#endif
+	} else if(in(path_.pos(), path_.size())) {
+		path_.clicked(pos);
+	}
+}
+
+void App::key(ny::Keycode key, bool pressed) {
+	if(key == ny::Keycode::left) {
+		pendulum_.left(pressed);
+	} else if(key == ny::Keycode::right) {
+		pendulum_.right(pressed);
+	}
+
+	if(!pressed) {
+		return;
+	}
+
+	if(key == ny::Keycode::b) {
+		*paint_.change() = rvg::colorPaint({rvg::norm, 0.2, 0.2, 0.8});
+	} else if(key == ny::Keycode::g) {
+		*paint_.change() = rvg::colorPaint({rvg::norm, 0.1, 0.6, 0.3});
+	} else if(key == ny::Keycode::r) {
+		*paint_.change() = rvg::colorPaint({rvg::norm, 0.8, 0.2, 0.3});
+	} else if(key == ny::Keycode::d) {
+		*paint_.change() = rvg::colorPaint({rvg::norm, 0.1, 0.1, 0.1});
+	} else if(key == ny::Keycode::w) {
+		*paint_.change() = rvg::colorPaint(rvg::Color::white);
+	} else if(key == ny::Keycode::p) {
+		*paint_.change() = rvg::linearGradient({0, 0}, {2000, 1000},
+			{255, 0, 0}, {255, 255, 0});
+	} else if(key == ny::Keycode::c) {
+		*paint_.change() = rvg::radialGradient({1000, 500}, 0, 1000,
+			{255, 0, 0}, {255, 255, 0});
+	}
+}
+
+// main
 int main() {
 	// - initialization -
 	auto& backend = ny::Backend::choose();
@@ -95,7 +556,7 @@ int main() {
 	if(useValidation) {
 		auto layers = {
 			layerName,
-			"VK_LAYER_RENDERDOC_Capture",
+			// "VK_LAYER_RENDERDOC_Capture",
 		};
 
 		instanceInfo.enabledLayerCount = layers.size();
@@ -158,28 +619,12 @@ int main() {
 
 	auto renderer = Renderer(renderInfo);
 
-	// rvg
+	// app
 	rvg::Context ctx(device, {renderer.renderPass(), 0, true});
+	App app(ctx);
 
-	rvg::Transform transform(ctx);
-
-	auto drawMode = rvg::DrawMode {false, 1.f};
-	drawMode.aaStroke = true;
-	drawMode.deviceLocal = true;
-	rvg::Shape shape(ctx, {}, drawMode);
-	rvg::Paint paint(ctx, rvg::colorPaint({rvg::norm, 0.1f, .6f, .3f}));
-
-	auto fontHeight = 14;
-	rvg::FontAtlas atlas(ctx);
-	rvg::Font osFont(atlas, baseResPath + "example/OpenSans-Regular.ttf",
-		fontHeight);
-	rvg::Font lsFont(atlas, baseResPath + "example/LiberationSans-Regular.ttf",
-		fontHeight);
-	atlas.bake(ctx);
-
-	rvg::Font lsSmall(atlas, baseResPath + "example/LiberationSans-Regular.ttf", 14);
-	atlas.bake(ctx);
-
+	// rvg
+	/*
 	auto string = "yo, whaddup";
 	rvg::Text text(ctx, string, lsFont, {0, 0});
 	auto textWidth = lsFont.width(string);
@@ -203,28 +648,12 @@ int main() {
 
 	rvg::Paint svgPaint {ctx, rvg::colorPaint({150, 230, 200})};
 
-	auto bgPaintData = rvg::colorPaint({5, 5, 5});
-	auto labelPaintData = rvg::colorPaint({240, 240, 240});
-
-	auto hintBgPaint = rvg::Paint(ctx, rvg::colorPaint({5, 5, 5, 200}));
-	auto hintTextPaint = rvg::Paint(ctx, labelPaintData);
-
-	auto bgPaint = rvg::Paint(ctx, bgPaintData);
+	*/
 
 	// render recoreding
-	renderer.onRender += [&](vk::CommandBuffer buf){
-		ctx.bindDefaults(buf);
-
-		transform.bind(buf);
-		svgPaint.bind(buf);
-		svgShape.fill(buf);
-
-		foxPaint.bind(buf);
-		foxRect.fill(buf);
-
-		paint.bind(buf);
-		shape.stroke(buf);
-		text.draw(buf);
+	renderer.onRender += [&](vk::CommandBuffer cb){
+		ctx.bindDefaults(cb);
+		app.draw(cb);
 	};
 
 	ctx.updateDevice();
@@ -234,70 +663,25 @@ int main() {
 	auto run = true;
 	window.onClose = [&](const auto&) { run = false; };
 	window.onKey = [&](const auto& ev) {
+		app.key(ev.keycode, ev.pressed);
 		if(ev.pressed) {
 			if(ev.keycode == ny::Keycode::escape) {
 				dlg_info("Escape pressed, exiting");
 				run = false;
-			} else if(ev.keycode == ny::Keycode::b) {
-				*paint.change() = rvg::colorPaint({rvg::norm, 0.2, 0.2, 0.8});
-			} else if(ev.keycode == ny::Keycode::g) {
-				*paint.change() = rvg::colorPaint({rvg::norm, 0.1, 0.6, 0.3});
-			} else if(ev.keycode == ny::Keycode::r) {
-				*paint.change() = rvg::colorPaint({rvg::norm, 0.8, 0.2, 0.3});
-			} else if(ev.keycode == ny::Keycode::d) {
-				*paint.change() = rvg::colorPaint({rvg::norm, 0.1, 0.1, 0.1});
-			} else if(ev.keycode == ny::Keycode::w) {
-				*paint.change() = rvg::colorPaint(rvg::Color::white);
-			} else if(ev.keycode == ny::Keycode::p) {
-				*paint.change() = rvg::linearGradient({0, 0}, {2000, 1000},
-					{255, 0, 0}, {255, 255, 0});
-			} else if(ev.keycode == ny::Keycode::c) {
-				*paint.change() = rvg::radialGradient({1000, 500}, 0, 1000,
-					{255, 0, 0}, {255, 255, 0});
-			} else if(ev.keycode == ny::Keycode::k1) {
-				text.change()->font = &lsFont;
-			} else if(ev.keycode == ny::Keycode::k2) {
-				text.change()->font = &osFont;
 			}
 		}
 	};
 
 	window.onResize = [&](const auto& ev) {
 		renderer.resize(ev.size);
-
-		auto tchange = text.change();
-		tchange->position.x = (ev.size[0] - textWidth) / 2;
-		tchange->position.y = ev.size[1] - fontHeight - 20;
-
-		auto mat = nytl::identity<4, float>();
-		auto s = nytl::Vec {2.f / window.size().x, 2.f / window.size().y, 1};
-		scale(mat, s);
-		translate(mat, {-1, -1, 0});
-		*transform.change() = mat;
+		app.resize(ev.size);
 	};
-
-	ktc::Subpath subpath;
-	bool first = true;
 
 	window.onMouseButton = [&](const auto& ev) {
-		auto p = static_cast<nytl::Vec2f>(ev.position);
-
-		if(!ev.pressed) {
-			return;
+		if(ev.pressed && ev.button == ny::MouseButton::left) {
+			auto p = static_cast<nytl::Vec2f>(ev.position);
+			app.clicked(p);
 		}
-
-		if(ev.button == ny::MouseButton::left) {
-			if(first) {
-				first = false;
-				subpath.start = p;
-			} else {
-				subpath.sqBezier(p);
-				shape.change()->points = ktc::flatten(subpath);
-			}
-		}
-	};
-
-	window.onMouseMove = [&](const auto&) {
 	};
 
 	// - main loop -
@@ -311,9 +695,10 @@ int main() {
 	while(run) {
 		auto now = Clock::now();
 		auto diff = now - lastFrame;
-		auto deltaCount = std::chrono::duration_cast<Secf>(diff).count();
+		auto dt = std::chrono::duration_cast<Secf>(diff).count();
 		lastFrame = now;
 
+		app.update(dt);
 		if(!appContext->pollEvents()) {
 			dlg_info("pollEvents returned false");
 			return 0;
@@ -338,11 +723,11 @@ int main() {
 			info.wait = wait;
 		}
 
-		renderer.renderBlock(info);
+		renderer.renderSync(info);
 
 		if(printFrames) {
 			++fpsCounter;
-			secCounter += deltaCount;
+			secCounter += dt;
 			if(secCounter >= 1.f) {
 				dlg_info("{} fps", fpsCounter);
 				secCounter = 0.f;

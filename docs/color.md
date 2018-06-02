@@ -27,6 +27,8 @@ Great resources and discussions regarding color spaces and gamma correction:
   for converting (with gamma) and also mixing colors.
 
 
+---
+
 
 *Issue*: should rvg offer a gamma setting for its shader? This would be useful
 when rendering on a not-srgb framebuffer.
@@ -36,3 +38,20 @@ when rendering on a not-srgb framebuffer.
 - otherwise vulkan supports srgb, there is practially no reason to not use it
 
 *Resolved*: since it is usually not done, rvg will not do it for now
+
+---
+
+
+*Issue*: should rvg offer the user an options whether color mixing should
+be done in rgb or srgb space?
+
+- Pretty much _all_ software does it in srgb space
+- doing it in srgb space is technically "wrong" (not fully convinced there
+  is a wrong here) and most modern software only does it to stay compatible
+- this lead to getting used to "wrong" gradients so it appears somewhat
+  normal to e.g. have a dark section between a red/green gradient
+- if rvg _forces_ (the "correct") rgb mixing some users could perceive rvg's
+  gradients as "wrong". So it might be a good idea to offer this as setting,
+  like svg does it (see svgs 'color-interpolation' attribute)
+
+*Resolved*: planned for a later stage

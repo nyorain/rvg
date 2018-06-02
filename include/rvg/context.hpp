@@ -13,6 +13,7 @@
 #include <vpp/commandBuffer.hpp>
 #include <vpp/image.hpp>
 #include <vpp/sync.hpp>
+#include <nytl/nonCopyable.hpp>
 
 #include <variant>
 #include <unordered_set>
@@ -50,7 +51,7 @@ struct ContextSettings {
 /// Drawing context. Manages all pipelines and layouts needed to
 /// draw any shapes. There is usually no need for multiple Contexts
 /// for a single device.
-class Context {
+class Context : public nytl::NonMovable {
 public:
 	/// All resources with data on the device that might
 	/// register themselves for update device calls.

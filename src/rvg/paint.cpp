@@ -245,9 +245,13 @@ std::uint32_t u32rgba(const Color& c) {
 }
 
 Color mix(const Color& a, const Color& b, float fac) {
+	// gamma-correct
 	auto la = linearize(a);
 	auto lb = linearize(b);
 	return srgb(fac * la + (1 - fac) * lb);
+
+	// gamma-incorrect
+	// return {norm, fac * a.rgbaNorm() + (1 - fac) * b.rgbaNorm()};
 }
 
 // Paint functions

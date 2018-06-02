@@ -18,12 +18,6 @@
 	  like a DrawInstance state
 	  [ended up deprecatng/removing DrawInstance. Not needed (atm)]
 - [x] combine stageUpload and updateDevice (if possible).
-- [ ] more rvg testing
-	- [ ] some color conversion, mixing tests
-	- [ ] test where all shapes are drawn once with possible settings
-	      and paints and stuff
-	- [x] especially test defined behaviour when moving/destructing
-	      objects
 - [x] Context::updateDevice return semantics when device objects that are not
       currently used are updated or new ones are created
 	  [it's sane to rerecord even if objects currently not used and not
@@ -33,24 +27,35 @@
 - [ ] stable (update) deps
 	- [x] nytl
 	- [ ] vpp
-	- [ ] katachi
+	- [x] katachi
 	- [x] dlg
 	- [ ] put their minimum versions in meson
 - [ ] basic demos with screenshots
-	- [ ] heavily documented basic example
-	- [ ] try to use every feature once (in extra functions/modules)
 - [x] split rvg and vui library
 - [ ] create real readme
 - [ ] release public version
 
 ### later
 
+- [ ] make positioning textures easier (NO manual matrix...)
+- [ ] (improve) heavily documented basic example
+	- [ ] try to use every feature once (in extra functions/modules)
+- [ ] when vui 0.1 is released/made public:
+	- [ ] link to it in the readme as somewhat larger project using rvg
+	- [ ] add highly functional and good looking example(s) using rvg and vui
+- [ ] more (and systematic) rvg testing
+	- [ ] some color conversion, mixing tests
+	- [ ] test where all shapes are drawn once with possible settings
+	      and paints and stuff
+	- [ ] especially test defined behaviour when moving/destructing
+	      objects
 - [ ] care about texture srgb. You probably want srgb textures.
 	- [ ] add srgb support for vpp/formats
 - [ ] check if DeviceObject/DevRes impl mess in Context can be cleaned up
 	- [ ] currently rather error prone and (over-?)complicated with visitors
 - [ ] improve font/fontAtlas handling
 	- [ ] document WHEN bake can/must be called
+	- [ ] make movable?
 - [ ] custom queueSubmitter in ContextSettings. Or option for another
       submission method (callback + queueFamily or sth. that defaults
 	  to current impl with default queue family and queue submitter)
