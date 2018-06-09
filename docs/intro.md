@@ -15,7 +15,7 @@ use of vulkan performance (mainly/especially on host (cpu) side).
 This can be useful e.g. for quick 2d prototypes or a vulkan gui library.
 It can also be useful for small simple things like a quick start into
 text rendering which is some effort to write from scratch (rvg reuses
-the font handling from [nuklear](https://github.com/vurtun/nuklar)).
+the font handling from [nuklear](https://github.com/vurtun/nuklear)).
 
 You can think of it like a more lightweight and (at least on host side)
 more efficient counterpart to the graphics library of sfml (rvg does

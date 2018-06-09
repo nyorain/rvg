@@ -17,7 +17,8 @@ Written in C++17, the project is tagged as C by github because it embeds
 [nuklears](https://github.com/vurtun/nuklear) font handling and
 some [stb headers](https://github.com/nothings/stb).
 Note that the project is still in a rather early stage, please report
-all issues you come across.
+all issues and questions coming up (simple things such as spelling errors
+or missing docs on a function are appreciated as well).
 
 For more information check out the example concepts below, the
 [example](example/example.cpp) showing off many features,
