@@ -16,10 +16,13 @@ Could e.g. easily be used for a vulkan gui library.
 Written in C++17, the project is tagged as C by github because it embeds
 [nuklears](https://github.com/vurtun/nuklear) font handling and
 some [stb headers](https://github.com/nothings/stb).
+Note that the project is still in a rather early stage, please report
+all issues you come across.
 
-For some information check out the example concepts below, the real
-heavily documented [example](example/example.cpp) showing off most features
-or read the [introduction](docs/intro.md).
+For more information check out the example concepts below, the
+[example](example/example.cpp) showing off many features,
+or read the [introduction](docs/intro.md) which documents some basic
+concepts and shows how to integrate rvg in more detail.
 
 # Example
 
@@ -134,8 +137,8 @@ Screenshot of [example/example.cpp](example/example.cpp):
 
 ## Building
 
-The library uses meson as build system (and uses a few of my other
-libraries as dependencies to stay modular).
+The library uses meson as build system. It uses a few of my other
+libraries as dependencies to stay modular.
 You need a solid C++17 compiler (currently not tested with msvc),
 gcc >= 7 is tested.
 

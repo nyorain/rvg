@@ -294,6 +294,3 @@ relaxed in a future version, you can probably already call update, draw/bind
 and updateDevice on Polygon/Shape/Text/Paint etc from any thread as long
 as there is never more than one thread calling it. But this was not fully
 tested yet.
-
-
-From here on, just lookup the
