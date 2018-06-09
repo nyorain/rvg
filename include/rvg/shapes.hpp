@@ -87,12 +87,15 @@ protected:
 /// Circular shape that can be filled or stroked.
 class CircleShape {
 public:
+	static constexpr unsigned defaultPoints = 0xFFFFFFFF;
+
+public:
 	CircleShape() = default;
 	CircleShape(Context& ctx) : polygon_(ctx) {}
 	CircleShape(Context&, Vec2f center, Vec2f radius, const DrawMode&,
-		unsigned points = 16, float startAngle = 0.f);
+		unsigned points = defaultPoints, float startAngle = 0.f);
 	CircleShape(Context&, Vec2f center, float radius, const DrawMode&,
-		unsigned points = 16, float startAngle = 0.f);
+		unsigned points = defaultPoints, float startAngle = 0.f);
 
 	auto change() { return StateChange {*this, state_}; }
 

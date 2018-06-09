@@ -141,6 +141,11 @@ CircleShape::CircleShape(Context& ctx,
 		: state_{xcenter, xradius, std::move(xdraw), xpoints, xstartAngle},
 			polygon_(ctx) {
 
+	if(xpoints == defaultPoints) {
+		auto& pc = state_.pointCount;
+		pc = std::min(8 + 8 * ((xradius.x + xradius.y) / 16), 256.f);
+	}
+
 	update();
 	polygon_.updateDevice();
 }

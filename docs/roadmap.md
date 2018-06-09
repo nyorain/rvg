@@ -30,14 +30,15 @@
 	- [x] katachi
 	- [x] dlg
 	- [x] put their minimum versions in meson
-- [ ] basic demos with screenshots
+- [x] basic demos with screenshots
 - [x] split rvg and vui library
-- [ ] create real readme
+- [x] create real readme
 - [ ] release public version
 
 ### later
 
 - [ ] make positioning textures easier (NO manual matrix...)
+- [ ] corner bevels. Currently anti aliasing not too good for sharp corners
 - [ ] (improve) heavily documented basic example
 	- [ ] try to use every feature once (in extra functions/modules)
 - [ ] when vui 0.1 is released/made public:

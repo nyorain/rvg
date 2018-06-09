@@ -89,7 +89,6 @@ protected:
 	rvg::Text middleText_;
 	rvg::RectShape middleShape_;
 	rvg::Paint gradient_;
-	rvg::Paint textPaint_;
 
 	rvg::Text bottomText_;
 	std::vector<Rect> bottomRects_;
@@ -128,7 +127,7 @@ public:
 		float g {-9.81}; // we work in window coordinates
 	} constants;
 
-	float screenLength {320.f};
+	float screenLength {350.f};
 	float angle {0.01f};
 	float avel {0.f};
 
@@ -137,7 +136,7 @@ public:
 
 public:
 	PendulumWidget() = default;
-	PendulumWidget(rvg::Context& ctx, nytl::Vec2f pos);
+	PendulumWidget(const Context& cctx, nytl::Vec2f pos);
 	void update(float dt);
 	nytl::Vec2f massPos() const;
 	void changeCenter(nytl::Vec2f nc);
@@ -185,8 +184,15 @@ protected:
 	rvg::Paint paint_;
 	rvg::Transform transform_;
 	rvg::CircleShape circle_;
-	rvg::Shape antiAliased_;
 	rvg::Text bottomText_;
+	rvg::Shape starShape_;
+	rvg::Shape hsvCircle_;
+
+	rvg::Texture texture_;
+	rvg::Paint texturePaint_;
+	rvg::Paint gradientPaint_;
+
+	std::vector<rvg::Text> texts_;
 };
 
 // - implementation -
@@ -239,10 +245,13 @@ Vec2f alignText(std::string_view text, const rvg::Font& font,
 }
 
 // Pendulum
-PendulumWidget::PendulumWidget(rvg::Context& ctx, nytl::Vec2f pos) : center_(pos) {
+PendulumWidget::PendulumWidget(const Context& cctx, nytl::Vec2f pos)
+		: center_(pos) {
+
 	constexpr auto centerRadius = 10.f;
 	constexpr auto massRadius = 20.f;
 
+	auto& ctx = cctx.ctx;
 	auto end = massPos();
 	auto drawMode = rvg::DrawMode {};
 	drawMode.aaFill = true;
@@ -257,11 +266,17 @@ PendulumWidget::PendulumWidget(rvg::Context& ctx, nytl::Vec2f pos) : center_(pos
 
 	whitePaint_ = {ctx, rvg::colorPaint(rvg::Color::white)};
 	redPaint_ = {ctx, rvg::colorPaint(rvg::Color::red)};
+
+	auto ppos = pos - Vec2f {0.f, massRadius + 10.f};
+	auto string = "Move me using the arrow keys";
+	auto textPos = alignText(string, cctx.font, {ppos, {}},
+		HorzAlign::center, VertAlign::middle);
+	text_ = {ctx, string, cctx.font, textPos};
 }
 
 void PendulumWidget::update(float dt) {
-	constexpr auto leftBound = 750.f;
-	constexpr auto rightBound = 1600.f;
+	constexpr auto leftBound = 650.f;
+	constexpr auto rightBound = 1450.f;
 
 	float u = -xFriction_ * xVel_;
 	if(center_.x < leftBound) {
@@ -325,6 +340,7 @@ void PendulumWidget::draw(vk::CommandBuffer cb) {
 	whitePaint_.bind(cb);
 	fixture_.fill(cb);
 	connection_.stroke(cb);
+	text_.draw(cb);
 
 	redPaint_.bind(cb);
 	mass_.fill(cb);
@@ -354,7 +370,6 @@ GradientWidget::GradientWidget(const Context& ctx, Vec2f pos,
 	middleShape_ = {rctx, mpos, msize, dm};
 	gradient_ = {rctx, rvg::linearGradient(mpos,
 		mpos + Vec {gradientWidth, 0.f}, start, end)};
-	textPaint_ = {rctx, rvg::colorPaint(rvg::mix(start, end, 0.5f))};
 
 	p.y += lineHeight;
 	bottomText_ = {rctx, "[Stepped] Using incorrect mixing", ctx.font, p};
@@ -380,6 +395,10 @@ GradientWidget::GradientWidget(const Context& ctx, Vec2f pos,
 }
 
 void GradientWidget::draw(vk::CommandBuffer cb) {
+	topText_.draw(cb);
+	middleText_.draw(cb);
+	bottomText_.draw(cb);
+
 	dlg_assert(topRects_.size() == bottomRects_.size());
 	for(auto i = 0u; i < topRects_.size(); ++i) {
 		topRects_[i].paint.bind(cb);
@@ -391,11 +410,6 @@ void GradientWidget::draw(vk::CommandBuffer cb) {
 
 	gradient_.bind(cb);
 	middleShape_.fill(cb);
-
-	textPaint_.bind(cb);
-	topText_.draw(cb);
-	middleText_.draw(cb);
-	bottomText_.draw(cb);
 }
 
 // Path
@@ -435,21 +449,95 @@ void PathWidget::clicked(Vec2f pos) {
 
 // App
 App::App(rvg::Context& ctx) : ctx_(ctx), fontAtlas_(ctx),
-		font_(fontAtlas_, baseResPath + "example/OpenSans-Regular.ttf", 16) {
+		font_(fontAtlas_, baseResPath + "example/OpenSans-Regular.ttf", 18u) {
 
 	fontAtlas_.bake(ctx);
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
-	constexpr auto pathPos = Vec {50.f, 400.f};
+	constexpr auto pathPos = Vec {50.f, 450.f};
 	constexpr auto pathSize = Vec {400.f, 400.f};
-	constexpr auto pendulumPos = Vec {900.f, 200.f};
+	constexpr auto pendulumPos = Vec {900.f, 450.f};
+	constexpr auto texPath = "example/thunderstorm.jpg";
+	constexpr auto circlePos = Vec {850.f, 200.f};
+	constexpr auto circleRad = 120.f;
+	constexpr auto hsvCenter = Vec {1150.f, 200.f};
+	constexpr auto hsvRad = 120.f;
+	constexpr auto starPos = Vec {1440.f, 205.f};
+	constexpr auto starRad = 130.f;
+	constexpr auto textOff = Vec {0.f, 150.f};
+
+	auto addText = [&](Vec2f center, const char* string) {
+		auto pos = alignText(string, font_, {center, {}}, HorzAlign::center,
+			VertAlign::middle);
+		texts_.emplace_back(ctx, string, font_, pos);
+	};
 
 	transform_ = {ctx};
 	gradWidget_ = {{ctx, font_}, gradPos, rvg::Color::red, rvg::Color::green};
 	path_ = {{ctx, font_}, pathPos, pathSize};
-	pendulum_ = {ctx, pendulumPos};
+	pendulum_ = {{ctx, font_}, pendulumPos};
 	bottomText_ = {ctx, "https://github.com/nyorain/rvg", font_, {}};
 	paint_ = {ctx, rvg::colorPaint(rvg::Color::white)};
+
+	addText(pathPos + Vec {pathSize.x / 2.f, pathSize.y + 20.f},
+		"Click me: Anti aliased smooth bezier curves");
+
+	texture_ = rvg::Texture(ctx, baseResPath + texPath);
+
+	auto mat = nytl::identity<4, float>();
+	mat[0][0] = 0.5 / circleRad;
+	mat[1][1] = 0.5 / circleRad;
+	mat[0][3] = -0.5 * (circlePos.x - circleRad) / circleRad;
+	mat[1][3] = -0.5 * (circlePos.y - circleRad) / circleRad;
+	texturePaint_ = {ctx, rvg::texturePaintRGBA(mat, texture_.vkImageView())};
+
+	// star
+	auto starPoints = [&](Vec2f center, float scale) {
+		std::vector<nytl::Vec2f> points;
+		points.push_back(center);
+		using nytl::constants::pi;
+		auto angle = -0.5 * pi;
+		for(auto i = 0u; i < 6; ++i) {
+			auto pos = center + scale * Vec {std::cos(angle), std::sin(angle)};
+			points.push_back(Vec2f(pos));
+			angle += (4 / 5.f) * pi;
+		}
+
+		return points;
+	};
+
+	starShape_ = {ctx, starPoints(starPos, starRad), {true, 2.f}};
+	gradientPaint_ = {ctx, rvg::radialGradient(starPos, -5.f, starRad - 15.f,
+		rvg::u32rgba(0x7474FFFF), rvg::u32rgba(0xFFFF74FF))};
+	addText(starPos + textOff, "No anti aliasing");
+
+	// hsv wheel
+	auto drawMode = rvg::DrawMode {true, 0.f};
+
+	auto hsvPointCount = 128u + 2u;
+	auto colorPoints = std::vector<nytl::Vec4u8> {hsvPointCount};
+	auto hsvPoints = std::vector<nytl::Vec2f> {hsvPointCount};
+	colorPoints[0] = rvg::hsvNorm(0.f, 0.f, 0.5f).rgba();
+	hsvPoints[0] = hsvCenter;
+	for(auto i = 1u; i < hsvPointCount; ++i) {
+		auto fac = (i - 1) / float(hsvPointCount - 2);
+		auto col = rvg::hsvNorm(fac, 1.f, 1.f);
+		colorPoints[i] = col.rgba();
+		fac *= 2 * nytl::constants::pi;
+		auto off = Vec2f {std::cos(fac), std::sin(fac)};
+		hsvPoints[i] = hsvCenter + hsvRad * off;
+	}
+
+	drawMode.color.fill = true;
+	drawMode.color.points = std::move(colorPoints);
+	hsvCircle_ = {ctx, std::move(hsvPoints), drawMode};
+	addText(hsvCenter + textOff, "Using per-point color");
+
+	drawMode.aaFill = true;
+	drawMode.aaStroke = true;
+	drawMode.stroke = 2.5f;
+	circle_ = {ctx, circlePos, circleRad, drawMode};
+	addText(circlePos + textOff, "Anti aliasing & using a texture");
 }
 
 void App::update(double dt) {
@@ -472,8 +560,27 @@ void App::resize(Vec2ui size) {
 
 void App::draw(vk::CommandBuffer cb) {
 	transform_.bind(cb);
+	paint_.bind(cb);
+
 	gradWidget_.draw(cb);
 	path_.draw(cb);
+
+	gradientPaint_.bind(cb);
+	starShape_.fill(cb);
+
+	paint_.bind(cb);
+	circle_.stroke(cb);
+	texturePaint_.bind(cb);
+	circle_.fill(cb);
+
+	ctx_.pointColorPaint().bind(cb);
+	hsvCircle_.fill(cb);
+
+	paint_.bind(cb);
+	for(auto& t : texts_) {
+		t.draw(cb);
+	}
+
 	pendulum_.draw(cb);
 
 	paint_.bind(cb);
@@ -620,33 +727,6 @@ int main() {
 	// app
 	rvg::Context ctx(device, {renderer.renderPass(), 0, true});
 	App app(ctx);
-
-	// rvg
-	/*
-	auto string = "yo, whaddup";
-	rvg::Text text(ctx, string, lsFont, {0, 0});
-	auto textWidth = lsFont.width(string);
-
-	// svg path
-	auto svgSubpath = ktc::parseSvgSubpath("h 1920 v 1080 h -1920 z");
-
-	rvg::Shape svgShape(ctx, ktc::flatten(svgSubpath), {true, 0.f});
-
-	// image stuff
-	rvg::RectShape foxRect(ctx, {500, 100}, {300, 200}, {true, 0.f});
-	auto foxTex = rvg::Texture(ctx, baseResPath + "example/fox.jpg");
-	auto iv = foxTex.vkImageView();
-
-	auto mat = nytl::identity<4, float>();
-	mat[0][0] = 1 / 300.f;
-	mat[1][1] = 1 / 200.f;
-	mat[0][3] = -500.f / 300.f;
-	mat[1][3] = -100.f / 200.f;
-	rvg::Paint foxPaint = {ctx, rvg::texturePaintRGBA(mat, iv)};
-
-	rvg::Paint svgPaint {ctx, rvg::colorPaint({150, 230, 200})};
-
-	*/
 
 	// render recoreding
 	renderer.onRender += [&](vk::CommandBuffer cb){

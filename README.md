@@ -2,14 +2,16 @@
 
 Vulkan library for high-level 2D vector-like rendering.
 Modeled loosely after svg, inspired by nanoVG.
-Implements retained mode for rendering which makes it highly efficient
-for rendering with vulkan since curves and shapes are not recomputed
-and uploaded every frame but just once (or when changed).
+Uses an object-oriented, retained mode idiom for rendering which makes it
+highly efficient for rendering with vulkan since curves and shapes are not
+recomputed and uploaded every frame but just once (or when changed).
 Does not even need a command buffer rerecord every frame,
 even things like paints, shapes or transforms can be
 changed without triggering the need for a command buffer rerecord which makes
 it use way less cpu performance than immediate mode alternatives.
-Could e.g. easily be used for a gui library.
+Aims to provide a compromise between high level drawing functionality
+and an api that can efficiently be implemented on the gpu.
+Could e.g. easily be used for a vulkan gui library.
 
 Written in C++17, the project is tagged as C by github because it embeds
 [nuklears](https://github.com/vurtun/nuklear) font handling and
