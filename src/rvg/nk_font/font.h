@@ -1,6 +1,6 @@
 // Ripped the font atlas from the excellent nuklear library.
 // See https://github.com/vurtun/nuklear.
-// Licensed under public domain.
+// Released into public domain.
 
 #pragma once
 
@@ -12,9 +12,17 @@
 extern "C" {
 #endif
 
+struct nk_image {
+	nk_handle handle;
+	unsigned short w,h;
+	unsigned short region[4];
+};
 
-struct nk_image {nk_handle handle;unsigned short w,h;unsigned short region[4];};
-struct nk_cursor {struct nk_image img; struct nk_vec2 size, offset;};
+struct nk_cursor {
+	struct nk_image img;
+	struct nk_vec2 size, offset;
+};
+
 enum nk_style_cursor {
     NK_CURSOR_ARROW,
     NK_CURSOR_TEXT,

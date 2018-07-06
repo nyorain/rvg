@@ -61,7 +61,8 @@ public:
 		Paint*,
 		Texture*,
 		Transform*,
-		Scissor*>;
+		Scissor*,
+		FontAtlas*>;
 
 	/// Descriptor set bindings.
 	static constexpr auto transformBindSet = 0u;
@@ -137,6 +138,8 @@ public:
 	const auto& identityTransform() const { return identityTransform_; }
 	const auto& defaultScissor() const { return defaultScissor_; }
 	const auto& defaultStrokeAA() const { return defaultStrokeAA_; }
+	const auto& defaultAtlas() const { return *defaultAtlas_; }
+	auto& defaultAtlas() { return *defaultAtlas_; }
 
 	const auto& settings() const { return settings_; }
 	bool antiAliasing() const { return settings().antiAliasing; }
@@ -186,6 +189,7 @@ private:
 	Scissor defaultScissor_;
 	Transform identityTransform_;
 	Paint pointColorPaint_;
+	std::unique_ptr<FontAtlas> defaultAtlas_;
 
 	vpp::SubBuffer defaultStrokeAABuf_;
 	vpp::TrDs defaultStrokeAA_;

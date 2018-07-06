@@ -173,8 +173,6 @@ public:
 
 protected:
 	rvg::Context& ctx_;
-	rvg::FontAtlas fontAtlas_;
-
 	rvg::Font font_;
 
 	GradientWidget gradWidget_;
@@ -448,10 +446,11 @@ void PathWidget::clicked(Vec2f pos) {
 }
 
 // App
-App::App(rvg::Context& ctx) : ctx_(ctx), fontAtlas_(ctx),
-		font_(fontAtlas_, baseResPath + "example/OpenSans-Regular.ttf", 18u) {
+App::App(rvg::Context& ctx) : ctx_(ctx),
+		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf", 18u) {
 
-	fontAtlas_.bake(ctx);
+	// TODO!
+	ctx_.defaultAtlas().updateDevice();
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
 	constexpr auto pathPos = Vec {50.f, 450.f};

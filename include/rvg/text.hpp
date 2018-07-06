@@ -6,6 +6,7 @@
 
 #include <rvg/fwd.hpp>
 #include <rvg/deviceObject.hpp>
+#include <rvg/font.hpp>
 #include <rvg/stateChange.hpp>
 
 #include <nytl/vec.hpp>
@@ -26,6 +27,10 @@ public:
 	Text() = default;
 	Text(Context&, std::u32string text, const Font&, Vec2f pos);
 	Text(Context&, std::string_view text, const Font&, Vec2f pos);
+
+	Text(Text&& rhs) noexcept;
+	Text& operator=(Text&& rhs) noexcept;
+	~Text();
 
 	/// Draws this text with the bound draw resources (transform,
 	/// scissor, paint).
@@ -64,7 +69,7 @@ public:
 protected:
 	struct State {
 		std::u32string utf32 {};
-		const Font* font {};
+		Font font {};
 		Vec2f position {};
 
 		void utf8(std::string_view);
@@ -78,7 +83,7 @@ protected:
 	std::vector<Vec2f> uvCache_;
 	vpp::SubBuffer posBuf_;
 	vpp::SubBuffer uvBuf_;
-	const Font* oldFont_ {};
+	FontAtlas* oldAtlas_ {};
 };
 
 } // namespace rvg

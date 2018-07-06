@@ -20,26 +20,69 @@ Text::Text(Context& ctx, std::string_view xtext, const Font& f, Vec2f xpos) :
 }
 
 Text::Text(Context& ctx, std::u32string txt, const Font& f, Vec2f xpos) :
-		DeviceObject(ctx), state_{std::move(txt), &f, xpos}, oldFont_(&f) {
+		DeviceObject(ctx), state_{std::move(txt), f, xpos},
+		oldAtlas_(&f.atlas()) {
 
+	f.atlas().added(*this);
 	update();
 	updateDevice();
 }
 
+// NOTE: remove them if possible (currently only here due to the
+// font atlas referencing)
+Text::Text(Text&& rhs) noexcept : DeviceObject(std::move(rhs)) {
+	state_ = std::move(rhs.state_);
+	deviceLocal_ = rhs.deviceLocal_;
+	disable_ = rhs.disable_;
+	posCache_ = std::move(rhs.posCache_);
+	uvCache_ = std::move(rhs.uvCache_);
+	posBuf_ = std::move(rhs.posBuf_);
+	uvBuf_ = std::move(rhs.uvBuf_);
+	oldAtlas_  = rhs.oldAtlas_;
+
+	if(valid()) {
+		font().atlas().moved(rhs, *this);
+	}
+}
+
+Text& Text::operator=(Text&& rhs) noexcept {
+	DeviceObject::operator=(std::move(rhs));
+	state_ = std::move(rhs.state_);
+	deviceLocal_ = rhs.deviceLocal_;
+	disable_ = rhs.disable_;
+	posCache_ = std::move(rhs.posCache_);
+	uvCache_ = std::move(rhs.uvCache_);
+	posBuf_ = std::move(rhs.posBuf_);
+	uvBuf_ = std::move(rhs.uvBuf_);
+	oldAtlas_  = rhs.oldAtlas_;
+
+	if(valid()) {
+		font().atlas().moved(rhs, *this);
+	}
+
+	return *this;
+}
+
+Text::~Text() {
+	if(valid()) {
+		state_.font.atlas().removed(*this);
+	}
+}
+
 void Text::update() {
+	dlg_assert(valid());
 	auto& font = state_.font;
 	auto& text = state_.utf32;
 	auto& position = state_.position;
 
-	if(font != oldFont_) {
-		if(&font->atlas() != &oldFont_->atlas()) {
-			context().rerecord();
-		}
-
-		oldFont_ = font;
+	if(&font.atlas() != oldAtlas_) {
+		context().rerecord();
+		oldAtlas_->removed(*this);
+		font.atlas().added(*this);
+		oldAtlas_ = &font.atlas();
 	}
 
-	dlg_assert(font && font->nkFont());
+	dlg_assert(font.nkFont());
 	dlg_assert(posCache_.size() == uvCache_.size());
 
 	posCache_.clear();
@@ -63,7 +106,7 @@ void Text::update() {
 	};
 
 	for(auto c : text) {
-		auto pglyph = nk_font_find_glyph(font->nkFont(), c);
+		auto pglyph = font.glyph(c);
 		dlg_assert(pglyph);
 
 		auto& glyph = *pglyph;
@@ -134,7 +177,7 @@ void Text::draw(vk::CommandBuffer cb) const {
 		context().stripPipe());
 	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
 		context().pipeLayout(), Context::fontBindSet,
-		{state_.font->atlas().ds()}, {});
+		{state_.font.atlas().ds()}, {});
 
 	static constexpr auto type = uint32_t(1);
 	vk::cmdPushConstants(cb, context().pipeLayout(),
@@ -174,7 +217,7 @@ Rect2f Text::ithBounds(unsigned n) const {
 	auto start = posCache_[n * 6 + vertIndex0];
 	auto end = posCache_[n * 6 + vertIndex2];
 
-	auto pglyph = nk_font_find_glyph(state_.font->nkFont(), text[n]);
+	auto pglyph = nk_font_find_glyph(state_.font.nkFont(), text[n]);
 	dlg_assert(pglyph);
 	auto r = Rect2f {start - position, {pglyph->xadvance, end.y - start.y}};
 

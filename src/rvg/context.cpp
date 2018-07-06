@@ -204,6 +204,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	identityTransform_ = {*this};
 	pointColorPaint_ = {*this, ::rvg::pointColorPaint()};
 	defaultScissor_ = {*this, Scissor::reset};
+	defaultAtlas_ = std::make_unique<FontAtlas>(*this);
 
 	if(settings.antiAliasing) {
 		defaultStrokeAABuf_ = {bufferAllocator(), 12 * sizeof(float),
