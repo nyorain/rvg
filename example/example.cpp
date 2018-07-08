@@ -446,11 +446,10 @@ void PathWidget::clicked(Vec2f pos) {
 }
 
 // App
-App::App(rvg::Context& ctx) : ctx_(ctx),
-		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf", 18u) {
-
-	// TODO!
-	ctx_.defaultAtlas().updateDevice();
+App::App(rvg::Context& ctx) : ctx_(ctx), font_(ctx_, {
+			{baseResPath + "example/OpenSans-Regular.ttf", 18u},
+			{baseResPath + "example/fontawesome-webfont.ttf", 18u},
+		}) {
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
 	constexpr auto pathPos = Vec {50.f, 450.f};
@@ -475,7 +474,7 @@ App::App(rvg::Context& ctx) : ctx_(ctx),
 	gradWidget_ = {{ctx, font_}, gradPos, rvg::Color::red, rvg::Color::green};
 	path_ = {{ctx, font_}, pathPos, pathSize};
 	pendulum_ = {{ctx, font_}, pendulumPos};
-	bottomText_ = {ctx, "https://github.com/nyorain/rvg", font_, {}};
+	bottomText_ = {ctx, u8" https://github.com/nyorain/rvg ", font_, {}};
 	paint_ = {ctx, rvg::colorPaint(rvg::Color::white)};
 
 	addText(pathPos + Vec {pathSize.x / 2.f, pathSize.y + 20.f},
@@ -660,7 +659,7 @@ int main() {
 	if(useValidation) {
 		auto layers = {
 			layerName,
-			// "VK_LAYER_RENDERDOC_Capture",
+			"VK_LAYER_RENDERDOC_Capture",
 		};
 
 		instanceInfo.enabledLayerCount = layers.size();

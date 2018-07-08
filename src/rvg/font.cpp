@@ -26,7 +26,6 @@ FontAtlas::FontAtlas(Context& ctx) : DeviceObject(ctx) {
 	atlas_ = std::make_unique<nk_font_atlas>();
 	nk_font_atlas_init_default(&nkAtlas());
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutFontAtlas()};
-	nk_font_atlas_begin(&nkAtlas());
 }
 
 FontAtlas::~FontAtlas() {
@@ -48,12 +47,11 @@ void FontAtlas::ensureBaked() {
 	nk_font_atlas_bake(&nkAtlas(), &w, &h, NK_FONT_ATLAS_ALPHA8);
 
 	context().registerUpdateDevice(this);
-	for(auto& t : texts_) {
+	invalid_ = false;
+	for(auto& t : texts_) { // texts have to be rebaked (uv coords)
 		dlg_assert(t);
 		t->update();
 	}
-
-	invalid_ = false;
 }
 
 void FontAtlas::added(Text& t) {
@@ -110,9 +108,9 @@ Font::Font(Context& ctx, StringParam f, unsigned h) :
 }
 
 Font::Font(FontAtlas& atlas, StringParam f, unsigned h) : atlas_(&atlas) {
-	range_ = {0x0020, 0x00FF, 0};
 	auto config = nk_font_config(h);
-	config.range = range_.data();
+	auto data = reinterpret_cast<uint32_t*>(range_.data());
+	config.range = data;
 	font_ = nk_font_atlas_add_from_file(&atlas.nkAtlas(), f.c_str(), h,
 		&config);
 	if(!font_) {
@@ -127,9 +125,9 @@ Font::Font(FontAtlas& atlas, StringParam f, unsigned h) : atlas_(&atlas) {
 Font::Font(FontAtlas& atlas, Span<const std::byte> blob, unsigned h) :
 		atlas_(&atlas) {
 
-	range_ = {0x0020, 0x00FF, 0};
 	auto config = nk_font_config(h);
-	config.range = range_.data();
+	auto data = reinterpret_cast<uint32_t*>(range_.data());
+	config.range = data;
 	font_ = nk_font_atlas_add_from_memory(&atlas.nkAtlas(),
 		const_cast<std::byte*>(blob.data()), blob.size(), h, &config);
 	if(!font_) {
@@ -142,6 +140,53 @@ Font::Font(FontAtlas& atlas, Span<const std::byte> blob, unsigned h) :
 
 Font::Font(Context& ctx, Span<const std::byte> blob, unsigned h) :
 	Font(ctx.defaultAtlas(), blob, h) {
+}
+
+Font::Font(Context& ctx, Span<const Description> fonts) :
+	Font(ctx.defaultAtlas(), fonts) {
+}
+
+Font::Font(FontAtlas& atlas, Span<const Description> fonts) : atlas_(&atlas) {
+	// TODO: leave in valid state when throwing. Don't destroy font atlas
+	if(fonts.empty()) {
+		throw std::runtime_error("Font: empty font span given");
+	}
+
+	auto first = true;
+	for(auto& f : fonts) {
+		auto config = nk_font_config(f.height);
+		auto data = reinterpret_cast<uint32_t*>(range_.data());
+		config.range = data;
+		config.merge_mode = !first;
+
+		std::string err = "Failed to create font from ";
+		struct nk_font* ff = nullptr;
+		if(f.from.index() == 0) {
+			auto file = std::get<0>(f.from);
+			ff = nk_font_atlas_add_from_file(&atlas.nkAtlas(), file.c_str(),
+				f.height, &config);
+			err += "file '";
+			err += file;
+			err += "'";
+		} else {
+			auto blob = std::get<1>(f.from);
+			ff = nk_font_atlas_add_from_memory(&atlas.nkAtlas(),
+				const_cast<std::byte*>(blob.data()), blob.size(), f.height,
+				&config);
+			err += "given binary data";
+		}
+
+		if(!ff) {
+			throw std::runtime_error(err);
+		}
+
+		if(first) {
+			font_ = ff;
+			first = false;
+		}
+	}
+
+	atlas.invalidate();
 }
 
 float Font::width(std::string_view text) const {
@@ -168,59 +213,93 @@ float Font::height() const {
 	return font_->handle.height;
 }
 
-void Font::addRange(uint32_t from, uint32_t to) {
+bool Font::addRange(uint32_t from, uint32_t to) {
 	if(from == 0) {
 		if(to == 0) {
 			dlg_warn("Font::addRange: called with 0, 0");
-			return;
+			return false;
 		}
 
+		// 0 is invalid
 		from = 1;
 	}
 
-	// check if already in range
 	// range is ordered
-	for(auto i = 0u; i < range_.size() - 1; i += 2) {
+	auto inserted = false;
+	auto added = false;
+	for(auto i = 0u; i < range_.size() - 1; ++i) {
 		auto& r = range_[i];
-		auto* next = (i < range_.size() - 2) ? &range_[i + 1] : nullptr;
-		if(r.to < from) {
+		if(r.to + 1 < from) { // when (r.to + 1 == from) we can merge them
 			continue;
 		}
 
-		if(from > r.from) {
-			to = std::max(r.to, to);
-			if(next && next->from <= to) {
-				to = std::max(next->to, to);
+		// we know (from <= r.to + 1)
+		if(from < r.from && to + 1 < r.from) { // insert completely new range
+			range_.insert(range_.begin() + i, {to, from});
+			added = true;
+		} else if(from < r.from || to > r.to) {
+			r.from = std::min(from, r.from);;
+			r.to = std::max(to, r.to);
+			added = true;
+
+			// fix overlapping ranges
+			auto* next = (i < range_.size() - 2) ? &range_[i + 1] : nullptr;
+			while(next && next->from <= r.to) {
+				r.to = std::max(next->to, to);
 				range_.erase(range_.begin() + i + 1);
+				next = (i < range_.size() - 2) ? &range_[i + 1] : nullptr;
 			}
+		} // else: (from >= r.from && to <= r.to), range already included
 
-			r.to = to;
-		} else if(from <= r.to) {
-			if(from < r.to && to < r.to) {
-				// insert new range
-				range_.insert(range_.begin() + i, to);
-				range_.insert(range_.begin() + i, from);
-			} else if(from < range_[i] || to > range_[i + 1]) {
-				range_[i] = from;
-				to = std::max(to, range_[i + 1]);
-				if(i < range_.size() - 3 && range_[i + 2] <= to) {
-					to = std::max(range_[i + 3], to);
-					range_.erase(range_.begin() + i + 2,
-						range_.begin() + i + 3);
-				}
-
-				range_[i + 1] = to;
-			}
-		}
-
+		inserted = true;
 		break;
 	}
 
 	// add new range
-	range_.back() = from;
-	range_.push_back(to);
-	range_.push_back(0);
-	nkFont()->config->range = range_.data();
+	if(!inserted) {
+		range_.back() = {from, to};
+		range_.emplace_back();
+		added = true;
+	}
+
+	if(added) {
+		dlg_trace("added: {} {}", from, to);
+	}
+
+	return added;
+}
+
+bool Font::ensureRange(std::u32string_view text) {
+	auto ret = false;
+	for(auto c : text) {
+		ret |= addRange(c, c);
+	}
+
+	if(ret) {
+		updateRanges();
+	}
+
+	return ret;
+}
+
+bool Font::ensureRange(uint32_t from, uint32_t to) {
+	auto ret = addRange(from, to);
+	if(ret) {
+		updateRanges();
+	}
+
+	return ret;
+}
+
+void Font::updateRanges() {
+	auto data = reinterpret_cast<uint32_t*>(range_.data());
+	for(auto c = nkFont()->config;; c = c->n) {
+		c->range = data;
+		if(c->n == nkFont()->config) {
+			break;
+		}
+	}
+
 	atlas().invalidate();
 }
 
@@ -230,8 +309,13 @@ const nk_font_glyph& Font::glyph(uint32_t utf32) {
 		return *g;
 	}
 
-	addRange(utf32, utf32);
+	dlg_info("Rebaking font atlas for glyph {}", utf32);
+	if(!addRange(utf32, utf32) && g) {
+		return *g;
+	}
+
 	g = findGlyph(utf32);
+	dlg_assert(g);
 	return *g;
 }
 

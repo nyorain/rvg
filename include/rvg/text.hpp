@@ -25,8 +25,8 @@ namespace rvg {
 class Text : public DeviceObject {
 public:
 	Text() = default;
-	Text(Context&, std::u32string text, const Font&, Vec2f pos);
-	Text(Context&, std::string_view text, const Font&, Vec2f pos);
+	Text(Context&, std::u32string text, Font&, Vec2f pos);
+	Text(Context&, std::string_view text, Font&, Vec2f pos);
 
 	Text(Text&& rhs) noexcept;
 	Text& operator=(Text&& rhs) noexcept;
@@ -57,7 +57,7 @@ public:
 	/// as x size.
 	Rect2f ithBounds(unsigned n) const;
 
-	const auto& font() const { return state_.font; }
+	const auto& font() const { return *state_.font; }
 	const auto& utf32() const { return state_.utf32; }
 	const auto& position() const { return state_.position; }
 	auto utf8() const { return state_.utf8(); }
@@ -69,7 +69,7 @@ public:
 protected:
 	struct State {
 		std::u32string utf32 {};
-		Font font {};
+		Font* font {};
 		Vec2f position {};
 
 		void utf8(std::string_view);

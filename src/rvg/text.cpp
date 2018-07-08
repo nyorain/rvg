@@ -15,12 +15,12 @@ constexpr auto vertIndex0 = 2; // vertex index on the left
 constexpr auto vertIndex2 = 3; // vertex index on the right
 
 // Text
-Text::Text(Context& ctx, std::string_view xtext, const Font& f, Vec2f xpos) :
+Text::Text(Context& ctx, std::string_view xtext, Font& f, Vec2f xpos) :
 	Text(ctx, toUtf32(xtext), f, xpos) {
 }
 
-Text::Text(Context& ctx, std::u32string txt, const Font& f, Vec2f xpos) :
-		DeviceObject(ctx), state_{std::move(txt), f, xpos},
+Text::Text(Context& ctx, std::u32string txt, Font& f, Vec2f xpos) :
+		DeviceObject(ctx), state_{std::move(txt), &f, xpos},
 		oldAtlas_(&f.atlas()) {
 
 	f.atlas().added(*this);
@@ -65,7 +65,7 @@ Text& Text::operator=(Text&& rhs) noexcept {
 
 Text::~Text() {
 	if(valid()) {
-		state_.font.atlas().removed(*this);
+		state_.font->atlas().removed(*this);
 	}
 }
 
@@ -75,15 +75,23 @@ void Text::update() {
 	auto& text = state_.utf32;
 	auto& position = state_.position;
 
-	if(&font.atlas() != oldAtlas_) {
+	dlg_assert(font && font->nkFont());
+	dlg_assert(posCache_.size() == uvCache_.size());
+
+	if(&font->atlas() != oldAtlas_) {
 		context().rerecord();
 		oldAtlas_->removed(*this);
-		font.atlas().added(*this);
-		oldAtlas_ = &font.atlas();
+		font->atlas().added(*this);
+		oldAtlas_ = &font->atlas();
 	}
 
-	dlg_assert(font.nkFont());
-	dlg_assert(posCache_.size() == uvCache_.size());
+	if(font->ensureRange(text)) {
+		dlg_info("new char");
+		// all texts will be updated anyways
+		// NOTE: will trigger a call to this function from within
+		font->atlas().ensureBaked();
+		return;
+	}
 
 	posCache_.clear();
 	uvCache_.clear();
@@ -106,10 +114,7 @@ void Text::update() {
 	};
 
 	for(auto c : text) {
-		auto pglyph = font.glyph(c);
-		dlg_assert(pglyph);
-
-		auto& glyph = *pglyph;
+		auto glyph = font->glyph(c);
 
 		// we render using a strip pipe. Those doubled points allow us to
 		// jump to the next quad. Not less efficient than using a list pipe
@@ -171,13 +176,13 @@ bool Text::updateDevice() {
 }
 
 void Text::draw(vk::CommandBuffer cb) const {
-	dlg_assert(valid());
+	dlg_assert(valid() && state_.font);
 
 	vk::cmdBindPipeline(cb, vk::PipelineBindPoint::graphics,
 		context().stripPipe());
 	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
 		context().pipeLayout(), Context::fontBindSet,
-		{state_.font.atlas().ds()}, {});
+		{font().atlas().ds()}, {});
 
 	static constexpr auto type = uint32_t(1);
 	vk::cmdPushConstants(cb, context().pipeLayout(),
@@ -207,6 +212,8 @@ unsigned Text::charAt(float x) const {
 }
 
 Rect2f Text::ithBounds(unsigned n) const {
+	dlg_assert(valid() && state_.font);
+
 	auto& text = utf32();
 	auto& position = state_.position;
 
@@ -217,7 +224,7 @@ Rect2f Text::ithBounds(unsigned n) const {
 	auto start = posCache_[n * 6 + vertIndex0];
 	auto end = posCache_[n * 6 + vertIndex2];
 
-	auto pglyph = nk_font_find_glyph(state_.font.nkFont(), text[n]);
+	auto pglyph = nk_font_find_glyph(state_.font->nkFont(), text[n]);
 	dlg_assert(pglyph);
 	auto r = Rect2f {start - position, {pglyph->xadvance, end.y - start.y}};
 

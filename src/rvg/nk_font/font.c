@@ -298,6 +298,7 @@ nk_font_bake_pack(struct nk_font_baker *baker,
             return 1;
         } while ((it = it->n) != config_iter);
     }
+
     *height = 0;
     *width = (total_glyph_count > 1000) ? 1024 : 512;
     nk_tt_PackBegin(&baker->spc, 0, (int)*width, (int)max_height, 0, 1, alloc);
@@ -457,7 +458,7 @@ nk_font_bake(struct nk_font_baker *baker, void *image_memory, int width, int hei
                         (int)height, char_idx, &dummy_x, &dummy_y, &q, 0);
 
                     /* fill own glyph type with data */
-                    glyph = &glyphs[dst_font->glyph_offset + dst_font->glyph_count + (unsigned int)glyph_count];
+                    glyph = &glyphs[dst_font->glyph_offset /*+ dst_font->glyph_count*/ + (unsigned int)glyph_count];
                     glyph->codepoint = codepoint;
                     glyph->x0 = q.x0; glyph->y0 = q.y0;
                     glyph->x1 = q.x1; glyph->y1 = q.y1;
@@ -993,8 +994,11 @@ nk_font_atlas_add(struct nk_font_atlas *atlas, const struct nk_font_config *conf
         struct nk_font_config *c = 0;
         NK_ASSERT(atlas->font_num);
         f = atlas->fonts;
+        while (f->next) f = f->next;
+
         c = f->config;
         cfg->font = &f->info;
+		font = f;
 
         cfg->n = c;
         cfg->p = c->p;
