@@ -175,6 +175,7 @@ public:
 protected:
 	rvg::Context& ctx_;
 	rvg::Font font_;
+	rvg::Font awesomeFont_;
 
 	GradientWidget gradWidget_;
 	PendulumWidget pendulum_;
@@ -449,7 +450,8 @@ void PathWidget::clicked(Vec2f pos) {
 
 // App
 App::App(rvg::Context& ctx) : ctx_(ctx),
-		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf") {
+		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf"),
+		awesomeFont_(ctx_, baseResPath + "example/fontawesome-webfont.ttf") {
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
 	constexpr auto pathPos = Vec {50.f, 450.f};
@@ -463,6 +465,8 @@ App::App(rvg::Context& ctx) : ctx_(ctx),
 	constexpr auto starPos = Vec {1440.f, 205.f};
 	constexpr auto starRad = 130.f;
 	constexpr auto textOff = Vec {0.f, 150.f};
+
+	font_.fallback(awesomeFont_);
 
 	auto addText = [&](Vec2f center, const char* string) {
 		auto pos = alignText(string, font_, textHeight, {center, {}});

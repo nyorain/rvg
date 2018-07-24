@@ -88,7 +88,7 @@ void Text::update() {
 	posCache_.clear();
 	uvCache_.clear();
 
-	// good approximcation for usually-ascii
+	// good approximation for usually-ascii
 	posCache_.reserve(text.size());
 	uvCache_.reserve(text.size());
 

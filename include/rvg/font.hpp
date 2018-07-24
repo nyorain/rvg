@@ -77,6 +77,10 @@ public:
 	Font(Context&, std::vector<std::byte> font);
 	Font(FontAtlas&, std::vector<std::byte> font);
 
+	/// Adds the given font as fallback.
+	/// Must be allocated on the same atlas.
+	void fallback(const Font& f);
+
 	float width(std::string_view text, unsigned height) const;
 	float width(std::u32string_view text, unsigned height) const;
 

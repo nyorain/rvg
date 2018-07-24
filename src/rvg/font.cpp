@@ -116,7 +116,7 @@ Font::Font(Context& ctx, StringParam f) :
 }
 
 Font::Font(FontAtlas& atlas, StringParam f) : atlas_(&atlas) {
-	id_ = fonsAddFont(atlas.stash(), "", f.c_str());
+	id_ = fonsAddFont(atlas.stash(), f.c_str());
 	if(id_ == FONS_INVALID) {
 		std::string err = "Could not load font ";
 		err.append(f);
@@ -128,7 +128,7 @@ Font::Font(FontAtlas& atlas, std::vector<std::byte> blob) : atlas_(&atlas),
 	blob_(std::move(blob)) {
 
 	auto data = reinterpret_cast<unsigned char*>(blob_.data());
-	id_ = fonsAddFontMem(atlas.stash(), "", data, blob_.size(), 0);
+	id_ = fonsAddFontMem(atlas.stash(), data, blob_.size(), 0);
 	if(id_ == FONS_INVALID) {
 		std::string err = "Could not load font from memory";
 		throw std::runtime_error(err);
@@ -153,6 +153,12 @@ float Font::width(std::u32string_view text, unsigned height) const {
 	// TODO: we can do better than this (requires fontstash utf32 support)
 	auto utf8 = nytl::toUtf8(text);
 	return width(utf8, height);
+}
+
+void Font::fallback(const Font& f) {
+	dlg_assert(id_ != FONS_INVALID && f.id() != FONS_INVALID);
+	dlg_assert(&atlas() == &f.atlas());
+	fonsAddFallbackFont(atlas().stash(), id_, f.id());
 }
 
 } // namespac rvg
