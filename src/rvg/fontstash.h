@@ -1,5 +1,3 @@
-// TODO: logical fonts (for fallback building)
-
 // Copyright (c) 2009-2013 Mikko Mononen memon@inside.org
 //
 // This software is provided 'as-is', without any express or implied
@@ -114,7 +112,6 @@ FONS_DEF void fonsClearState(FONScontext* s);
 
 // State setting
 FONS_DEF void fonsSetSize(FONScontext* s, float size);
-FONS_DEF void fonsSetColor(FONScontext* s, unsigned int color);
 FONS_DEF void fonsSetSpacing(FONScontext* s, float spacing);
 FONS_DEF void fonsSetBlur(FONScontext* s, float blur);
 FONS_DEF void fonsSetAlign(FONScontext* s, int align);
@@ -391,7 +388,6 @@ struct FONSstate
 	int font;
 	int align;
 	float size;
-	unsigned int color;
 	float blur;
 	float spacing;
 };
@@ -423,7 +419,6 @@ struct FONScontext
 	int nfonts;
 	float verts[FONS_VERTEX_COUNT*2];
 	float tcoords[FONS_VERTEX_COUNT*2];
-	unsigned int colors[FONS_VERTEX_COUNT];
 	int nverts;
 	unsigned char* scratch;
 	int nscratch;
@@ -777,11 +772,6 @@ void fonsSetSize(FONScontext* stash, float size)
 	fons__getState(stash)->size = size;
 }
 
-void fonsSetColor(FONScontext* stash, unsigned int color)
-{
-	fons__getState(stash)->color = color;
-}
-
 void fonsSetSpacing(FONScontext* stash, float spacing)
 {
 	fons__getState(stash)->spacing = spacing;
@@ -828,7 +818,6 @@ void fonsClearState(FONScontext* stash)
 {
 	FONSstate* state = fons__getState(stash);
 	state->size = 12.0f;
-	state->color = 0xffffffff;
 	state->font = 0;
 	state->blur = 0;
 	state->spacing = 0;
@@ -1249,16 +1238,6 @@ static void fons__flush(FONScontext* stash)
 	if (stash->nverts > 0) {
 		stash->nverts = 0;
 	}
-}
-
-static __inline void fons__vertex(FONScontext* stash, float x, float y, float s, float t, unsigned int c)
-{
-	stash->verts[stash->nverts*2+0] = x;
-	stash->verts[stash->nverts*2+1] = y;
-	stash->tcoords[stash->nverts*2+0] = s;
-	stash->tcoords[stash->nverts*2+1] = t;
-	stash->colors[stash->nverts] = c;
-	stash->nverts++;
 }
 
 static float fons__getVertAlign(FONScontext* stash, FONSfont* font, int align, short isize)

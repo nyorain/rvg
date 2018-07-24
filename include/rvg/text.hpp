@@ -25,8 +25,7 @@ namespace rvg {
 class Text : public DeviceObject {
 public:
 	Text() = default;
-	Text(Context&, Vec2f pos, std::string_view text, Font&, unsigned height);
-	Text(Context&, Vec2f pos, std::u32string text, Font&, unsigned height);
+	Text(Context&, Vec2f pos, std::string text, Font&, unsigned height);
 
 	Text(Text&& rhs) noexcept;
 	Text& operator=(Text&& rhs) noexcept;
@@ -50,23 +49,21 @@ public:
 	/// Returns the index of the char at the given x, or the index of
 	/// the next one if there isn't any. Returns text.length() if x is
 	/// after all chars.
+	/// Must not be called during a state change.
 	unsigned charAt(float x) const;
 
-	// TODO
 	/// Returns the bounds of the full text
-	// Rect2f bounds() const;
+	/// Must not be called during a state change.
+	Rect2f bounds() const;
 
-	// TODO: broken
 	/// Returns the bounds of the ith char in local coordinates.
-	/// For a char that has no x-size (e.g. space), returns xadvance
-	/// as x size.
+	/// Must not be called during a state change.
 	Rect2f ithBounds(unsigned n) const;
 
-	const auto& font() const { return *state_.font; }
-	const auto& utf32() const { return state_.utf32; }
+	const auto& font() const { return state_.font; }
+	const auto& text() const { return state_.text; }
 	const auto& position() const { return state_.position; }
 	float height() const { return state_.height; }
-	auto utf8() const { return state_.utf8(); }
 	float width() const;
 
 	void update();
@@ -74,13 +71,10 @@ public:
 
 protected:
 	struct State {
-		std::u32string utf32 {};
-		Font* font {};
+		std::string text {};
+		Font font {}; // must not be set to invalid object
 		Vec2f position {};
-		unsigned height {};
-
-		void utf8(std::string_view);
-		std::string utf8() const;
+		unsigned height {}; // must be >0
 	} state_;
 
 	bool disable_ {};

@@ -15,13 +15,8 @@ constexpr auto vertIndex0 = 2; // vertex index on the left
 constexpr auto vertIndex2 = 3; // vertex index on the right
 
 // Text
-Text::Text(Context& ctx, Vec2f p, std::string_view t, Font& f, unsigned h) :
-	Text(ctx, p, toUtf32(t), f, h) {
-}
-
-Text::Text(Context& ctx, Vec2f p, std::u32string txt, Font& f, unsigned h) :
-		DeviceObject(ctx), state_{std::move(txt), &f, p, h},
-		oldAtlas_(&f.atlas()) {
+Text::Text(Context& ctx, Vec2f p, std::string t, Font& f, unsigned h) :
+		DeviceObject(ctx), state_{std::move(t), f, p, h} {
 
 	f.atlas().added(*this);
 	update();
@@ -65,24 +60,24 @@ Text& Text::operator=(Text&& rhs) noexcept {
 
 Text::~Text() {
 	if(valid()) {
-		state_.font->atlas().removed(*this);
+		dlg_assert(font().valid());
+		font().atlas().removed(*this);
 	}
 }
 
 void Text::update() {
-	dlg_assert(valid());
+	dlg_assert(valid() && font().valid() && height() > 0);
 	auto& font = state_.font;
-	auto& text = state_.utf32;
+	auto& text = state_.text;
 	auto& position = state_.position;
 
-	dlg_assert(font && font->id() != FONS_INVALID);
-	dlg_assert(posCache_.size() == uvCache_.size());
+	dlg_assert(font.valid());
 
-	if(&font->atlas() != oldAtlas_) {
+	if(oldAtlas_ && &font.atlas() != oldAtlas_) {
 		context().rerecord();
 		oldAtlas_->removed(*this);
-		font->atlas().added(*this);
-		oldAtlas_ = &font->atlas();
+		font.atlas().added(*this);
+		oldAtlas_ = &font.atlas();
 	}
 
 	posCache_.clear();
@@ -104,23 +99,20 @@ void Text::update() {
 			top ? q.t0 : q.t1});
 	};
 
-	// TODO
-	auto utf8 = nytl::toUtf8(state_.utf32);
-
-	auto* stash = font->atlas().stash();
+	auto* stash = font.atlas().stash();
 	FONSquad q;
 	FONStextIter iter;
 
 	fonsSetSize(stash, state_.height);
-	fonsSetFont(stash, font->id());
+	fonsSetFont(stash, font.id());
 
-	fonsTextIterInit(stash, &iter, position.x, position.y, utf8.data(),
-		utf8.data() + utf8.size());
+	fonsTextIterInit(stash, &iter, position.x, position.y, text.data(),
+		text.data() + text.size());
 
 	auto prev = iter;
 	while(fonsTextIterNext(stash, &iter, &q)) {
 		if(iter.prevGlyphIndex == -1) {
-			font->atlas().expand();
+			font.atlas().expand();
 
 			iter = prev;
 			fonsTextIterNext(stash, &iter, &q); // try again
@@ -136,7 +128,7 @@ void Text::update() {
 		prev = iter;
 	}
 
-	font->atlas().validate();
+	font.atlas().validate();
 	context().registerUpdateDevice(this);
 	dlg_assert(posCache_.size() == uvCache_.size());
 }
@@ -188,7 +180,7 @@ bool Text::updateDevice() {
 }
 
 void Text::draw(vk::CommandBuffer cb) const {
-	dlg_assert(valid() && state_.font);
+	dlg_assert(valid() && font().valid());
 
 	vk::cmdBindPipeline(cb, vk::PipelineBindPoint::graphics,
 		context().stripPipe());
@@ -223,47 +215,46 @@ unsigned Text::charAt(float x) const {
 	return unsigned(posCache_.size() / 6);
 }
 
-// Rect2f Text::bounds() const {
-	// return {};
-// }
+// NOTE: although it would be desirable, we cannot derive the information of
+// bounds from the stored position cache (we don't have advance/overlaps).
+// Not 100% sure, there might be a way (with assumption).
+// We could cache this information in the update function but it's probably
+// not worth it.
+Rect2f Text::bounds() const {
+	dlg_assert(valid() && state_.font.valid());
+	return font().bounds(state_.text, state_.height);
+}
 
 Rect2f Text::ithBounds(unsigned n) const {
-	dlg_assert(valid() && state_.font);
+	dlg_assert(valid() && state_.font.valid());
 
-	auto& text = utf32();
-	auto& position = state_.position;
+	auto* stash = font().atlas().stash();
+	FONSquad q;
+	FONStextIter iter;
 
-	if(posCache_.size() <= n * 6 || text.size() <= n) {
-		throw std::out_of_range("Text::ithBounds");
+	fonsSetSize(stash, state_.height);
+	fonsSetFont(stash, font().id());
+	fonsTextIterInit(stash, &iter, position().x, position().y, text().data(),
+		text().data() + text().size());
+
+	while(fonsTextIterNext(stash, &iter, &q)) {
+		dlg_assert(iter.prevGlyphIndex != -1);
+		if(n == 0) {
+			auto x = std::min(iter.x, q.x0);
+			auto y = std::min(iter.y, q.y0);
+			auto sx = std::max(iter.nextx, q.x1) - x;
+			auto sy = std::max(iter.nexty, q.y1) - y;
+			return {{x, y}, {sx, sy}};
+		}
+		--n;
 	}
 
-	auto start = posCache_[n * 6 + vertIndex0];
-	auto end = posCache_[n * 6 + vertIndex2];
-
-	// auto pglyph = nk_font_find_glyph(state_.font->nkFont(), text[n]);
-	// dlg_assert(pglyph);
-	// auto r = Rect2f {start - position, {pglyph->xadvance, end.y - start.y}};
-	auto r = Rect2f {start - position, {0.f, end.y - start.y}};
-
-	return r;
-}
-
-void Text::State::utf8(std::string_view utf8) {
-	utf32 = toUtf32(utf8);
-}
-
-std::string Text::State::utf8() const {
-	return toUtf8(utf32);
+	dlg_warn("Invalid char given in Text::ithBounds");
+	return {};
 }
 
 float Text::width() const {
-	if(utf32().empty()) {
-		return 0.f;
-	}
-
-	auto first = ithBounds(0);
-	auto last = ithBounds(utf32().length() - 1);
-	return last.position.x + last.size.x - first.position.x;
+	return bounds().size.x;
 }
 
 bool Text::disable(bool disable) {

@@ -110,6 +110,11 @@ bool FontAtlas::updateDevice() {
 	return rerecord;
 }
 
+nytl::Span<std::byte> FontAtlas::addBlob(std::vector<std::byte> blob) {
+	blobs_.emplace_back(std::move(blob));
+	return blobs_.back();
+}
+
 // Font
 Font::Font(Context& ctx, StringParam f) :
 	Font(ctx.defaultAtlas(), f) {
@@ -124,14 +129,12 @@ Font::Font(FontAtlas& atlas, StringParam f) : atlas_(&atlas) {
 	}
 }
 
-Font::Font(FontAtlas& atlas, std::vector<std::byte> blob) : atlas_(&atlas),
-	blob_(std::move(blob)) {
-
-	auto data = reinterpret_cast<unsigned char*>(blob_.data());
-	id_ = fonsAddFontMem(atlas.stash(), data, blob_.size(), 0);
+Font::Font(FontAtlas& atlas, std::vector<std::byte> blob) : atlas_(&atlas) {
+	auto data = atlas.addBlob(std::move(blob));
+	auto ptr = reinterpret_cast<unsigned char*>(data.data());
+	id_ = fonsAddFontMem(atlas.stash(), ptr, data.size(), 0);
 	if(id_ == FONS_INVALID) {
-		std::string err = "Could not load font from memory";
-		throw std::runtime_error(err);
+		throw std::runtime_error("Font: Invalid blob given");
 	}
 }
 
@@ -139,20 +142,18 @@ Font::Font(Context& ctx, std::vector<std::byte> blob) :
 	Font(ctx.defaultAtlas(), std::move(blob)) {
 }
 
-float Font::width(std::string_view text, unsigned height) const {
+nytl::Rect2f Font::bounds(std::string_view text, unsigned height) const {
 	dlg_assert(id_ != FONS_INVALID);
 	float bounds[4];
 
 	fonsSetFont(atlas().stash(), id_);
 	fonsSetSize(atlas().stash(), height);
 	fonsTextBounds(atlas().stash(), 0, 0, text.begin(), text.end(), bounds);
-	return bounds[2] - bounds[0];
+	return {bounds[0], bounds[1], bounds[2] - bounds[0], bounds[3] - bounds[1]};
 }
 
-float Font::width(std::u32string_view text, unsigned height) const {
-	// TODO: we can do better than this (requires fontstash utf32 support)
-	auto utf8 = nytl::toUtf8(text);
-	return width(utf8, height);
+float Font::width(std::string_view text, unsigned height) const {
+	return bounds(text, height).size.x;
 }
 
 void Font::fallback(const Font& f) {
