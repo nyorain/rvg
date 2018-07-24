@@ -25,8 +25,8 @@ namespace rvg {
 class Text : public DeviceObject {
 public:
 	Text() = default;
-	Text(Context&, std::u32string text, Font&, Vec2f pos);
-	Text(Context&, std::string_view text, Font&, Vec2f pos);
+	Text(Context&, Vec2f pos, std::string_view text, Font&, unsigned height);
+	Text(Context&, Vec2f pos, std::u32string text, Font&, unsigned height);
 
 	Text(Text&& rhs) noexcept;
 	Text& operator=(Text&& rhs) noexcept;
@@ -52,6 +52,11 @@ public:
 	/// after all chars.
 	unsigned charAt(float x) const;
 
+	// TODO
+	/// Returns the bounds of the full text
+	// Rect2f bounds() const;
+
+	// TODO: broken
 	/// Returns the bounds of the ith char in local coordinates.
 	/// For a char that has no x-size (e.g. space), returns xadvance
 	/// as x size.
@@ -60,6 +65,7 @@ public:
 	const auto& font() const { return *state_.font; }
 	const auto& utf32() const { return state_.utf32; }
 	const auto& position() const { return state_.position; }
+	float height() const { return state_.height; }
 	auto utf8() const { return state_.utf8(); }
 	float width() const;
 
@@ -71,6 +77,7 @@ protected:
 		std::u32string utf32 {};
 		Font* font {};
 		Vec2f position {};
+		unsigned height {};
 
 		void utf8(std::string_view);
 		std::string utf8() const;

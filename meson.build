@@ -26,6 +26,7 @@ warnings = [
 
 	# TODO: currently only for ny
 	'-Wno-non-virtual-dtor',
+	'-Wno-unused-function',
 ]
 
 # default arrguments

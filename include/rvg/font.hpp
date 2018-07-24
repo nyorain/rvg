@@ -17,6 +17,8 @@
 #include <string_view>
 #include <variant>
 
+struct FONScontext;
+
 namespace rvg {
 
 /// Holds a texture on the device to which multiple fonts can be uploaded.
@@ -25,21 +27,21 @@ public:
 	FontAtlas(Context&);
 	~FontAtlas();
 
-	auto& nkAtlas() const { return *atlas_; }
 	auto& ds() const { return ds_; }
 	auto& texture() const { return texture_; }
+	auto* stash() const { return ctx_; }
 
 	// - usually not needed -
 	bool updateDevice();
-	void invalidate();
-	void ensureBaked();
+	void validate();
+	void expand();
 
 	void added(Text&);
 	void removed(Text&);
 	void moved(Text&, Text&) noexcept;
 
 protected:
-	std::unique_ptr<nk_font_atlas> atlas_;
+	FONScontext* ctx_;
 	std::vector<Text*> texts_;
 	vpp::TrDs ds_;
 	Texture texture_;
@@ -64,50 +66,27 @@ public:
 
 public:
 	/// Loads the font from a given file.
-	/// Throws on error (e.g. if the file does not exist).
+	/// Throws on error (e.g. if the file does not exist/invalid font).
 	/// If no FontAtlas is given, uses the contexts default one.
-	Font(Context&, StringParam file, unsigned height);
-	Font(FontAtlas&, StringParam file, unsigned height);
+	Font(Context&, StringParam file);
+	Font(FontAtlas&, StringParam file);
 
 	/// Loads the font from a otf/ttf blob.
-	/// Throws on error.
+	/// Throws on error (invalid font data).
 	/// If no FontAtlas is given, uses the contexts default one.
-	Font(Context&, Span<const std::byte> font, unsigned height);
-	Font(FontAtlas&, Span<const std::byte> font, unsigned height);
+	Font(Context&, std::vector<std::byte> font);
+	Font(FontAtlas&, std::vector<std::byte> font);
 
-	/// Combines multiple fonts into one (order relevant).
-	Font(Context&, Span<const Description> fonts);
-	Font(FontAtlas&, Span<const Description> fonts);
+	float width(std::string_view text, unsigned height) const;
+	float width(std::u32string_view text, unsigned height) const;
 
-	/// Adds the range to the range of required glyphs.
-	/// Implicitly called by glyph(utf32).
-	/// Will trigger a FontAtlas recreation.
-	/// Returns true if any of the chars were not already in the range.
-	bool ensureRange(uint32_t from, uint32_t to);
-	bool ensureRange(std::u32string_view view);
-
-	float width(std::string_view text) const;
-	float width(std::u32string_view text) const;
-	float height() const;
-
-	auto* nkFont() const { return font_; }
 	auto& atlas() const { return *atlas_; }
-
-	const nk_font_glyph& glyph(uint32_t utf32);
-	const nk_font_glyph* findGlyph(uint32_t utf32) const;
+	auto id() const { return id_; }
 
 protected:
-	bool addRange(uint32_t from, uint32_t to);
-	void updateRanges();
-
-	struct Range {
-		uint32_t from {};
-		uint32_t to {};
-	};
-
 	FontAtlas* atlas_;
-	std::vector<Range> range_ {{0x0020, 0x00FF}, {}};
-	nk_font* font_;
+	int id_ {};
+	std::vector<std::byte> blob_;
 };
 
 } // namespace rvg

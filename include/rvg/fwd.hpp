@@ -34,9 +34,3 @@ class Font;
 class Text;
 
 } // namespace rvg
-
-struct nk_font_atlas;
-struct nk_font;
-struct nk_font_glyph;
-struct nk_font_config;
-

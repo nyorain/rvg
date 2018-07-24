@@ -57,6 +57,7 @@ constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
 constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
+constexpr auto textHeight = 14;
 
 struct Context {
 	rvg::Context& ctx;
@@ -222,9 +223,10 @@ enum class VertAlign {
 
 /// Returns the position to align the text in the given rect
 Vec2f alignText(std::string_view text, const rvg::Font& font,
-		Rect2f rect, HorzAlign halign, VertAlign valign) {
+		float height, Rect2f rect, HorzAlign halign = HorzAlign::center,
+		VertAlign valign = VertAlign::middle) {
 
-	auto size = Vec2f{font.width(text), font.height()};
+	auto size = Vec2f{font.width(text, height), height};
 
 	Vec2f ret = rect.position;
 	if(halign == HorzAlign::center) {
@@ -267,9 +269,8 @@ PendulumWidget::PendulumWidget(const Context& cctx, nytl::Vec2f pos)
 
 	auto ppos = pos - Vec2f {0.f, massRadius + 10.f};
 	auto string = "Move me using the arrow keys";
-	auto textPos = alignText(string, cctx.font, {ppos, {}},
-		HorzAlign::center, VertAlign::middle);
-	text_ = {ctx, string, cctx.font, textPos};
+	auto textPos = alignText(string, cctx.font, textHeight, {ppos, {}});
+	text_ = {ctx, textPos, string, cctx.font, textHeight};
 }
 
 void PendulumWidget::update(float dt) {
@@ -357,12 +358,12 @@ GradientWidget::GradientWidget(const Context& ctx, Vec2f pos,
 	auto& rctx = ctx.ctx;
 	auto dm = rvg::DrawMode {true, false};
 
-	auto yoff = (lineHeight - ctx.font.height()) / 2;
+	auto yoff = (lineHeight - textHeight) / 2;
 	auto p = pos + Vec{10, yoff};
-	topText_ = {rctx, "[Stepped] Using rvg::mix:", ctx.font, p};
+	topText_ = {rctx, p, "[Stepped] Using rvg::mix:", ctx.font, textHeight};
 
 	p.y += lineHeight;
-	middleText_ = {rctx, "Using a linear gradient:", ctx.font, p};
+	middleText_ = {rctx, p, "Using a linear gradient:", ctx.font, textHeight};
 	auto mpos = pos + Vec {textWidth, lineHeight};
 	auto msize = Vec2f {gradientWidth, lineHeight};
 	middleShape_ = {rctx, mpos, msize, dm};
@@ -370,7 +371,8 @@ GradientWidget::GradientWidget(const Context& ctx, Vec2f pos,
 		mpos + Vec {gradientWidth, 0.f}, start, end)};
 
 	p.y += lineHeight;
-	bottomText_ = {rctx, "[Stepped] Using incorrect mixing", ctx.font, p};
+	bottomText_ = {rctx, p, "[Stepped] Using incorrect mixing", ctx.font,
+		textHeight};
 
 	auto rsize = Vec {stepWidth, lineHeight};
 	auto topy = pos.y;
@@ -446,10 +448,8 @@ void PathWidget::clicked(Vec2f pos) {
 }
 
 // App
-App::App(rvg::Context& ctx) : ctx_(ctx), font_(ctx_, {
-			{baseResPath + "example/OpenSans-Regular.ttf", 18u},
-			{baseResPath + "example/fontawesome-webfont.ttf", 18u},
-		}) {
+App::App(rvg::Context& ctx) : ctx_(ctx),
+		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf") {
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
 	constexpr auto pathPos = Vec {50.f, 450.f};
@@ -465,16 +465,16 @@ App::App(rvg::Context& ctx) : ctx_(ctx), font_(ctx_, {
 	constexpr auto textOff = Vec {0.f, 150.f};
 
 	auto addText = [&](Vec2f center, const char* string) {
-		auto pos = alignText(string, font_, {center, {}}, HorzAlign::center,
-			VertAlign::middle);
-		texts_.emplace_back(ctx, string, font_, pos);
+		auto pos = alignText(string, font_, textHeight, {center, {}});
+		texts_.emplace_back(ctx, pos, string, font_, textHeight);
 	};
 
 	transform_ = {ctx};
 	gradWidget_ = {{ctx, font_}, gradPos, rvg::Color::red, rvg::Color::green};
 	path_ = {{ctx, font_}, pathPos, pathSize};
 	pendulum_ = {{ctx, font_}, pendulumPos};
-	bottomText_ = {ctx, u8" https://github.com/nyorain/rvg ", font_, {}};
+	bottomText_ = {ctx, {}, u8" https://github.com/nyorain/rvg ", font_,
+		textHeight};
 	paint_ = {ctx, rvg::colorPaint(rvg::Color::white)};
 
 	addText(pathPos + Vec {pathSize.x / 2.f, pathSize.y + 20.f},
@@ -553,7 +553,7 @@ void App::resize(Vec2ui size) {
 	auto textWidth = bottomText_.width();
 	auto tchange = bottomText_.change();
 	tchange->position.x = (size[0] - textWidth) / 2;
-	tchange->position.y = size[1] - font_.height() - 20;
+	tchange->position.y = size[1] - bottomText_.height() - 20;
 }
 
 void App::draw(vk::CommandBuffer cb) {
@@ -591,7 +591,8 @@ void App::clicked(Vec2f pos) {
 		return pos == clamp(pos, p, p + size);
 	};
 
-	if(in(bottomText_.position(), {bottomText_.width(), font_.height()})) {
+	auto h = bottomText_.height();
+	if(in(bottomText_.position(), {bottomText_.width(), h})) {
 		// ikr, std::system isn't a good choice, generally.
 		// But here, i feel like it's enough
 #ifdef RVG_EXAMPLE_UNIX
