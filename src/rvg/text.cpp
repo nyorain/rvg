@@ -107,7 +107,7 @@ void Text::update() {
 	fonsSetFont(stash, font.id());
 
 	fonsTextIterInit(stash, &iter, position.x, position.y, text.data(),
-		text.data() + text.size());
+		text.data() + text.size(), FONS_GLYPH_BITMAP_REQUIRED);
 
 	auto prev = iter;
 	while(fonsTextIterNext(stash, &iter, &q)) {
@@ -235,7 +235,7 @@ Rect2f Text::ithBounds(unsigned n) const {
 	fonsSetSize(stash, state_.height);
 	fonsSetFont(stash, font().id());
 	fonsTextIterInit(stash, &iter, position().x, position().y, text().data(),
-		text().data() + text().size());
+		text().data() + text().size(), FONS_GLYPH_BITMAP_REQUIRED);
 
 	while(fonsTextIterNext(stash, &iter, &q)) {
 		dlg_assert(iter.prevGlyphIndex != -1);

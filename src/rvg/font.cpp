@@ -121,7 +121,7 @@ Font::Font(Context& ctx, StringParam f) :
 }
 
 Font::Font(FontAtlas& atlas, StringParam f) : atlas_(&atlas) {
-	id_ = fonsAddFont(atlas.stash(), f.c_str());
+	id_ = fonsAddFont(atlas.stash(), "", f.c_str());
 	if(id_ == FONS_INVALID) {
 		std::string err = "Could not load font ";
 		err.append(f);
@@ -132,7 +132,7 @@ Font::Font(FontAtlas& atlas, StringParam f) : atlas_(&atlas) {
 Font::Font(FontAtlas& atlas, std::vector<std::byte> blob) : atlas_(&atlas) {
 	auto data = atlas.addBlob(std::move(blob));
 	auto ptr = reinterpret_cast<unsigned char*>(data.data());
-	id_ = fonsAddFontMem(atlas.stash(), ptr, data.size(), 0);
+	id_ = fonsAddFontMem(atlas.stash(), "", ptr, data.size(), 0);
 	if(id_ == FONS_INVALID) {
 		throw std::runtime_error("Font: Invalid blob given");
 	}

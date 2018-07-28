@@ -57,7 +57,7 @@ constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
 constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
-constexpr auto textHeight = 14;
+constexpr auto textHeight = 22;
 
 struct Context {
 	rvg::Context& ctx;
@@ -193,6 +193,9 @@ protected:
 	rvg::Paint gradientPaint_;
 
 	std::vector<rvg::Text> texts_;
+	double angle_ {};
+	double scale_ {1.f};
+	nytl::Vec2ui size_ {};
 };
 
 // - implementation -
@@ -208,6 +211,21 @@ void translate(nytl::Mat4<T>& mat, nytl::Vec3<T> move) {
 	for(auto i = 0; i < 3; ++i) {
 		mat[i][3] += move[i];
 	}
+}
+
+template<typename T = float>
+nytl::Mat4<T> rotMat(double angle) {
+	auto mat = nytl::identity<4, T>();
+
+	auto c = std::cos(angle);
+	auto s = std::sin(angle);
+
+	mat[0][0] = c;
+	mat[0][1] = -s;
+	mat[1][0] = s;
+	mat[1][1] = c;
+
+	return mat;
 }
 
 enum class HorzAlign {
@@ -450,7 +468,8 @@ void PathWidget::clicked(Vec2f pos) {
 
 // App
 App::App(rvg::Context& ctx) : ctx_(ctx),
-		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf"),
+		// font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf"),
+		font_(ctx_, "Roboto-Regular.ttf"),
 		awesomeFont_(ctx_, baseResPath + "example/fontawesome-webfont.ttf") {
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
@@ -552,7 +571,11 @@ void App::resize(Vec2ui size) {
 	auto s = nytl::Vec {2.f / size.x, 2.f / size.y, 1};
 	scale(mat, s);
 	translate(mat, {-1, -1, 0});
+	mat = mat * rotMat(angle_);
+	mat[0][0] *= scale_;
+	mat[1][1] *= scale_;
 	*transform_.change() = mat;
+	size_ = size;
 
 	auto textWidth = bottomText_.width();
 	auto tchange = bottomText_.change();
@@ -621,6 +644,9 @@ void App::key(ny::Keycode key, bool pressed) {
 		return;
 	}
 
+	// TODO
+	auto t = false;
+
 	if(key == ny::Keycode::b) {
 		*paint_.change() = rvg::colorPaint({rvg::norm, 0.2, 0.2, 0.8});
 	} else if(key == ny::Keycode::g) {
@@ -637,6 +663,32 @@ void App::key(ny::Keycode key, bool pressed) {
 	} else if(key == ny::Keycode::c) {
 		*paint_.change() = rvg::radialGradient({1000, 500}, 0, 1000,
 			{255, 0, 0}, {255, 255, 0});
+	}
+
+	else if(key == ny::Keycode::q) {
+		angle_ += 0.1;
+		t = true;
+	} else if(key == ny::Keycode::e) {
+		angle_ -= 0.1;
+		t = true;
+	} else if(key == ny::Keycode::i) {
+		scale_ *= 1.1;
+		t = true;
+	} else if(key == ny::Keycode::o) {
+		scale_ /= 1.1;
+		t = true;
+	}
+
+	if(t) {
+		auto size = size_;
+		auto mat = nytl::identity<4, float>();
+		auto s = nytl::Vec {2.f / size.x, 2.f / size.y, 1};
+		scale(mat, s);
+		translate(mat, {-1, -1, 0});
+		mat = mat * rotMat(angle_);
+		mat[0][0] *= scale_;
+		mat[1][1] *= scale_;
+		*transform_.change() = mat;
 	}
 }
 

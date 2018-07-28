@@ -1,3 +1,6 @@
+# notes
+
+This file is for implementation notes, snippets, ideas and discussions.
 
 # Gradient texture computations
 
@@ -147,3 +150,73 @@ struct StrokePolygon {
 bool updateDevice(Context&, FillPolygon&);
 bool updateDevice(Context&, StrokePolygon&);
 ```
+
+
+## try for pencil drawing api
+
+```cpp
+someShape.fillMask(cb);
+someRect.strokeMask(cb);
+transform2.bind(cb);
+someRect.fillMask(cb);
+somePaint.bind(cb);
+ctx.drawMasked(cb);
+```
+
+- everything is added to mask until drawMasked is called
+	- then mask is reset
+- problem: drawMasked must draw fullscreen and cannot know the largest
+  bounds (which may after all be quite small -> large performance loss)
+- not sure if possible without normal drawing interfering
+
+```cpp
+rvg::Mask mask(ctx, cb);
+someShape.fill(mask);
+someRect.stroke(mask);
+transform2.bind(cb);
+someRect.fill(mask);
+mask.draw(paint);
+```
+
+- problem with this: interface seems like there can be multiple masks at
+  a time which is not the case
+- intermixing calls with cb and mask that influence each other is bad interface
+  design as well
+
+
+Reintroducing rvg::DrawInstance that __must__ always be used:
+
+```
+auto di = ctx.beginDraw(cb);
+someShape.maskFill(di);
+someRect.maskStroke(di);
+transform2.bind(di);
+someRect.maskFill(di);
+somePaint.bind(di);
+di.drawMasked();
+```
+
+Seems like the best alternative. Takes the lightweight feel away though
+(which makes sense since the abstraction over the pencil-based drawing
+is rather large and also not cheap on performance i'd guess). But to make
+it consistent, all functions using a CommandBuffer directly have to be abolished.
+
+## discussing transforms
+
+- scaling in transform is a real problem for all kind of things. Maybe only
+  allow translation and rotation in Transform state? (and introduce pre-
+  transforms/only pre-scale?); or instead of "allowing" in terms of restricting
+  the api (and not use a plain transform matrix), just document the issues and
+  let the user decide what to use?
+- problem with pre + post transform: not too intuitive, could overwhelm new
+  users, seem redundant and badly designed (which it may be)
+  	- problem: only scale as pre-"transform" or full matrix again?
+	  if full matrix: document that it is less performant that post transform
+	- how to handle text? just add scale in Text::state?
+- end coordinate system (from api pov): normalized vulkan space vs window space
+  (vs frame-buffer space?)
+  	- pretty much no use cases work in normalized space
+	- nanovg uses window size; svg specifies canvas in pixels
+- devicePixelRatio and where to apply it/where to set it?
+- (later) support for 3D coords? For polygon-based classes already possible
+  via manual pre-transform (no depth though) but issue for text

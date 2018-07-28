@@ -50,9 +50,11 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	samplerInfo.borderColor = vk::BorderColor::floatOpaqueWhite;
 	texSampler_ = {dev, samplerInfo};
 
-	samplerInfo.magFilter = vk::Filter::nearest;
-	samplerInfo.minFilter = vk::Filter::nearest;
-	fontSampler_ = {dev, samplerInfo};
+	// we use linear sampling for fonts as well since normally they are
+	// pixel-aligned (and therefore linear == nearest) but when
+	// the text is rotatet, linear produces somewhat blurred yet
+	// way nicer results than nearest (which renders the text with cuts)
+	auto& fontSampler = texSampler_;
 
 	// layouts
 	auto transformDSB = {
@@ -71,7 +73,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	auto fontAtlasDSB = {
 		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
-			vk::ShaderStageBits::fragment, -1, 1, &fontSampler_.vkHandle()),
+			vk::ShaderStageBits::fragment, -1, 1, &fontSampler.vkHandle()),
 	};
 
 	auto clipDistance = settings.clipDistanceEnable;

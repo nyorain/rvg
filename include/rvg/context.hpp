@@ -180,7 +180,6 @@ private:
 	vpp::TrDsLayout dsLayoutFontAtlas_;
 	vpp::TrDsLayout dsLayoutStrokeAA_;
 
-	vpp::Sampler fontSampler_;
 	vpp::Sampler texSampler_;
 
 	Texture emptyImage_;

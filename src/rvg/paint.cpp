@@ -445,6 +445,10 @@ Texture::Texture(Context& ctx, Vec2ui size, nytl::Span<const std::byte> data,
 }
 
 void Texture::create() {
+	constexpr auto usage =
+		vk::ImageUsageBits::transferDst |
+		vk::ImageUsageBits::sampled;
+
 	vk::Extent3D extent;
 	extent.width = size_.x;
 	extent.height = size_.y;
@@ -456,11 +460,10 @@ void Texture::create() {
 
 	if(type() == TextureType::rgba32) {
 		dataSize = dataSize * 4;
-		info = vpp::ViewableImageCreateInfo::color(dev, extent).value();
+		info = vpp::ViewableImageCreateInfo::color(dev, extent, usage,
+			{vk::Format::r8g8b8a8Srgb}).value();
 	} else if(type() == TextureType::a8) {
-		info = vpp::ViewableImageCreateInfo::color(dev, extent,
-			vk::ImageUsageBits::transferDst |
-			vk::ImageUsageBits::sampled,
+		info = vpp::ViewableImageCreateInfo::color(dev, extent, usage,
 			{vk::Format::r8Unorm}).value();
 		info.view.components = {
 			vk::ComponentSwizzle::zero,
@@ -468,9 +471,6 @@ void Texture::create() {
 			vk::ComponentSwizzle::zero,
 			vk::ComponentSwizzle::r,
 		};
-
-		dlg_assert(info.view.format == vk::Format::r8Unorm);
-		dlg_assert(info.img.format == vk::Format::r8Unorm);
 	} else {
 		throw std::runtime_error("Texture: Invalid rvg::TextureType");
 	}
@@ -494,7 +494,7 @@ void Texture::upload(nytl::Span<const std::byte> data, vk::ImageLayout layout) {
 	auto size = vk::Extent3D{size_.x, size_.y, 1u};
 	auto format = type_ == Type::a8 ?
 		vk::Format::r8Unorm :
-		vk::Format::r8g8b8a8Unorm;
+		vk::Format::r8g8b8a8Srgb;
 	auto stage = vpp::fillStaging(cmdBuf, image_.image(), format, layout,
 		size, data, {vk::ImageAspectBits::color});
 

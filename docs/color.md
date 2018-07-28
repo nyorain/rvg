@@ -55,3 +55,8 @@ be done in rgb or srgb space?
   like svg does it (see svgs 'color-interpolation' attribute)
 
 *Resolved*: planned for a later stage
+
+---
+
+*Note*: since version 0.2 image data loaded/given is also interpreted as
+  srgb since this seems to be the default for images (which makes sense).

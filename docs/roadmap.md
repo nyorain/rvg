@@ -6,10 +6,12 @@
 - [ ] text __scaling__
 - [ ] allow to specify fringe on context creation/change it later
 	- [ ] __scaling__ with transform?
-- [ ] care about texture srgb. You probably want srgb textures.
-	- [ ] add srgb support for vpp/formats (?)
+- [x] care about texture srgb. You probably want srgb textures.
+      _yep, were needed since most images use srgb/stb_image outputs srgb_
+	- [x] add srgb support for vpp/formats (?) [wasn't needed]
 - [ ] make positioning textures easier (NO manual matrix...)
-- [ ] strokeWidth < fringeWidth (nvg 2258), github.com/memononen/nanovg/issues/68
+- [ ] transform matrix on paint?
+- [ ] strokeWidth < fringeWidth (nvg line 2258), github.com/memononen/nanovg/issues/68
 
 problem of __scaling__ should be solved in this release:
 	When using a non-window transform (e.g. level transform) then
@@ -23,16 +25,20 @@ problem of __scaling__ should be solved in this release:
 Completely abolish transform state?
 	well, rotation and translation aren't a problem. Only scale.
 
+- [ ] clean up/solve transform state handling (scaling!)
+- [ ] cleanup fontstash (and remove fso.h)
+
 ### later
 
 - [ ] corner bevels. Currently anti aliasing not too good for sharp corners
       -> katachi
 - [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
-- [ ] (improve) heavily documented basic example
-	- [ ] try to use every feature once (in extra functions/modules)
 - [ ] when vui 0.1 is released/made public:
 	- [ ] link to it in the readme as somewhat larger project using rvg
 	- [ ] add highly functional and good looking example(s) using rvg and vui
+
+- [ ] (improve) heavily documented basic example
+	- [ ] try to use every feature once (in extra functions/modules)
 - [ ] more (and systematic) rvg testing
 	- [ ] some color conversion, mixing tests
 	- [ ] test where all shapes are drawn once with possible settings
@@ -49,15 +55,15 @@ Completely abolish transform state?
 	/// The QueueSubmitter to submit any upload work to.
 	/// Should be associated with the queue for rendering since
 	/// otherwise Context::waitSemaphore cannot be used for rendering.
-	/// In this case, one could still synchronize using fences.
+	/// In this case, one could still synchronize using fences/deviceWait.
 	// vpp::QueueSubmitter& submitter;
 - [ ] bind initial paint that simply has dummy texture pattern to signal
       that no paint is bound?
-- [ ] rvg: make non-texture gradients make use of transform buffer span
+- [ ] make non-texture gradients make use of transform buffer span
 - [ ] nanovg-like box gradient
-- [ ] helper for non-convex shapes (in rvg: stencil buffer? or decomposition?)
+- [ ] helper for non-convex shapes (stencil buffer? or decomposition?)
 	- [ ] evaluate first if this makes sense for the scope of rvg. It might not
-- [ ] rvg: radial gradients (allowing e.g. color wheel)
+- [ ] radial gradients (allowing e.g. color wheel)
 	- [ ] any other gradient types to implement?
 - [ ] multistop gradients (?), using small 1d textures
 	- [ ] see discussion https://github.com/memononen/nanovg/pull/430
@@ -70,7 +76,7 @@ Completely abolish transform state?
 		a massive performance boost. Like only one vkDrawIndexedIndirect
 		class or sth
   - [ ] performance optimizations, resolve performance todos
-  - [ ] rvg: better with more (but also more optimized) pipelines?
+  - [ ] better with more (but also more optimized) pipelines?
 
 Should we make sure that there is always only (at max) one StateChange
 object for a polygon/shape/etc? Should not be needed but be
@@ -87,7 +93,6 @@ TODO(performance): reduce number of SubBuffers? In text/polygon.
   will probably require the vpp::offset feature for upload140
 
 TODO(performance): cache points vec in {Circle, Rect}Shape::update
-TODO: something like default font(atlas) in context instead of dummy texture?
 
 
 We could record upload command buffers in update and not updateDevice.
