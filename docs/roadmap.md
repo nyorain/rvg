@@ -1,44 +1,33 @@
 ## Roadmap
 
-### v0.1
+### v0.2
 
-- [x] basic documentation (like at least one page stating basic usage)
-  - [x] also check that there are at enough inline docs
-  - [x] proof read
-- [x] rvg: correct vulkan synchronization
-  - [x] probably best to require the user to set it in the render pass or
-        otherwise handle it. Document this somewhere
-- [x] rvg::Context: use vpps new pipeline creation info (?)
-- [x] srgb colors
-	- [x] fix color mixing
-- [x] clean up the DrawInstance mess
-      or document why it is implemented that way.
-	  We could also call it rvg::Context::bindDefaults(cmdBuf) which
-	  matches it better. And change it if we really need something
-	  like a DrawInstance state
-	  [ended up deprecatng/removing DrawInstance. Not needed (atm)]
-- [x] combine stageUpload and updateDevice (if possible).
-- [x] Context::updateDevice return semantics when device objects that are not
-      currently used are updated or new ones are created
-	  [it's sane to rerecord even if objects currently not used and not
-	   our business to handle new/destroyed device objects]
-	- [x] also ctx.updateDevice() to return true when something was destroyed?
-		  probably not, right?
-- [x] stable (update) deps
-	- [x] nytl
-	- [x] vpp
-	- [x] katachi
-	- [x] dlg
-	- [x] put their minimum versions in meson
-- [x] basic demos with screenshots
-- [x] split rvg and vui library
-- [x] create real readme
-- [ ] release public version
+- [x] better font handling: automatik atlas rebaking, fallback fonts
+- [ ] text __scaling__
+- [ ] allow to specify fringe on context creation/change it later
+	- [ ] __scaling__ with transform?
+- [ ] care about texture srgb. You probably want srgb textures.
+	- [ ] add srgb support for vpp/formats (?)
+- [ ] make positioning textures easier (NO manual matrix...)
+- [ ] strokeWidth < fringeWidth (nvg 2258), github.com/memononen/nanovg/issues/68
+
+problem of __scaling__ should be solved in this release:
+	When using a non-window transform (e.g. level transform) then
+	fringe/text size/whatever will not work anymore since they are currently
+	given in pre-transform coords. Introduce context-wide scaling/
+	per-object scaling/Scaling state? What about stroke width?
+	nanovg solves it with a "devicePixelRatio" and seperate.
+	(and by doing transform BEFORE doing stuff like tesselation...)
+	tesselation (-> katachi) is affected by the same problem (problem
+	of rvg?)
+Completely abolish transform state?
+	well, rotation and translation aren't a problem. Only scale.
 
 ### later
 
-- [ ] make positioning textures easier (NO manual matrix...)
 - [ ] corner bevels. Currently anti aliasing not too good for sharp corners
+      -> katachi
+- [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
 - [ ] (improve) heavily documented basic example
 	- [ ] try to use every feature once (in extra functions/modules)
 - [ ] when vui 0.1 is released/made public:
@@ -50,13 +39,8 @@
 	      and paints and stuff
 	- [ ] especially test defined behaviour when moving/destructing
 	      objects
-- [ ] care about texture srgb. You probably want srgb textures.
-	- [ ] add srgb support for vpp/formats
 - [ ] check if DeviceObject/DevRes impl mess in Context can be cleaned up
 	- [ ] currently rather error prone and (over-?)complicated with visitors
-- [ ] improve font/fontAtlas handling
-	- [ ] document WHEN bake can/must be called
-	- [ ] make movable?
 - [ ] custom queueSubmitter in ContextSettings. Or option for another
       submission method (callback + queueFamily or sth. that defaults
 	  to current impl with default queue family and queue submitter)
@@ -70,16 +54,15 @@
 - [ ] bind initial paint that simply has dummy texture pattern to signal
       that no paint is bound?
 - [ ] rvg: make non-texture gradients make use of transform buffer span
-- [ ] nanovg like box gradient
-- [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]
+- [ ] nanovg-like box gradient
 - [ ] helper for non-convex shapes (in rvg: stencil buffer? or decomposition?)
 	- [ ] evaluate first if this makes sense for the scope of rvg. It might not
-- [ ] rvg: radial gradients
+- [ ] rvg: radial gradients (allowing e.g. color wheel)
 	- [ ] any other gradient types to implement?
 - [ ] multistop gradients (?), using small 1d textures
-  - [ ] see discussion https://github.com/memononen/nanovg/pull/430
+	- [ ] see discussion https://github.com/memononen/nanovg/pull/430
 - [ ] benchmark alternative pipelines, optimize default use cases
-  - [ ] benchmark how much paints are slowing things down. I suspect
+	- [ ] benchmark how much paints are slowing things down. I suspect
         that if we would get rid of gradients (and therefore always
 		be able to use color paint; use plain uv for textures) and
 		therefore paints; also then drawing everything with just one
@@ -88,7 +71,6 @@
 		class or sth
   - [ ] performance optimizations, resolve performance todos
   - [ ] rvg: better with more (but also more optimized) pipelines?
-- [ ] allow to specify fringe on context creation
 
 Should we make sure that there is always only (at max) one StateChange
 object for a polygon/shape/etc? Should not be needed but be
@@ -150,3 +132,39 @@ not be a good idea.
 	certain points: after updateDevice (cmd buf recording) and before
 	the cmd buf is executed.
 - [x] think about dynamic scissor, avoiding rerecording on Widget::bounds
+
+### v0.1
+
+- [x] basic documentation (like at least one page stating basic usage)
+  - [x] also check that there are at enough inline docs
+  - [x] proof read
+- [x] rvg: correct vulkan synchronization
+  - [x] probably best to require the user to set it in the render pass or
+        otherwise handle it. Document this somewhere
+- [x] rvg::Context: use vpps new pipeline creation info (?)
+- [x] srgb colors
+	- [x] fix color mixing
+- [x] clean up the DrawInstance mess
+      or document why it is implemented that way.
+	  We could also call it rvg::Context::bindDefaults(cmdBuf) which
+	  matches it better. And change it if we really need something
+	  like a DrawInstance state
+	  [ended up deprecatng/removing DrawInstance. Not needed (atm)]
+- [x] combine stageUpload and updateDevice (if possible).
+- [x] Context::updateDevice return semantics when device objects that are not
+      currently used are updated or new ones are created
+	  [it's sane to rerecord even if objects currently not used and not
+	   our business to handle new/destroyed device objects]
+	- [x] also ctx.updateDevice() to return true when something was destroyed?
+		  probably not, right?
+- [x] stable (update) deps
+	- [x] nytl
+	- [x] vpp
+	- [x] katachi
+	- [x] dlg
+	- [x] put their minimum versions in meson
+- [x] basic demos with screenshots
+- [x] split rvg and vui library
+- [x] create real readme
+- [x] release public version
+
