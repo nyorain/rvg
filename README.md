@@ -1,6 +1,6 @@
 # Retained vulkan/vector graphics
 
-Vulkan library for high-level 2D vector-like rendering.
+Vulkan library for high-level 2D vector-like rendering in modern C++17.
 Modeled loosely after svg, inspired by nanoVG.
 Uses an object-oriented, retained mode idiom for rendering which makes it
 highly efficient for rendering with vulkan since curves and shapes are not
@@ -13,15 +13,15 @@ Aims to provide a compromise between high level drawing functionality
 and an api that can efficiently be implemented on the gpu.
 Could e.g. easily be used for a vulkan gui library.
 
-Written in C++17, the project is tagged as C by github because it embeds
-[nuklears](https://github.com/vurtun/nuklear) font handling and
+The project builds upon tested and proven libraries where possible, such as
+[fontstash](https://github.com/memononen/fontstash) for font atlas building and
 some [stb headers](https://github.com/nothings/stb).
 Note that the project is still in a rather early stage, please report
-all issues and questions coming up (simple things such as spelling errors
+all issues and questions (simple things such as spelling errors
 or missing docs on a function are appreciated as well).
 
 For more information check out the example concepts below, the
-[example](example/example_ny.cpp) showing off many features,
+[example](example/example_glfw.cpp) showing off many features,
 or read the [introduction](docs/intro.md) which documents some basic
 concepts and shows how to integrate rvg in more detail.
 
@@ -139,18 +139,26 @@ Screenshot of [example/example.cpp](example/example.cpp):
 ## Building
 
 The library uses meson as build system. It uses a few of my other
-libraries as dependencies to stay modular.
+libraries as dependencies to stay modular but those will be automatically
+built using meson. The only hard dependencies are vulkan as well as glslang
+for building the spirv shaders.
 You need a solid C++17 compiler (currently not tested with msvc),
-gcc >= 7 is tested.
+gcc >= 7 is tested. For gcc 7 you currently have to turn off werror
+in meson (`meson configure -Dwerror=false` in build dir).
+For the glfw example you need the glfw3 library (obviously with vulkan
+support).
 
 After building
 
 ```
-meson build -Dexamples=true
-ninja -C build
+meson build -Dexample-glfw=true
+cd build
+ninja
 ```
 
-you should be able to run the example in the build dir via `./example/example`
+you should be able to run the example in the build dir via `./example/example_glfw`.
+There is also an example using my experimental ny window abstraction instead of glfw,
+enable it via `-Dexample-ny=true` (requires several low level xcb/wayland libraries).
 
 # Notes
 
