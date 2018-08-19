@@ -4,7 +4,6 @@
 
 // Example utility for creating window and vulkan swapchain setup
 #include "render.hpp"
-#include "window.hpp"
 
 // the used rvg headers.
 #include <rvg/context.hpp>
@@ -18,18 +17,12 @@
 #include <katachi/path.hpp>
 #include <katachi/svg.hpp>
 
-// ny to create a backend, event processing, window.
-#include <ny/backend.hpp>
-#include <ny/appContext.hpp>
-#include <ny/key.hpp>
-#include <ny/mouseButton.hpp>
-#include <ny/event.hpp>
-
 // vpp to allow more high-level vulkan usage.
 #include <vpp/instance.hpp>
 #include <vpp/debug.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/physicalDevice.hpp>
+#include <vkpp/error.hpp>
 
 // some matrix/vector utilities
 #include <nytl/vecOps.hpp>
@@ -38,6 +31,8 @@
 // logging/debugging
 #include <dlg/dlg.hpp>
 
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 #include <chrono>
 #include <array>
 
@@ -57,7 +52,7 @@ constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
 constexpr auto printFrames = true;
 constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
-constexpr auto textHeight = 22;
+constexpr auto textHeight = 16;
 
 struct Context {
 	rvg::Context& ctx;
@@ -170,7 +165,7 @@ public:
 	void resize(Vec2ui size);
 
 	void clicked(Vec2f pos);
-	void key(ny::Keycode, bool pressed);
+	void key(unsigned, bool pressed);
 
 protected:
 	rvg::Context& ctx_;
@@ -620,6 +615,7 @@ void App::clicked(Vec2f pos) {
 
 	auto h = bottomText_.height();
 	if(in(bottomText_.position(), {bottomText_.width(), h})) {
+		// opens the github link in browser
 		// ikr, std::system isn't a good choice, generally.
 		// But here, i feel like it's enough
 #ifdef RVG_EXAMPLE_UNIX
@@ -633,10 +629,10 @@ void App::clicked(Vec2f pos) {
 	}
 }
 
-void App::key(ny::Keycode key, bool pressed) {
-	if(key == ny::Keycode::left) {
+void App::key(unsigned key, bool pressed) {
+	if(key == GLFW_KEY_LEFT) {
 		pendulum_.left(pressed);
-	} else if(key == ny::Keycode::right) {
+	} else if(key == GLFW_KEY_RIGHT) {
 		pendulum_.right(pressed);
 	}
 
@@ -647,34 +643,34 @@ void App::key(ny::Keycode key, bool pressed) {
 	// TODO
 	auto t = false;
 
-	if(key == ny::Keycode::b) {
+	if(key == GLFW_KEY_B) {
 		*paint_.change() = rvg::colorPaint({rvg::norm, 0.2, 0.2, 0.8});
-	} else if(key == ny::Keycode::g) {
+	} else if(key == GLFW_KEY_G) {
 		*paint_.change() = rvg::colorPaint({rvg::norm, 0.1, 0.6, 0.3});
-	} else if(key == ny::Keycode::r) {
+	} else if(key == GLFW_KEY_R) {
 		*paint_.change() = rvg::colorPaint({rvg::norm, 0.8, 0.2, 0.3});
-	} else if(key == ny::Keycode::d) {
+	} else if(key == GLFW_KEY_D) {
 		*paint_.change() = rvg::colorPaint({rvg::norm, 0.1, 0.1, 0.1});
-	} else if(key == ny::Keycode::w) {
+	} else if(key == GLFW_KEY_W) {
 		*paint_.change() = rvg::colorPaint(rvg::Color::white);
-	} else if(key == ny::Keycode::p) {
+	} else if(key == GLFW_KEY_P) {
 		*paint_.change() = rvg::linearGradient({0, 0}, {2000, 1000},
 			{255, 0, 0}, {255, 255, 0});
-	} else if(key == ny::Keycode::c) {
+	} else if(key == GLFW_KEY_C) {
 		*paint_.change() = rvg::radialGradient({1000, 500}, 0, 1000,
 			{255, 0, 0}, {255, 255, 0});
 	}
 
-	else if(key == ny::Keycode::q) {
+	else if(key == GLFW_KEY_Q) {
 		angle_ += 0.1;
 		t = true;
-	} else if(key == ny::Keycode::e) {
+	} else if(key == GLFW_KEY_E) {
 		angle_ -= 0.1;
 		t = true;
-	} else if(key == ny::Keycode::i) {
+	} else if(key == GLFW_KEY_I) {
 		scale_ *= 1.1;
 		t = true;
-	} else if(key == ny::Keycode::o) {
+	} else if(key == GLFW_KEY_O) {
 		scale_ /= 1.1;
 		t = true;
 	}
@@ -695,15 +691,15 @@ void App::key(ny::Keycode key, bool pressed) {
 // main
 int main() {
 	// - initialization -
-	auto& backend = ny::Backend::choose();
-	if(!backend.vulkan()) {
-		throw std::runtime_error("ny backend has no vulkan support!");
+	if(!::glfwInit()) {
+		throw std::runtime_error("Failed to init glfw");
 	}
 
-	auto appContext = backend.createAppContext();
-
 	// vulkan init: instance
-	auto iniExtensions = appContext->vulkanExtensions();
+	uint32_t count;
+	const char** extensions = ::glfwGetRequiredInstanceExtensions(&count);
+
+	std::vector<const char*> iniExtensions {extensions, extensions + count};
 	iniExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
 
 	vk::ApplicationInfo appInfo (appName, 1, engineName, 1, VK_API_VERSION_1_0);
@@ -742,19 +738,41 @@ int main() {
 		debugCallback = std::make_unique<vpp::DebugCallback>(instance);
 	}
 
-	// init ny window
-	MainWindow window(*appContext, instance);
-	auto vkSurf = window.vkSurface();
+	// init glfw window
+	const auto size = nytl::Vec {1200u, 800u};
+	::glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	GLFWwindow* window = ::glfwCreateWindow(size.x, size.y, "rvg", NULL, NULL);
+	if(!window) {
+		throw std::runtime_error("Failed to create glfw window");
+	}
+
+	// avoiding reinterpret_cast due to aliasing warnings
+	VkInstance vkini;
+	auto handle = instance.vkHandle();
+	std::memcpy(&vkini, &handle, sizeof(vkini));
+	static_assert(sizeof(VkInstance) == sizeof(vk::Instance));
+
+	VkSurfaceKHR vkSurf {};
+	VkResult err = ::glfwCreateWindowSurface(vkini, window, NULL, &vkSurf);
+	if(err) {
+		auto str = std::string("Failed to create vulkan surface: ");
+		str += vk::name(static_cast<vk::Result>(err));
+		throw std::runtime_error(str);
+	}
+
+	vk::SurfaceKHR surface {};
+	std::memcpy(&surface, &vkSurf, sizeof(surface));
+	static_assert(sizeof(VkSurfaceKHR) == sizeof(vk::SurfaceKHR));
 
 	// create device
 	// enable some extra features
 	float priorities[1] = {0.0};
 
 	auto phdevs = vk::enumeratePhysicalDevices(instance);
-	auto phdev = vpp::choose(phdevs, instance, vkSurf);
+	auto phdev = vpp::choose(phdevs, instance, surface);
 
 	auto queueFlags = vk::QueueBits::compute | vk::QueueBits::graphics;
-	int queueFam = vpp::findQueueFamily(phdev, instance, vkSurf, queueFlags);
+	int queueFam = vpp::findQueueFamily(phdev, instance, surface, queueFlags);
 
 	vk::DeviceCreateInfo devInfo;
 	vk::DeviceQueueCreateInfo queueInfo({}, queueFam, 1, priorities);
@@ -773,11 +791,13 @@ int main() {
 	auto presentQueue = device.queue(queueFam);
 
 	auto renderInfo = RendererCreateInfo {
-		device, vkSurf, window.size(), *presentQueue,
+		device, surface, size, *presentQueue,
 		startMsaa, vsync, clearColor
 	};
 
-	auto renderer = Renderer(renderInfo);
+	// optional so we can manually destroy it before vulkan surface
+	auto orenderer = std::optional<Renderer>(renderInfo);
+	auto& renderer = *orenderer;
 
 	// app
 	rvg::Context ctx(device, {renderer.renderPass(), 0, true});
@@ -793,29 +813,45 @@ int main() {
 	renderer.invalidate();
 
 	// connect window & renderer
-	auto run = true;
-	window.onClose = [&](const auto&) { run = false; };
-	window.onKey = [&](const auto& ev) {
-		app.key(ev.keycode, ev.pressed);
-		if(ev.pressed) {
-			if(ev.keycode == ny::Keycode::escape) {
-				dlg_info("Escape pressed, exiting");
-				run = false;
-			}
+	struct WinInfo {
+		Renderer* renderer;
+		App* app;
+	} winInfo = {
+		&renderer,
+		&app,
+	};
+
+	::glfwSetWindowUserPointer(window, &winInfo);
+
+	auto sizeCallback = [](auto* window, int width, int height) {
+		auto ptr = ::glfwGetWindowUserPointer(window);
+		const auto& winInfo = *static_cast<const WinInfo*>(ptr);
+		auto size = nytl::Vec {unsigned(width), unsigned(height)};
+		winInfo.renderer->resize(size);
+		winInfo.app->resize(size);
+	};
+
+	auto keyCallback = [](auto* window, int key, int, int action, int) {
+		auto pressed = action != GLFW_RELEASE;
+		auto ptr = ::glfwGetWindowUserPointer(window);
+		const auto& winInfo = *static_cast<const WinInfo*>(ptr);
+		winInfo.app->key(key, pressed);
+	};
+
+	auto mouseCallback = [](auto* window, int button, int action, int) {
+		auto ptr = ::glfwGetWindowUserPointer(window);
+		const auto& winInfo = *static_cast<const WinInfo*>(ptr);
+		auto pressed = action == GLFW_PRESS;
+		if(pressed && button == GLFW_MOUSE_BUTTON_LEFT) {
+			double x,y;
+			::glfwGetCursorPos(window, &x, &y);
+			winInfo.app->clicked({float(x), float(y)});
 		}
 	};
 
-	window.onResize = [&](const auto& ev) {
-		renderer.resize(ev.size);
-		app.resize(ev.size);
-	};
-
-	window.onMouseButton = [&](const auto& ev) {
-		if(ev.pressed && ev.button == ny::MouseButton::left) {
-			auto p = static_cast<nytl::Vec2f>(ev.position);
-			app.clicked(p);
-		}
-	};
+	::glfwSetFramebufferSizeCallback(window, sizeCallback);
+	::glfwSetKeyCallback(window, keyCallback);
+	::glfwSetMouseButtonCallback(window, mouseCallback);
 
 	// - main loop -
 	using Clock = std::chrono::high_resolution_clock;
@@ -825,17 +861,14 @@ int main() {
 	auto fpsCounter = 0u;
 	auto secCounter = 0.f;
 
-	while(run) {
+	while(!::glfwWindowShouldClose(window)) {
 		auto now = Clock::now();
 		auto diff = now - lastFrame;
 		auto dt = std::chrono::duration_cast<Secf>(diff).count();
 		lastFrame = now;
 
 		app.update(dt);
-		if(!appContext->pollEvents()) {
-			dlg_info("pollEvents returned false");
-			return 0;
-		}
+		::glfwPollEvents();
 
 		auto [rec, seph] = ctx.upload();
 
@@ -868,4 +901,9 @@ int main() {
 			}
 		}
 	}
+
+	orenderer.reset();
+	vkDestroySurfaceKHR(vkini, vkSurf, nullptr);
+	::glfwDestroyWindow(window);
+	::glfwTerminate();
 }

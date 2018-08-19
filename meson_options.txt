@@ -1,2 +1,3 @@
-option('examples', type: 'boolean', value: false)
+option('example-ny', type: 'boolean', value: false)
+option('example-glfw', type: 'boolean', value: false)
 option('tests', type: 'boolean', value: false)

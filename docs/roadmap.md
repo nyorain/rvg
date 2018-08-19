@@ -12,6 +12,8 @@
 - [ ] make positioning textures easier (NO manual matrix...)
 - [ ] transform matrix on paint?
 - [ ] strokeWidth < fringeWidth (nvg line 2258), github.com/memononen/nanovg/issues/68
+- [ ] remove code duplication in ny/glfw backends. Define app and such
+      only once (or at least the widgets once)
 
 problem of __scaling__ should be solved in this release:
 	When using a non-window transform (e.g. level transform) then
