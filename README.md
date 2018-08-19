@@ -21,7 +21,7 @@ all issues and questions coming up (simple things such as spelling errors
 or missing docs on a function are appreciated as well).
 
 For more information check out the example concepts below, the
-[example](example/example.cpp) showing off many features,
+[example](example/example_ny.cpp) showing off many features,
 or read the [introduction](docs/intro.md) which documents some basic
 concepts and shows how to integrate rvg in more detail.
 
