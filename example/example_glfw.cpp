@@ -552,6 +552,7 @@ App::App(rvg::Context& ctx) : ctx_(ctx),
 	drawMode.aaFill = true;
 	drawMode.aaStroke = true;
 	drawMode.stroke = 2.5f;
+	drawMode.color = {};
 	circle_ = {ctx, circlePos, circleRad, drawMode};
 	addText(circlePos + textOff, "Anti aliasing & using a texture");
 }
