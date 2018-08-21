@@ -8,7 +8,8 @@ project('rvg', ['cpp', 'c'],
   		'warning_level=3',
   		'werror=true'])
 
-build_example = get_option('examples')
+build_example_ny = get_option('example-ny')
+build_example_glfw = get_option('example-glfw')
 build_tests = get_option('tests')
 
 warnings = [
@@ -73,7 +74,7 @@ rvg_dep = declare_dependency(
 	dependencies: rvg_deps,
 	include_directories: rvg_inc)
 
-if build_example
+if build_example_ny or build_example_glfw
   subdir('example')
 endif
 
