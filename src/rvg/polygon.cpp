@@ -157,13 +157,13 @@ void Polygon::update(Span<const Vec2f> points, const DrawMode& mode) {
 void Polygon::disable(bool disable, DrawType type) {
 	auto re = false;
 	if(type == DrawType::strokeFill || type == DrawType::fill) {
-		auto old = flags_.disableFill;
-		re |= (old != (flags_.disableFill = disable));
+		re |= (flags_.disableFill != disable);
+		flags_.disableFill = disable;
 	}
 
 	if(type == DrawType::strokeFill || type == DrawType::stroke) {
-		auto old = flags_.disableStroke;
-		re |= (old != (flags_.disableStroke = disable));
+		re |= (flags_.disableStroke != disable);
+		flags_.disableStroke = disable;
 	}
 
 	context().registerUpdateDevice(this);
