@@ -338,7 +338,8 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 	auto m4 = sizeof(nytl::Mat4f);
 	update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});
 	update.uniform({{ubo_.buffer(), ubo_.offset() + m4, ubo_.size() - m4}});
-	update.imageSampler({{{}, paint_.texture, vk::ImageLayout::general}});
+	update.imageSampler({{{}, paint_.texture,
+		vk::ImageLayout::shaderReadOnlyOptimal}});
 }
 
 void Paint::update() {
@@ -377,7 +378,8 @@ bool Paint::updateDevice() {
 	if(oldView_ != paint_.texture) {
 		vpp::DescriptorSetUpdate update(ds_);
 		update.skip(2);
-		update.imageSampler({{{}, paint_.texture, vk::ImageLayout::general}});
+		update.imageSampler({{{}, paint_.texture,
+			vk::ImageLayout::shaderReadOnlyOptimal}});
 		oldView_ = paint_.texture;
 		re = true;
 	}

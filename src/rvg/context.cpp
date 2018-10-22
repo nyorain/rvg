@@ -198,7 +198,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	dummyTex_ = {dsAllocator(), dsLayoutFontAtlas_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
-	auto layout = vk::ImageLayout::general;
+	auto layout = vk::ImageLayout::shaderReadOnlyOptimal;
 	update.imageSampler({{{}, emptyImage_.vkImageView(), layout}});
 
 	identityTransform_ = {*this};

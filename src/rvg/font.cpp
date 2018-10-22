@@ -45,7 +45,7 @@ bool FontAtlas::bake(Context& ctx) {
 
 		vpp::DescriptorSetUpdate update(ds_);
 		update.imageSampler({{{}, texture_.vkImageView(),
-			vk::ImageLayout::general}});
+			vk::ImageLayout::shaderReadOnlyOptimal}});
 	} else {
 		texture_.update({dptr, dptr + uw * uh});
 	}
