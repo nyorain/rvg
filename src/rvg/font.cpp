@@ -101,7 +101,7 @@ bool FontAtlas::updateDevice() {
 
 		vpp::DescriptorSetUpdate update(ds_);
 		update.imageSampler({{{}, texture_.vkImageView(),
-			vk::ImageLayout::general}});
+			vk::ImageLayout::shaderReadOnlyOptimal}});
 	} else {
 		// TODO: use dirty rect
 		texture_.update({dptr, dptr + dsize});
