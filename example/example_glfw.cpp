@@ -463,8 +463,7 @@ void PathWidget::clicked(Vec2f pos) {
 
 // App
 App::App(rvg::Context& ctx) : ctx_(ctx),
-		// font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf"),
-		font_(ctx_, "Roboto-Regular.ttf"),
+		font_(ctx_, baseResPath + "example/OpenSans-Regular.ttf"),
 		awesomeFont_(ctx_, baseResPath + "example/fontawesome-webfont.ttf") {
 
 	constexpr auto gradPos = Vec {50.f, 50.f};
