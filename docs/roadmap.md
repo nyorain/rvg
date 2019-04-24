@@ -36,6 +36,7 @@ Completely abolish transform state?
 
 - [ ] clean up/solve transform state handling (scaling!)
 - [ ] cleanup fontstash (and remove fso.h)
+- [ ] better srgb conversion functions
 
 ### later
 

@@ -5,6 +5,7 @@ Great resources and discussions regarding color spaces and gamma correction:
 - http://blog.johnnovak.net/2016/09/21/what-every-coder-should-know-about-gamma/
 - https://github.com/ocornut/imgui/issues/578
 - https://blackhole12.com/blog/everyone-does-srgb-wrong-because/
+- https://learnopengl.com/Advanced-Lighting/Gamma-Correction
 
 
 *Issue*: should the colors passed to paints be in rgb or srgb color space?
@@ -42,12 +43,13 @@ when rendering on a not-srgb framebuffer.
 ---
 
 
-*Issue*: should rvg offer the user an options whether color mixing should
+*Issue*: should rvg offer the user an option whether color mixing should
 be done in rgb or srgb space?
 
 - Pretty much _all_ software does it in srgb space
 - doing it in srgb space is technically "wrong" (not fully convinced there
-  is a wrong here) and most modern software only does it to stay compatible
+  is a wrong here though) and most modern software only does it to stay
+  compatible
 - this lead to getting used to "wrong" gradients so it appears somewhat
   normal to e.g. have a dark section between a red/green gradient
 - if rvg _forces_ (the "correct") rgb mixing some users could perceive rvg's

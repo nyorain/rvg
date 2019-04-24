@@ -51,11 +51,18 @@ layout(row_major, set = 1, binding = 0) uniform Paint {
 	void applyScissor() {}
 #endif
 
+vec4 linearize(vec4 srgb) {
+	return vec4(pow(srgb.rgb, vec3(gamma)), srgb.a);
+}
+
 void main() {
 	gl_Position = transform.matrix * vec4(in_pos, 0.0, 1.0);
 	out_paint = (paint.matrix * vec4(in_pos, 0.0, 1.0)).xy;
 	out_uv = in_uv;
 
-	out_color = in_color;
+	// fill.frag expects *all* colors in linear space.
+	// polygon specifies that it - as everything in rvg - expects colors
+	// in srgb space so we have to linearize it here.
+	out_color = linearize(in_color);
 	applyScissor();
 }
