@@ -349,6 +349,18 @@ void Paint::update() {
 
 void Paint::upload() {
 	dlg_assert(valid() && ubo_.size());
+
+	// NOTE: really important part here!
+	// shaders always work on linear colors (since operating on
+	// colors in gamma-corrected srgb space gives wrong results).
+	// But since we expect srgb color values from the user (we do
+	// that since that's what people are expected to work with;
+	// otherwise they e.g. would have way less dark colors
+	// to work with) we have to linearize them.
+	// Could also be done in the shader, but here is more efficient.
+	// It's also important that we get float values instead of
+	// u8 since with u8 we would lose the dark-color precision
+	// we need (and users expect; can actually see).
 	auto inner = linearize(paint_.data.frag.inner);
 	auto outer = linearize(paint_.data.frag.outer);
 
@@ -495,7 +507,7 @@ void Texture::upload(nytl::Span<const std::byte> data, vk::ImageLayout layout) {
 
 	auto size = vk::Extent3D{size_.x, size_.y, 1u};
 	auto format = type_ == Type::a8 ?
-		vk::Format::r8Unorm :
+		vk::Format::r8Unorm : // TODO: use srgb here as well?
 		vk::Format::r8g8b8a8Srgb;
 	auto stage = vpp::fillStaging(cmdBuf, image_.image(), format, layout,
 		size, data, {vk::ImageAspectBits::color});

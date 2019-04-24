@@ -51,6 +51,7 @@ vec4 paintColor(vec2 coords, PaintData paint, sampler2D tex, vec4 col) {
 	} else if(paint.type == paintTypePointColor) {
 		// TODO: doing it here is really not efficient
 		// rather do it in polygon?
+		// later note: we shouldn't have to do it at all?!
 		// const float gamma = 2.2;
 		// return vec4(pow(col.rgb, vec3(1. / gamma)), col.a);
 		return col.rgba;

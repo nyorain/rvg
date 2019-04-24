@@ -2,15 +2,20 @@
 
 ### v0.2
 
-- [x] better font handling: automatik atlas rebaking, fallback fonts
+- [x] better font handling: automatic atlas rebaking, fallback fonts
 - [ ] text __scaling__
+	- [ ] allow to set fonstash attributes like blur, spacing?
 - [ ] allow to specify fringe on context creation/change it later
 	- [ ] __scaling__ with transform?
 - [x] care about texture srgb. You probably want srgb textures.
       _yep, were needed since most images use srgb/stb_image outputs srgb_
 	- [x] add srgb support for vpp/formats (?) [wasn't needed]
 - [ ] make positioning textures easier (NO manual matrix...)
-- [ ] transform matrix on paint?
+	- [ ] add utility functions that create the matrix (from translate,
+	      scale rotation)
+	- [ ] allow specifying uv coords for textures?
+		  as alternative to the texture transforms
+		  optionally in polygon
 - [ ] strokeWidth < fringeWidth (nvg line 2258), github.com/memononen/nanovg/issues/68
 - [ ] remove code duplication in ny/glfw backends. Define app and such
       only once (or at least the widgets once)
@@ -26,12 +31,15 @@ problem of __scaling__ should be solved in this release:
 	of rvg?)
 Completely abolish transform state?
 	well, rotation and translation aren't a problem. Only scale.
+	Maybe allow to set pre-transform for each polygon? On change,
+	the whole polygon/text has to rebaked.
 
 - [ ] clean up/solve transform state handling (scaling!)
 - [ ] cleanup fontstash (and remove fso.h)
 
 ### later
 
+- [ ] general transform matrix on paint?
 - [ ] corner bevels. Currently anti aliasing not too good for sharp corners
       -> katachi
 - [ ] rvg: more stroke settings: linecap/linejoin [complex; -> katachi]

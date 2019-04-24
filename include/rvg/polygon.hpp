@@ -42,6 +42,7 @@ struct DrawMode {
 	struct {
 		/// The per-point color values. Should have the same size
 		/// as the points span passed to the polygon.
+		/// As all colors, are expected to be in srgb space.
 		std::vector<Vec4u8> points {};
 		bool fill {}; /// whether they can be used when filling
 		bool stroke {}; /// whether they can be used when stroking

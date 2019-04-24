@@ -31,7 +31,8 @@ constexpr struct Norm {} norm;
 /// way on the screen as in would in a browser (given that you
 /// use a srgb framebuffer or otherwise manually gamma correct).
 /// Therefore color values should NEVER be directly used
-/// for blending/mixing.
+/// for blending/mixing. Use the utility functions below, or convert
+/// them to linear rgb space before.
 class Color {
 public:
 	u8 r {0};
@@ -70,6 +71,7 @@ inline bool operator!=(Color a, Color b) { return a.rgba() != b.rgba(); }
 
 // srgb rgb (gamma-based approximations, you might need real conversion!)
 // will not convert alpha range
+// returns Vec4f to not lose precision for dark colors.
 Vec4f linearize(const Color&, float gamma = 2.2);
 Color srgb(Vec4f rgbLinearNorm, float gamma = 2.2);
 
