@@ -51,6 +51,7 @@ layout(row_major, set = 1, binding = 0) uniform Paint {
 	void applyScissor() {}
 #endif
 
+const float gamma = 2.2;
 vec4 linearize(vec4 srgb) {
 	return vec4(pow(srgb.rgb, vec3(gamma)), srgb.a);
 }

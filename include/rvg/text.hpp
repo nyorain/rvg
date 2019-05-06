@@ -10,6 +10,7 @@
 #include <rvg/stateChange.hpp>
 
 #include <nytl/vec.hpp>
+#include <nytl/matOps.hpp>
 #include <nytl/rect.hpp>
 
 #include <vpp/descriptor.hpp>
@@ -25,7 +26,7 @@ namespace rvg {
 class Text : public DeviceObject {
 public:
 	Text() = default;
-	Text(Context&, Vec2f pos, std::string text, Font&, unsigned height);
+	Text(Context&, Vec2f pos, std::string text, Font&, float height);
 
 	Text(Text&& rhs) noexcept;
 	Text& operator=(Text&& rhs) noexcept;
@@ -52,12 +53,10 @@ public:
 	/// Must not be called during a state change.
 	unsigned charAt(float x) const;
 
-	/// Returns the bounds of the full text
-	/// Must not be called during a state change.
+	/// Returns the (local) bounds of the full text
 	Rect2f bounds() const;
 
 	/// Returns the bounds of the ith char in local coordinates.
-	/// Must not be called during a state change.
 	Rect2f ithBounds(unsigned n) const;
 
 	const auto& font() const { return state_.font; }
@@ -72,9 +71,11 @@ public:
 protected:
 	struct State {
 		std::string text {};
-		Font font {}; // must not be set to invalid object
-		Vec2f position {};
-		unsigned height {}; // must be >0
+		Font font {}; // must not be set to invalid font
+		Vec2f position {}; // baseline position of first character
+		float height {}; // height to use
+		// pre-transform
+		nytl::Mat3f transform = nytl::identity<3, float>();
 	} state_;
 
 	bool disable_ {};

@@ -40,5 +40,10 @@ if build_example_glfw
 	  cpp_args: example_args,
 	  sources: example_src_glfw,
 	  dependencies: example_deps_glfw)
+
+  executable('scale',
+	  cpp_args: example_args,
+	  sources: example_src + ['scale.cpp'],
+	  dependencies: example_deps_glfw)
 endif
 

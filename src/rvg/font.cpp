@@ -15,7 +15,6 @@
 #include <rvg/fontstash.h>
 
 // TODO: currently fonts cannot be removed from a font atlas.
-// TODO: logical fonts (see fontstash.h)
 
 namespace rvg {
 
@@ -43,7 +42,7 @@ void FontAtlas::validate() {
 }
 
 void FontAtlas::expand() {
-	constexpr auto maxSize = 2048;
+	constexpr auto maxSize = 4096;
 
 	int w, h;
 	fonsGetAtlasSize(ctx_, &w, &h);
@@ -103,8 +102,12 @@ bool FontAtlas::updateDevice() {
 		update.imageSampler({{{}, texture_.vkImageView(),
 			vk::ImageLayout::shaderReadOnlyOptimal}});
 	} else {
+		// NOTE: important to not call texte_.update here since
+		//   then the texture would register for updateDevice.
+		//   But we currentlly are in the updateDevice phase, alling
+		//   context registerUpdateDevice during that is not allowed
 		// TODO: use dirty rect
-		texture_.update({dptr, dptr + dsize});
+		rerecord |= texture_.updateDevice({dptr, dptr + dsize});
 	}
 
 	return rerecord;

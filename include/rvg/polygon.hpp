@@ -8,6 +8,7 @@
 #include <rvg/deviceObject.hpp>
 
 #include <nytl/vec.hpp>
+#include <nytl/matOps.hpp>
 #include <vpp/trackedDescriptor.hpp>
 #include <vpp/sharedBuffer.hpp>
 
@@ -65,6 +66,15 @@ struct DrawMode {
 	/// for polygons that don't change often but are drawn.
 	/// If this is false, hostVisible memory will be used.
 	bool deviceLocal {};
+
+	/// Pre-transform that is applied while baking the primitive.
+	/// Comparison to the post-transform state via rvg::Transform:
+	/// - Every time the pre-transform changes the polygon has to be
+	///   rebaked/updated. More expensive
+	/// - Doing scaling via the post transform has serious problems:
+	///   anti aliasing might break and for shapes (that use this
+	///   pre transform as well) curves might not be correctly tesselated.
+	nytl::Mat3f transform = nytl::identity<3, float>();
 };
 
 enum class DrawType {

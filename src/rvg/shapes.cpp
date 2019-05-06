@@ -3,6 +3,7 @@
 // See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
 
 #include <rvg/shapes.hpp>
+#include <rvg/util.hpp>
 #include <rvg/context.hpp>
 #include <katachi/path.hpp>
 #include <katachi/curves.hpp>
@@ -40,84 +41,95 @@ RectShape::RectShape(Context& ctx, Vec2f p, Vec2f s,
 }
 
 void RectShape::update() {
+	// TODO: can probably all be done easier... first multiply
+	// pos and size with transforms and then use the multiplied
+	// radius
+	auto tp = [&](float x, float y) {
+		auto p = state_.position + Vec2f{x, y};
+		return multPos(state_.transform, p);
+	};
+
 	if(state_.rounding == std::array<float, 4>{}) {
 		auto points = {
-			state_.position,
-			state_.position + Vec {state_.size.x, 0.f},
-			state_.position + state_.size,
-			state_.position + Vec {0.f, state_.size.y},
-			state_.position
+			tp(0, 0),
+			tp(state_.size.x, 0),
+			tp(state_.size.x, state_.size.y),
+			tp(0, state_.size.y),
+			tp(0, 0),
 		};
 		polygon_.update(points, state_.drawMode);
 	} else {
-		constexpr auto steps = 12u;
+		constexpr auto steps = 12u; // TODO: make dependent on size
+		auto size = state_.size;
 		std::vector<Vec2f> points;
-
-		auto& position = state_.position;
-		auto& size = state_.size;
 		auto& rounding = state_.rounding;
 
 		// topRight
 		if(rounding[0] != 0.f) {
 			dlg_assert(rounding[0] > 0.f);
-			points.push_back(position + Vec {0.f, rounding[0]});
+			auto radius = Vec2f{rounding[0], rounding[0]};
+			radius = multDir(state_.transform, radius);
+
+			points.push_back(tp(0, rounding[0]));
 			auto a1 = ktc::CenterArc {
-				position + Vec{rounding[0], rounding[0]},
-				{rounding[0], rounding[0]},
+				tp(rounding[0], rounding[0]), radius,
 				nytl::constants::pi,
 				nytl::constants::pi * 1.5f
 			};
 			ktc::flatten(a1, points, steps);
 		} else {
-			points.push_back(position);
+			points.push_back(tp(0, 0));
 		}
 
 		// topLeft
 		if(rounding[1] != 0.f) {
 			dlg_assert(rounding[1] > 0.f);
-			auto x = position.x + size.x - rounding[1];
-			points.push_back({x, position.y});
+			auto radius = Vec2f{rounding[1], rounding[1]};
+			radius = multDir(state_.transform, radius);
+
+			points.push_back(tp(size.x - rounding[1], 0.f));
 			auto a1 = ktc::CenterArc {
-				{x, position.y + rounding[1]},
-				{rounding[1], rounding[1]},
+				tp(size.x - rounding[1], rounding[1]), radius,
 				nytl::constants::pi * 1.5f,
 				nytl::constants::pi * 2.f
 			};
 			ktc::flatten(a1, points, steps);
 		} else {
-			points.push_back(position + Vec {size.x, 0.f});
+			points.push_back(tp(size.x, 0.f));
 		}
 
 		// bottomRight
 		if(rounding[2] != 0.f) {
 			dlg_assert(rounding[2] > 0.f);
-			auto y = position.y + size.y - rounding[2];
-			points.push_back({position.x + size.x, y});
+			auto radius = Vec2f{rounding[2], rounding[2]};
+			radius = multDir(state_.transform, radius);
+
+			points.push_back(tp(size.x, size.y - rounding[2]));
 			auto a1 = ktc::CenterArc {
-				{position.x + size.x - rounding[2], y},
-				{rounding[2], rounding[2]},
+				tp(size.x - rounding[2], size.y - rounding[2]), radius,
 				0.f,
 				nytl::constants::pi * 0.5f
 			};
 			ktc::flatten(a1, points, steps);
 		} else {
-			points.push_back(position + size);
+			points.push_back(tp(size.x, size.y));
 		}
 
 		// bottomLeft
 		if(rounding[3] != 0.f) {
 			dlg_assert(rounding[3] > 0.f);
-			points.push_back({position.x + rounding[3], position.y + size.y});
-			auto y = position.y + size.y - rounding[3];
+			auto radius = Vec2f{rounding[3], rounding[3]};
+			radius = multDir(state_.transform, radius);
+
+			points.push_back(tp(rounding[3], size.y));
 			auto a1 = ktc::CenterArc {
-				{position.x + rounding[3], y},
-				{rounding[3], rounding[3]},
+				tp(rounding[3], size.y - rounding[3]), radius,
 				nytl::constants::pi * 0.5f,
 				nytl::constants::pi * 1.f,
 			};
 			ktc::flatten(a1, points, steps);
 		} else {
-			points.push_back(position + Vec {0.f, size.y});
+			points.push_back(tp(0, size.y));
 		}
 
 		// close it
@@ -141,11 +153,6 @@ CircleShape::CircleShape(Context& ctx,
 		: state_{xcenter, xradius, std::move(xdraw), xpoints, xstartAngle},
 			polygon_(ctx) {
 
-	if(xpoints == defaultPoints) {
-		auto& pc = state_.pointCount;
-		pc = std::min(8 + 8 * ((xradius.x + xradius.y) / 16), 256.f);
-	}
-
 	update();
 	polygon_.updateDevice();
 }
@@ -158,17 +165,22 @@ CircleShape::CircleShape(Context& ctx,
 }
 
 void CircleShape::update() {
-	dlg_assertl(dlg_level_warn, state_.pointCount > 2);
+	auto pcount = state_.pointCount;
+	auto radius = multDir(state_.transform, state_.radius);
+	auto center = multPos(state_.transform, state_.center);
+	if(pcount == defaultPointCount) {
+		pcount = std::min(8 + 8 * ((radius.x + radius.y) / 16), 256.f);
+	}
 
 	std::vector<Vec2f> pts;
-	pts.reserve(state_.pointCount);
+	pts.reserve(pcount);
 
 	auto a = state_.startAngle;
-	auto d = 2 * nytl::constants::pi / state_.pointCount;
-	for(auto i = 0u; i < state_.pointCount + 1; ++i) {
+	auto d = 2 * nytl::constants::pi / pcount;
+	for(auto i = 0u; i < pcount + 1; ++i) {
 		using namespace nytl::vec::cw::operators;
-		auto p = Vec {std::cos(a), std::sin(a)} * state_.radius;
-		pts.push_back(state_.center + p);
+		auto p = Vec {std::cos(a), std::sin(a)};
+		pts.push_back(center + radius * p);
 		a += d;
 	}
 

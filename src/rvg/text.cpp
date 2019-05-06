@@ -11,11 +11,20 @@
 
 namespace rvg {
 
+// utility
+namespace {
+
 constexpr auto vertIndex0 = 2; // vertex index on the left
 constexpr auto vertIndex2 = 3; // vertex index on the right
 
+float quantatize(float value, float quantum) {
+	return std::round(value / quantum) * quantum;
+}
+
+} // anon namespace
+
 // Text
-Text::Text(Context& ctx, Vec2f p, std::string t, Font& f, unsigned h) :
+Text::Text(Context& ctx, Vec2f p, std::string t, Font& f, float h) :
 		DeviceObject(ctx), state_{std::move(t), f, p, h} {
 
 	f.atlas().added(*this);
@@ -66,12 +75,19 @@ Text::~Text() {
 }
 
 void Text::update() {
-	dlg_assert(valid() && font().valid() && height() > 0);
+	constexpr auto quantum = 0.5f;
+	dlg_assert(valid() && font().valid());
 	auto& font = state_.font;
 	auto& text = state_.text;
-	auto& position = state_.position;
-
+	auto pos = state_.position;
+	auto fscale = scale(state_.transform);
+	auto fsize = quantatize(std::abs(state_.height) * fscale, quantum);
+	dlg_assert(fsize > 0.f);
 	dlg_assert(font.valid());
+
+	if(state_.height < 0.f) {
+		pos.y *= -1.f;
+	}
 
 	if(oldAtlas_ && &font.atlas() != oldAtlas_) {
 		context().rerecord();
@@ -91,9 +107,16 @@ void Text::update() {
 		auto left = i == 0 || i == 3;
 		auto top = i == 0 || i == 1;
 
-		posCache_.push_back({
+		auto p = Vec2f{
 			left ? q.x0 : q.x1,
-			top ? q.y0 : q.y1});
+			top ? q.y0 : q.y1};
+		p *= 1 / fscale;
+		if(state_.height < 0.f) {
+			p.y *= -1.f;
+		}
+		p = multPos(state_.transform, p);
+		posCache_.push_back(p);
+
 		uvCache_.push_back({
 			left ? q.s0 : q.s1,
 			top ? q.t0 : q.t1});
@@ -103,20 +126,21 @@ void Text::update() {
 	FONSquad q;
 	FONStextIter iter;
 
-	fonsSetSize(stash, state_.height);
+	fonsSetSize(stash, fsize);
 	fonsSetFont(stash, font.id());
 
-	fonsTextIterInit(stash, &iter, position.x, position.y, text.data(),
+	fonsTextIterInit(stash, &iter, fscale * pos.x, fscale * pos.y, text.data(),
 		text.data() + text.size(), FONS_GLYPH_BITMAP_REQUIRED);
 
 	auto prev = iter;
 	while(fonsTextIterNext(stash, &iter, &q)) {
 		if(iter.prevGlyphIndex == -1) {
+			// this will recreate the font atlas, i.e. all work we have
+			// done iterating up to this point is invalid.
+			// Will automatically update all texts (this object as well)
+			// so we can return afterwards.
 			font.atlas().expand();
-
-			iter = prev;
-			fonsTextIterNext(stash, &iter, &q); // try again
-			dlg_assert(iter.prevGlyphIndex != -1);
+			return;
 		}
 
 		// we render using a strip pipe. Those doubled points allow us to
@@ -203,6 +227,8 @@ void Text::draw(vk::CommandBuffer cb) const {
 	vk::cmdDrawIndirect(cb, posBuf_.buffer(), posBuf_.offset(), 1, 0);
 }
 
+// TODO: the given x is in logical space but posCache_ is in
+// (pre-)transformed state at the moment.
 unsigned Text::charAt(float x) const {
 	x += state_.position.x;
 	for(auto i = 0u; i < posCache_.size(); i += 6) {
@@ -217,7 +243,7 @@ unsigned Text::charAt(float x) const {
 
 // NOTE: although it would be desirable, we cannot derive the information of
 // bounds from the stored position cache (we don't have advance/overlaps).
-// Not 100% sure, there might be a way (with assumption).
+// Not 100% sure, there might be a way (with additional assumptions).
 // We could cache this information in the update function but it's probably
 // not worth it.
 Rect2f Text::bounds() const {

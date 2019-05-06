@@ -189,7 +189,7 @@ protected:
 
 	std::vector<rvg::Text> texts_;
 	double angle_ {};
-	double scale_ {1.f};
+	nytl::Vec2f scale_ {1.f, 1.f};
 	nytl::Vec2ui size_ {};
 };
 
@@ -567,8 +567,8 @@ void App::resize(Vec2ui size) {
 	scale(mat, s);
 	translate(mat, {-1, -1, 0});
 	mat = mat * rotMat(angle_);
-	mat[0][0] *= scale_;
-	mat[1][1] *= scale_;
+	mat[0] *= scale_.x;
+	mat[1] *= scale_.y;
 	*transform_.change() = mat;
 	size_ = size;
 
@@ -667,11 +667,17 @@ void App::key(unsigned key, bool pressed) {
 	} else if(key == GLFW_KEY_E) {
 		angle_ -= 0.1;
 		t = true;
+	} else if(key == GLFW_KEY_X) {
+		scale_.x *= 1.1;
+		t = true;
+	} else if(key == GLFW_KEY_Y) {
+		scale_.y *= 1.1;
+		t = true;
 	} else if(key == GLFW_KEY_I) {
 		scale_ *= 1.1;
 		t = true;
 	} else if(key == GLFW_KEY_O) {
-		scale_ /= 1.1;
+		scale_ *= 1.f / 1.1;
 		t = true;
 	}
 
@@ -682,8 +688,8 @@ void App::key(unsigned key, bool pressed) {
 		scale(mat, s);
 		translate(mat, {-1, -1, 0});
 		mat = mat * rotMat(angle_);
-		mat[0][0] *= scale_;
-		mat[1][1] *= scale_;
+		mat[0][0] *= scale_.x;
+		mat[1][1] *= scale_.y;
 		*transform_.change() = mat;
 	}
 }

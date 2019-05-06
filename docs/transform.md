@@ -1,25 +1,53 @@
-All coordinates given e.g. as positions, sizes or points are interpreted in
-world space. That space is purely of logical nature and its meaning interpreted
-by the user.
-You could define primitives like in plain vulkan; normalized in range [-1, 1] or
-in window space [0, width] x [0, height] or directly in the logical space of
-your 2d game world. The definition of this space happens by the user via the
-transform state (rvg::Transform). There the user can set a transform matrix
-which must map the given point into vulkan normalized coordinates, i.e.
-the [-1, 1] range.
+# rvg transform state
 
-__NOTE: better to require the transform to end in window space?__
+rvg internally deals with anti aliasing, transforming paths into shapes
+(e.g. rounded rect corners or circles) and font sizes. Therefore it has
+to know about pixels and pixel sizes at some point. At the same time
+rvg wants to allow efficient transforms, e.g. moving complicated shapes
+and lots of text around without re-computing and re-uploading all the data
+for these shapes. To implement both goals correctly, rvg exposes 2 types
+of transforms: pre-transforms and post-transforms. If you only intend to
+work in window space (and something that has at least the same *scale*) you
+can entirely skip pre-transforms and just read the simple example; rvg 0.1
+was released without the concepts of pre-transforms at all and usually
+you won't need it. In this case, just skip the next part until we come
+to post transforms, i.e. `rvg::Transform`.
+But if you ever intend to use rvg in spaces that are
+window-independent you might have to care about pre-transforms.
+But from the beginning (the full story, including pre-transforms):
 
-But there are also other quantities given in rvg for which the situation
-is a little bit more complicated: text height, stroke width, fringe,
-RectShape corner rounding (and probably some more). When your logical world
-space is e.g. already the vulkan normalized space (and your transform matrix
-therefore the identity) what is the expected behaviour when drawing a Text
-object with height 12 in position (0, 0)? The height 12 corresponds to 12 pixels,
-meaning the font glyphs used for this text heave pixel height 12.
-So, 12 pixels? But that means that the Text object has to know about the current
-transform (to even know what "pixels" are) and therefore all data has to
-be reprocessed and reuploaded every time your transform changes (and there
-arise other problems). We can do better. __NOTE: not so sure we can?__
+All input positions and sizes to rvg can be passed *in whatever space you
+want*. Feel free to pass (0.1, 0.1) as size for a RectShape and 0.05 as
+text font height to rvg if you want to work in normalized device coordinate
+space. Alternatively you can obviously use rvg in your level/world space the
+same way. **But in those cases you must use a pre-transform!**. Because after
+the pre-transform step, rvg expects all coordinate values to be in a space,
+where a unit of `1` equals 1 pixels. As outlined above, this is required
+for correct font rendering, anti aliasing and curve tesselation. Usually
+(and the case in rvg 0.1), this pre-transform is just the identity, therefore
+the value you pass to rvg must be in window-sized space. Note that they
+don't have to be exactly in window space, just in a space which has the
+same scale as window space. That means you can freely apply rotations
+and translations in post-transform. You usually want to use that since
+changing the pre-transform must be done on a per-shape/per-text basis
+and requires a full re-compute and re-upload of the shape, i.e. it's
+expensive.
 
-maybe only pre-transform?
+Then, after the pre-transform step, the data is passed to the gpu and there
+the post-transform step is applied. The post-transform is simply a
+shape-independent matrix on the gpu, managed via rvg::Transform, bound
+at command buffer recording time. Changing the transform later on
+is pretty cheap, it's just a single buffer update. You can have as many
+Transform objects as you need. The post-transform matrix
+(i.e. what you pass to rvg::Transform) takes coordinates as returned
+by the pre-transform matrix and converts them to vulkan ndc space.
+Since this matrix is supplied by the user, rvg never actively has to
+care about window size. For a typical window-space to ndc matrix,
+see the examples.
+
+Using rvg::Transform for scaling (aside from the window-size-space
+to ndc scaling) can still be useful e.g. for debugging or if you
+explicitly want all shapes to stay *exactly* the same, even for
+properties like antialiasing width or the used font size. But keep
+in mind that it will result in unexpected behaviour for users.
+Best is to just use rvg as it was originally intended: in window space.

@@ -530,6 +530,12 @@ void Texture::update(std::vector<std::byte> data) {
 	context().registerUpdateDevice(this);
 }
 
+bool Texture::updateDevice(std::vector<std::byte> data) {
+	dlg_assert(size_.x * size_.y * (type_ == Type::a8 ? 1u : 4u) == data.size());
+	pending_ = std::move(data);
+	return updateDevice();
+}
+
 bool Texture::updateDevice() {
 	upload(pending_, vk::ImageLayout::shaderReadOnlyOptimal);
 	return false;

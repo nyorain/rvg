@@ -154,6 +154,7 @@ public:
 	auto vkImageView() const { return viewableImage().vkImageView(); }
 	auto type() const { return type_; }
 
+	bool updateDevice(std::vector<std::byte> data);
 	bool updateDevice();
 
 protected:

@@ -33,7 +33,7 @@ public:
 	auto& texture() const { return texture_; }
 	auto* stash() const { return ctx_; }
 
-	// - usually not needed -
+	// - usually not needed manually -
 	bool updateDevice();
 	void validate();
 	void expand();

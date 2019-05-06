@@ -79,6 +79,7 @@ protected:
 		Vec2f size {};
 		DrawMode drawMode {};
 		std::array<float, 4> rounding {};
+		nytl::Mat3f transform = nytl::identity<3, float>();
 	} state_;
 
 	Polygon polygon_;
@@ -87,15 +88,17 @@ protected:
 /// Circular shape that can be filled or stroked.
 class CircleShape {
 public:
-	static constexpr unsigned defaultPoints = 0xFFFFFFFF;
+	/// When this is passed, will automatically choose the number
+	/// of points in the circle polygon.
+	static constexpr unsigned defaultPointCount = 0u;
 
 public:
 	CircleShape() = default;
 	CircleShape(Context& ctx) : polygon_(ctx) {}
 	CircleShape(Context&, Vec2f center, Vec2f radius, const DrawMode&,
-		unsigned points = defaultPoints, float startAngle = 0.f);
+		unsigned points = defaultPointCount, float startAngle = 0.f);
 	CircleShape(Context&, Vec2f center, float radius, const DrawMode&,
-		unsigned points = defaultPoints, float startAngle = 0.f);
+		unsigned points = defaultPointCount, float startAngle = 0.f);
 
 	auto change() { return StateChange {*this, state_}; }
 
@@ -119,8 +122,9 @@ protected:
 		Vec2f center {};
 		Vec2f radius {};
 		DrawMode drawMode {};
-		unsigned pointCount {16};
+		unsigned pointCount {defaultPointCount};
 		float startAngle {0.f};
+		nytl::Mat3f transform = nytl::identity<3, float>();
 	} state_;
 
 	Polygon polygon_;
