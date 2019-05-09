@@ -108,7 +108,7 @@ that you would expect.
 
 Now to the rvg vulkan-specific parts. Once a frame, you have to call
 Context::updateDevice which will return whether a command buffer
-rerecord is needed. Unlike the other calls, this calls MUST only be made,
+rerecord is needed. Unlike the other calls, these calls MUST only be made
 when no command buffer using resources of that context is currently
 rendering. This function will update the rendering resources' data
 on the device, which cannot be done during rendering. It will also
