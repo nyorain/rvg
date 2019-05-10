@@ -193,7 +193,9 @@ bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
 		auto memBits = flags_.deviceLocal ?
 			context().device().deviceMemoryTypes() :
 			context().device().hostMemoryTypes();
-		buf = {context().bufferAllocator(), needed * 2, usage, 4u, memBits};
+		auto align = std::max(vk::DeviceSize(16u),
+			context().device().properties().limits.minUniformBufferOffsetAlignment);
+		buf = {context().bufferAllocator(), needed * 2, usage, align, memBits};
 		return true;
 	}
 

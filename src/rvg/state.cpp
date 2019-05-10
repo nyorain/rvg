@@ -28,7 +28,9 @@ Transform::Transform(Context& ctx, const Mat4f& m, bool deviceLocal) :
 		ctx.device().deviceMemoryTypes() :
 		ctx.device().hostMemoryTypes();
 
-	ubo_ = {ctx.bufferAllocator(), transformUboSize, usage, 4u, memBits};
+	auto align = std::max(vk::DeviceSize(16u),
+		ctx.device().properties().limits.minUniformBufferOffsetAlignment);
+	ubo_ = {ctx.bufferAllocator(), transformUboSize, usage, align, memBits};
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutTransform()};
 
 	updateDevice();
@@ -67,7 +69,9 @@ Scissor::Scissor(Context& ctx, const Rect2f& r, bool deviceLocal)
 		ctx.device().deviceMemoryTypes() :
 		ctx.device().hostMemoryTypes();
 
-	ubo_ = {ctx.bufferAllocator(), scissorUboSize, usage, 4u, memBits};
+	auto align = std::max(vk::DeviceSize(16u),
+		ctx.device().properties().limits.minUniformBufferOffsetAlignment);
+	ubo_ = {ctx.bufferAllocator(), scissorUboSize, usage, align, memBits};
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutScissor()};
 
 	updateDevice();

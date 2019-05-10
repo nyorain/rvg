@@ -329,15 +329,15 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 	auto memBits = deviceLocal ?
 		context().device().deviceMemoryTypes() :
 		context().device().hostMemoryTypes();
-	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, 0u, memBits};
+	auto align = std::max(vk::DeviceSize(16u),
+		ctx.device().properties().limits.minUniformBufferOffsetAlignment);
+	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, align, memBits};
 
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
 	upload();
 
 	vpp::DescriptorSetUpdate update(ds_);
-	auto m4 = sizeof(nytl::Mat4f);
-	update.uniform({{ubo_.buffer(), ubo_.offset(), m4}});
-	update.uniform({{ubo_.buffer(), ubo_.offset() + m4, ubo_.size() - m4}});
+	update.uniform({{ubo_.buffer(), ubo_.offset(), ubo_.size()}});
 	update.imageSampler({{{}, paint_.texture,
 		vk::ImageLayout::shaderReadOnlyOptimal}});
 }

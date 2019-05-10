@@ -29,6 +29,7 @@ problem of __scaling__ should be solved in this release:
 	(and by doing transform BEFORE doing stuff like tesselation...)
 	tesselation (-> katachi) is affected by the same problem (problem
 	of rvg?)
+	See scale.cpp. Currently has still problems with rotations for shapes
 Completely abolish transform state?
 	well, rotation and translation aren't a problem. Only scale.
 	Maybe allow to set pre-transform for each polygon? On change,

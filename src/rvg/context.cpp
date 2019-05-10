@@ -64,9 +64,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	auto paintDSB = {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
-			vk::ShaderStageBits::vertex),
-		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
-			vk::ShaderStageBits::fragment),
+			vk::ShaderStageBits::vertex | vk::ShaderStageBits::fragment),
 		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
 			vk::ShaderStageBits::fragment, -1, 1, &texSampler_.vkHandle()),
 	};
@@ -209,8 +207,10 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	defaultAtlas_ = std::make_unique<FontAtlas>(*this);
 
 	if(settings.antiAliasing) {
+		auto align = std::max(vk::DeviceSize(16u),
+			device().properties().limits.minUniformBufferOffsetAlignment);
 		defaultStrokeAABuf_ = {bufferAllocator(), 12 * sizeof(float),
-			vk::BufferUsageBits::uniformBuffer, 0u, device().hostMemoryTypes()};
+			vk::BufferUsageBits::uniformBuffer, align, device().hostMemoryTypes()};
 		auto map = defaultStrokeAABuf_.memoryMap();
 		auto ptr = map.ptr();
 		write(ptr, 1.f);

@@ -9,11 +9,12 @@ layout(location = 2) in vec4 in_color;
 
 layout(location = 0) out vec4 out_color;
 
-layout(set = 1, binding = 1) uniform Paint {
+layout(set = 1, binding = 0) uniform Paint {
+	mat4 matrix;
 	PaintData data;
 } paint;
 
-layout(set = 1, binding = 2) uniform sampler2D tex;
+layout(set = 1, binding = 1) uniform sampler2D tex;
 layout(set = 2, binding = 0) uniform sampler2D font;
 
 const uint TypeDefault = 0;
