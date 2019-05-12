@@ -26,7 +26,7 @@ namespace rvg {
 class Text : public DeviceObject {
 public:
 	Text() = default;
-	Text(Context&, Vec2f pos, std::string text, Font&, float height);
+	Text(Context&, Vec2f pos, std::string text, const Font&, float height);
 
 	Text(Text&& rhs) noexcept;
 	Text& operator=(Text&& rhs) noexcept;

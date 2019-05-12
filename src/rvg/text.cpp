@@ -24,7 +24,7 @@ float quantatize(float value, float quantum) {
 } // anon namespace
 
 // Text
-Text::Text(Context& ctx, Vec2f p, std::string t, Font& f, float h) :
+Text::Text(Context& ctx, Vec2f p, std::string t, const Font& f, float h) :
 		DeviceObject(ctx), state_{std::move(t), f, p, h} {
 
 	f.atlas().added(*this);
