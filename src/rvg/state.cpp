@@ -28,9 +28,7 @@ Transform::Transform(Context& ctx, const Mat4f& m, bool deviceLocal) :
 		ctx.device().deviceMemoryTypes() :
 		ctx.device().hostMemoryTypes();
 
-	auto align = std::max(vk::DeviceSize(16u),
-		ctx.device().properties().limits.minUniformBufferOffsetAlignment);
-	ubo_ = {ctx.bufferAllocator(), transformUboSize, usage, align, memBits};
+	ubo_ = {ctx.bufferAllocator(), transformUboSize, usage, memBits};
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutTransform()};
 
 	updateDevice();
@@ -40,7 +38,7 @@ Transform::Transform(Context& ctx, const Mat4f& m, bool deviceLocal) :
 
 bool Transform::updateDevice() {
 	dlg_assert(valid() && ubo_.size() && ds_);
-	upload140(*this, ubo_, vpp::raw(matrix_));
+	writeBuffer(*this, ubo_, matrix_);
 	return false;
 }
 
@@ -52,7 +50,8 @@ void Transform::update() {
 void Transform::bind(vk::CommandBuffer cb) const {
 	dlg_assert(valid() && ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
-		context().pipeLayout(), Context::transformBindSet, {ds_}, {});
+		context().pipeLayout(), Context::transformBindSet,
+		{{ds_.vkHandle()}}, {});
 }
 
 // Scissor
@@ -69,9 +68,7 @@ Scissor::Scissor(Context& ctx, const Rect2f& r, bool deviceLocal)
 		ctx.device().deviceMemoryTypes() :
 		ctx.device().hostMemoryTypes();
 
-	auto align = std::max(vk::DeviceSize(16u),
-		ctx.device().properties().limits.minUniformBufferOffsetAlignment);
-	ubo_ = {ctx.bufferAllocator(), scissorUboSize, usage, align, memBits};
+	ubo_ = {ctx.bufferAllocator(), scissorUboSize, usage, memBits};
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutScissor()};
 
 	updateDevice();
@@ -86,15 +83,15 @@ void Scissor::update() {
 
 bool Scissor::updateDevice() {
 	dlg_assert(ubo_.size() && ds_);
-	upload140(*this, ubo_, vpp::raw(rect_.position),
-		vpp::raw(rect_.size));
+	writeBuffer(*this, ubo_, rect_.position, rect_.size);
 	return false;
 }
 
 void Scissor::bind(vk::CommandBuffer cmdb) const {
 	dlg_assert(ubo_.size() && ds_);
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		context().pipeLayout(), Context::scissorBindSet, {ds_}, {});
+		context().pipeLayout(), Context::scissorBindSet,
+		{{ds_.vkHandle()}}, {});
 }
 
 } // namespace rvg

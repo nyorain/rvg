@@ -37,7 +37,7 @@ void Polygon::updateStroke(Span<const Vec2f> points, const DrawMode& mode) {
 	auto loop = mode.loop;
 	if(points.size() > 2 && points.front() == points.back()) {
 		loop = true;
-		points = points.slice(0, points.size() - 1);
+		points = points.first(points.size() - 1);
 	}
 
 	auto settings = ktc::StrokeSettings {width, loop, sf};
@@ -114,7 +114,7 @@ void Polygon::updateFill(Span<const Vec2f> points, const DrawMode& mode) {
 		// just copy color and points, no processing needed
 		fill_.points.insert(fill_.points.end(), points.begin(), points.end());
 		if(mode.color.fill) {
-			dlg_assert(mode.color.points.size() == points.size());
+			dlg_assert(unsigned(mode.color.points.size()) == points.size());
 			fill_.color.insert(fill_.color.end(),
 				mode.color.points.begin(), mode.color.points.end());
 		}
@@ -193,9 +193,8 @@ bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
 		auto memBits = flags_.deviceLocal ?
 			context().device().deviceMemoryTypes() :
 			context().device().hostMemoryTypes();
-		auto align = std::max(vk::DeviceSize(16u),
-			context().device().properties().limits.minUniformBufferOffsetAlignment);
-		buf = {context().bufferAllocator(), needed * 2, usage, align, memBits};
+		auto align = 8u;
+		buf = {context().bufferAllocator(), needed * 2, usage, memBits, align};
 		return true;
 	}
 
@@ -214,10 +213,10 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	cmd.instanceCount = 1;
 
 	if(disable) {
-		upload140(*this, draw.pBuf, vpp::raw(cmd));
+		writeBuffer(*this, draw.pBuf, cmd);
 	} else {
-		auto points = vpp::raw(*draw.points.data(), draw.points.size());
-		upload140(*this, draw.pBuf, vpp::raw(cmd), points);
+		auto points = nytl::Span<const nytl::Vec2f>(draw.points);
+		writeBuffer(*this, draw.pBuf, cmd, points);
 	}
 
 	// color
@@ -228,8 +227,8 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	auto cneeded = color * (sizeof(draw.color[0])) * draw.color.size();
 	rerecord |= checkResize(draw.cBuf, cneeded,
 		vk::BufferUsageBits::vertexBuffer);
-	upload140(*this, draw.cBuf, vpp::raw(*draw.color.data(),
-		draw.color.size()));
+	auto colorSpan = nytl::span(draw.color.data(), draw.color.size());
+	writeBuffer(*this, draw.cBuf, colorSpan);
 
 	return rerecord;
 }
@@ -242,17 +241,19 @@ bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
 		auto needed = stroke.aa.size() * sizeof(stroke.aa[0]);
 		vk::BufferUsageFlags usage = vk::BufferUsageBits::vertexBuffer;
 		if(mult) {
-			needed += sizeof(float);
+			needed += 2 * sizeof(float);
 			usage |= vk::BufferUsageBits::uniformBuffer;
 		}
 
 		rerecord |= checkResize(stroke.aaBuf, needed, usage);
-		auto data = vpp::raw(*stroke.aa.data(), stroke.aa.size());
+		auto data = nytl::span(stroke.aa.data(), stroke.aa.size());
 
 		if(mult) {
-			upload140(*this, stroke.aaBuf, *mult, data);
+			// the 0.f is padding since data requires vec2f alignment
+			// and mult is only one float
+			writeBuffer(*this, stroke.aaBuf, *mult, 0.f, data);
 		} else {
-			upload140(*this, stroke.aaBuf, data);
+			writeBuffer(*this, stroke.aaBuf, data);
 		}
 	}
 
@@ -308,22 +309,26 @@ void Polygon::fill(vk::CommandBuffer cb) const {
 
 	auto& b = fill_.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cb, 0, {b.buffer()}, {off});
-	vk::cmdBindVertexBuffers(cb, 1, {b.buffer()}, {off}); // dummy uv
+	vk::cmdBindVertexBuffers(cb, 0, {{b.buffer().vkHandle()}}, {{off}});
+	vk::cmdBindVertexBuffers(cb, 1, {{b.buffer().vkHandle()}},
+		{{off}}); // dummy uv
 
 	if(flags_.colorFill) {
 		auto& c = fill_.cBuf;
 		dlg_assert(c.size());
-		vk::cmdBindVertexBuffers(cb, 2, {c.buffer()}, {c.offset()});
+		vk::cmdBindVertexBuffers(cb, 2, {{c.buffer().vkHandle()}},
+			{{c.offset()}});
 	} else {
-		vk::cmdBindVertexBuffers(cb, 2, {b.buffer()}, {off}); // dummy color
+		vk::cmdBindVertexBuffers(cb, 2, {{b.buffer().vkHandle()}},
+			{{off}}); // dummy color
 	}
 
 	vk::cmdDrawIndirect(cb, b.buffer(), b.offset(), 1, 0);
 
 	// aa stroke
 	if(flags_.aaFill) {
-		stroke(cb, fillAA_, true, flags_.colorFill, context().defaultStrokeAA(), 0u);
+		stroke(cb, fillAA_, true, flags_.colorFill,
+			context().defaultStrokeAA(), 0u);
 	}
 }
 
@@ -331,7 +336,9 @@ void Polygon::stroke(vk::CommandBuffer cb) const {
 	dlg_assertm(flags_.stroke, "Polygon has no stroke data");
 	dlg_assertm(valid(), "Polygon must not be in an invalid state");
 
-	stroke(cb, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 4u);
+	// 8 offset here: 4 by float and then 4 padding
+	// the following vertex data has needs vec2f alignment
+	stroke(cb, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 8u);
 }
 
 void Polygon::stroke(vk::CommandBuffer cb, const Stroke& stroke, bool aa,
@@ -345,7 +352,7 @@ void Polygon::stroke(vk::CommandBuffer cb, const Stroke& stroke, bool aa,
 	// position and dummy uv buffer
 	auto& b = stroke.pBuf;
 	auto off = b.offset() + sizeof(vk::DrawIndirectCommand);
-	vk::cmdBindVertexBuffers(cb, 0, {b.buffer()}, {off});
+	vk::cmdBindVertexBuffers(cb, 0, {{b.buffer().vkHandle()}}, {{off}});
 
 	// aa
 	auto type = uint32_t(0);
@@ -355,12 +362,14 @@ void Polygon::stroke(vk::CommandBuffer cb, const Stroke& stroke, bool aa,
 		dlg_assert(a.size());
 		dlg_assert(aaDs);
 
-		vk::cmdBindVertexBuffers(cb, 1, {a.buffer()}, {a.offset() + aaOff});
+		vk::cmdBindVertexBuffers(cb, 1, {{a.buffer().vkHandle()}},
+			{{a.offset() + aaOff}});
 		vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
 			context().pipeLayout(), Context::aaStrokeBindSet,
-			{aaDs}, {});
+			{{aaDs}}, {});
 	} else {
-		vk::cmdBindVertexBuffers(cb, 1, {b.buffer()}, {off}); // dummy aa uv
+		vk::cmdBindVertexBuffers(cb, 1, {{b.buffer().vkHandle()}},
+			{{off}}); // dummy aa uv
 	}
 
 	// used to determine whether aa alpha blending is used
@@ -371,9 +380,11 @@ void Polygon::stroke(vk::CommandBuffer cb, const Stroke& stroke, bool aa,
 	if(color) {
 		auto& c = stroke.cBuf;
 		dlg_assert(c.size());
-		vk::cmdBindVertexBuffers(cb, 2, {c.buffer()}, {c.offset()});
+		vk::cmdBindVertexBuffers(cb, 2, {{c.buffer().vkHandle()}},
+			{{c.offset()}});
 	} else {
-		vk::cmdBindVertexBuffers(cb, 2, {b.buffer()}, {off}); // dummy color
+		vk::cmdBindVertexBuffers(cb, 2, {{b.buffer().vkHandle()}},
+			{{off}}); // dummy color
 	}
 
 	vk::cmdDrawIndirect(cb, b.buffer(), b.offset(), 1, 0);

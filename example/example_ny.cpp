@@ -26,8 +26,8 @@
 #include <ny/event.hpp>
 
 // vpp to allow more high-level vulkan usage.
-#include <vpp/instance.hpp>
-#include <vpp/debug.hpp>
+#include <vpp/handles.hpp>
+#include <vpp/debugReport.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/physicalDevice.hpp>
 
@@ -752,10 +752,10 @@ int main() {
 	float priorities[1] = {0.0};
 
 	auto phdevs = vk::enumeratePhysicalDevices(instance);
-	auto phdev = vpp::choose(phdevs, instance, vkSurf);
+	auto phdev = vpp::choose(phdevs, vkSurf);
 
 	auto queueFlags = vk::QueueBits::compute | vk::QueueBits::graphics;
-	int queueFam = vpp::findQueueFamily(phdev, instance, vkSurf, queueFlags);
+	int queueFam = vpp::findQueueFamily(phdev, vkSurf, queueFlags);
 
 	vk::DeviceCreateInfo devInfo;
 	vk::DeviceQueueCreateInfo queueInfo({}, queueFam, 1, priorities);

@@ -2,6 +2,7 @@
 
 ### v0.2
 
+- [ ] allow float color in Paint? maybe add float color class?
 - [x] better font handling: automatic atlas rebaking, fallback fonts
 - [ ] text __scaling__
 	- [ ] allow to set fonstash attributes like blur, spacing?

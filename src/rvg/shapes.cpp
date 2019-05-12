@@ -166,8 +166,8 @@ CircleShape::CircleShape(Context& ctx,
 
 void CircleShape::update() {
 	auto pcount = state_.pointCount;
-	auto radius = multDir(state_.transform, state_.radius);
-	auto center = multPos(state_.transform, state_.center);
+	auto radius = state_.radius;
+	auto center = state_.center;
 	if(pcount == defaultPointCount) {
 		pcount = std::min(8 + 8 * ((radius.x + radius.y) / 16), 256.f);
 	}
@@ -179,8 +179,8 @@ void CircleShape::update() {
 	auto d = 2 * nytl::constants::pi / pcount;
 	for(auto i = 0u; i < pcount + 1; ++i) {
 		using namespace nytl::vec::cw::operators;
-		auto p = Vec {std::cos(a), std::sin(a)};
-		pts.push_back(center + radius * p);
+		auto p = nytl::Vec2f{std::cos(a), std::sin(a)};
+		pts.push_back(multPos(state_.transform, center + radius * p));
 		a += d;
 	}
 

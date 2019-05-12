@@ -1,4 +1,4 @@
-// Copyright (c) 2017 nyorain
+// Copyright (c) 2019 nyorain
 // Distributed under the Boost Software License, Version 1.0.
 // See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
 
@@ -7,7 +7,6 @@
 #include <nytl/mat.hpp>
 #include <vpp/vk.hpp>
 #include <vpp/util/file.hpp>
-#include <vpp/renderPass.hpp>
 #include <vpp/swapchain.hpp>
 #include <vpp/formats.hpp>
 
@@ -17,9 +16,7 @@ vpp::RenderPass createRenderPass(const vpp::Device&, vk::Format,
 	vk::SampleCountBits);
 
 Renderer::Renderer(const RendererCreateInfo& info) :
-	DefaultRenderer(info.present), sampleCount_(info.samples),
-		clearColor_(info.clearColor) {
-
+		sampleCount_(info.samples), clearColor_(info.clearColor) {
 	vpp::SwapchainPreferences prefs {};
 	if(info.vsync) {
 		prefs.presentMode = vk::PresentModeKHR::fifo; // vsync
@@ -28,11 +25,10 @@ Renderer::Renderer(const RendererCreateInfo& info) :
 	scInfo_ = vpp::swapchainCreateInfo(info.dev, info.surface,
 		{info.size[0], info.size[1]}, prefs);
 	renderPass_ = createRenderPass(info.dev, scInfo_.imageFormat, samples());
-	vpp::DefaultRenderer::init(renderPass_, scInfo_);
+	vpp::DefaultRenderer::init(renderPass_, scInfo_, info.present);
 }
 
-void Renderer::createMultisampleTarget(const vk::Extent2D& size)
-{
+void Renderer::createMultisampleTarget(const vk::Extent2D& size) {
 	auto width = size.width;
 	auto height = size.height;
 
@@ -48,7 +44,8 @@ void Renderer::createMultisampleTarget(const vk::Extent2D& size)
 	img.sharingMode = vk::SharingMode::exclusive;
 	img.tiling = vk::ImageTiling::optimal;
 	img.samples = sampleCount_;
-	img.usage = vk::ImageUsageBits::transientAttachment | vk::ImageUsageBits::colorAttachment;
+	img.usage = vk::ImageUsageBits::transientAttachment |
+		vk::ImageUsageBits::colorAttachment;
 	img.initialLayout = vk::ImageLayout::undefined;
 
 	// view
@@ -68,8 +65,7 @@ void Renderer::createMultisampleTarget(const vk::Extent2D& size)
 	multisampleTarget_ = {device(), img, view};
 }
 
-void Renderer::record(const RenderBuffer& buf)
-{
+void Renderer::record(const RenderBuffer& buf) {
 	const auto width = scInfo_.imageExtent.width;
 	const auto height = scInfo_.imageExtent.height;
 	const auto clearValue = vk::ClearValue {{
@@ -97,13 +93,11 @@ void Renderer::record(const RenderBuffer& buf)
 	vk::endCommandBuffer(cmdBuf);
 }
 
-void Renderer::resize(nytl::Vec2ui size)
-{
+void Renderer::resize(nytl::Vec2ui size) {
 	vpp::DefaultRenderer::recreate({size[0], size[1]}, scInfo_);
 }
 
-void Renderer::samples(vk::SampleCountBits samples)
-{
+void Renderer::samples(vk::SampleCountBits samples) {
 	sampleCount_ = samples;
 	if(sampleCount_ != vk::SampleCountBits::e1) {
 		createMultisampleTarget(scInfo_.imageExtent);
@@ -117,8 +111,7 @@ void Renderer::samples(vk::SampleCountBits samples)
 }
 
 void Renderer::initBuffers(const vk::Extent2D& size,
-	nytl::Span<RenderBuffer> bufs)
-{
+		nytl::Span<RenderBuffer> bufs) {
 	if(sampleCount_ != vk::SampleCountBits::e1) {
 		createMultisampleTarget(scInfo_.imageExtent);
 		vpp::DefaultRenderer::initBuffers(size, bufs,
@@ -130,8 +123,7 @@ void Renderer::initBuffers(const vk::Extent2D& size,
 
 // util
 vpp::RenderPass createRenderPass(const vpp::Device& dev,
-	vk::Format format, vk::SampleCountBits sampleCount)
-{
+		vk::Format format, vk::SampleCountBits sampleCount) {
 	vk::AttachmentDescription attachments[2] {};
 	auto msaa = sampleCount != vk::SampleCountBits::e1;
 

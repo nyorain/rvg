@@ -1,4 +1,4 @@
-// Copyright (c) 2018 nyorain
+// Copyright (c) 2019 nyorain
 // Distributed under the Boost Software License, Version 1.0.
 // See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
 
@@ -10,9 +10,8 @@
 
 #include <vpp/trackedDescriptor.hpp>
 #include <vpp/pipeline.hpp>
-#include <vpp/commandBuffer.hpp>
 #include <vpp/image.hpp>
-#include <vpp/sync.hpp>
+#include <vpp/handles.hpp>
 #include <nytl/nonCopyable.hpp>
 
 #include <variant>

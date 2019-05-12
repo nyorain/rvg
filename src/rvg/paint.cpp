@@ -329,9 +329,7 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 	auto memBits = deviceLocal ?
 		context().device().deviceMemoryTypes() :
 		context().device().hostMemoryTypes();
-	auto align = std::max(vk::DeviceSize(16u),
-		ctx.device().properties().limits.minUniformBufferOffsetAlignment);
-	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, align, memBits};
+	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, memBits};
 
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
 	upload();
@@ -349,6 +347,15 @@ void Paint::update() {
 
 void Paint::upload() {
 	dlg_assert(valid() && ubo_.size());
+	struct PaintUbo {
+		nytl::Mat4f transform;
+		nytl::Vec4f inner;
+		nytl::Vec4f outer;
+		nytl::Vec4f custom;
+		std::uint32_t type;
+	} ubo;
+
+	ubo.transform = paint_.data.transform;
 
 	// NOTE: really important part here!
 	// shaders always work on linear colors (since operating on
@@ -361,21 +368,19 @@ void Paint::upload() {
 	// It's also important that we get float values instead of
 	// u8 since with u8 we would lose the dark-color precision
 	// we need (and users expect; can actually see).
-	auto inner = linearize(paint_.data.frag.inner);
-	auto outer = linearize(paint_.data.frag.outer);
+	ubo.inner = linearize(paint_.data.frag.inner);
+	ubo.outer = linearize(paint_.data.frag.outer);
 
-	upload140(*this, ubo_,
-		vpp::raw(paint_.data.transform),
-		vpp::raw(inner),
-		vpp::raw(outer),
-		vpp::raw(paint_.data.frag.custom),
-		vpp::raw(static_cast<std::uint32_t>(paint_.data.frag.type)));
+	ubo.custom = paint_.data.frag.custom;
+	ubo.type = unsigned(paint_.data.frag.type);
+
+	writeBuffer(*this, ubo_, ubo);
 }
 
 void Paint::bind(vk::CommandBuffer cb) const {
 	dlg_assert(valid() && ds_ && ubo_.size());
 	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
-		context().pipeLayout(), Context::paintBindSet, {ds_}, {});
+		context().pipeLayout(), Context::paintBindSet, {{ds_.vkHandle()}}, {});
 }
 
 bool Paint::updateDevice() {
@@ -448,7 +453,7 @@ Texture::Texture(Context& ctx, nytl::StringParam filename, Type type) :
 	size_.x = width;
 	size_.y = height;
 	create();
-	upload({ptr, dataSize}, vk::ImageLayout::undefined);
+	upload({ptr, ptr + dataSize}, vk::ImageLayout::undefined);
 	free(data);
 }
 
@@ -468,29 +473,22 @@ void Texture::create() {
 	extent.height = size_.y;
 	extent.depth = 1u;
 
-	vpp::ViewableImageCreateInfo info;
-	auto dataSize = extent.width * extent.height;
-	auto& dev = context().device();
+	vpp::ViewableImageCreateInfo info(vk::Format::r8g8b8a8Srgb,
+		vk::ImageAspectBits::color, {size_.x, size_.y},
+		usage);
 
-	if(type() == TextureType::rgba32) {
-		dataSize = dataSize * 4;
-		info = vpp::ViewableImageCreateInfo::color(dev, extent, usage,
-			{vk::Format::r8g8b8a8Srgb}).value();
-	} else if(type() == TextureType::a8) {
-		info = vpp::ViewableImageCreateInfo::color(dev, extent, usage,
-			{vk::Format::r8Unorm}).value();
+	if(type() == TextureType::a8) {
+		info.img.format = vk::Format::r8Unorm;
+		info.view.format = vk::Format::r8Unorm;
 		info.view.components = {
 			vk::ComponentSwizzle::zero,
 			vk::ComponentSwizzle::zero,
 			vk::ComponentSwizzle::zero,
 			vk::ComponentSwizzle::r,
 		};
-	} else {
-		throw std::runtime_error("Texture: Invalid rvg::TextureType");
 	}
 
-	info.img.imageType = vk::ImageType::e2d;
-	info.view.viewType = vk::ImageViewType::e2d;
+	auto& dev = context().device();
 	auto memBits = dev.memoryTypeBits(vk::MemoryPropertyBits::deviceLocal);
 
 	image_ = {dev, info, memBits};
@@ -498,11 +496,15 @@ void Texture::create() {
 
 void Texture::upload(nytl::Span<const std::byte> data, vk::ImageLayout layout) {
 	auto cmdBuf = context().uploadCmdBuf();
-	vpp::changeLayout(cmdBuf, image_.image(),
-		layout, vk::PipelineStageBits::topOfPipe, {},
-		vk::ImageLayout::transferDstOptimal, vk::PipelineStageBits::transfer,
-		vk::AccessBits::transferWrite,
-		{vk::ImageAspectBits::color, 0, 1, 0, 1});
+
+	vk::ImageMemoryBarrier barrier;
+	barrier.image = image_.image();
+	barrier.oldLayout = layout;
+	barrier.newLayout = vk::ImageLayout::transferDstOptimal;
+	barrier.dstAccessMask = vk::AccessBits::transferWrite;
+	barrier.subresourceRange = {vk::ImageAspectBits::color, 0, 1, 0, 1};
+	vk::cmdPipelineBarrier(cmdBuf, vk::PipelineStageBits::topOfPipe,
+		vk::PipelineStageBits::transfer, {}, {}, {}, {{barrier}});
 	layout = vk::ImageLayout::transferDstOptimal;
 
 	auto size = vk::Extent3D{size_.x, size_.y, 1u};
@@ -512,13 +514,12 @@ void Texture::upload(nytl::Span<const std::byte> data, vk::ImageLayout layout) {
 	auto stage = vpp::fillStaging(cmdBuf, image_.image(), format, layout,
 		size, data, {vk::ImageAspectBits::color});
 
-	vpp::changeLayout(cmdBuf, image_.image(),
-		layout, vk::PipelineStageBits::transfer,
-		vk::AccessBits::transferWrite,
-		vk::ImageLayout::shaderReadOnlyOptimal,
-		vk::PipelineStageBits::allGraphics,
-		vk::AccessBits::shaderRead,
-		{vk::ImageAspectBits::color, 0, 1, 0, 1});
+	barrier.oldLayout = layout;
+	barrier.srcAccessMask = vk::AccessBits::transferWrite;
+	barrier.newLayout = vk::ImageLayout::shaderReadOnlyOptimal;
+	barrier.dstAccessMask = vk::AccessBits::shaderRead;
+	vk::cmdPipelineBarrier(cmdBuf, vk::PipelineStageBits::transfer,
+		vk::PipelineStageBits::allGraphics, {}, {}, {}, {{barrier}});
 
 	context().addStage(std::move(stage));
 	context().addCommandBuffer(this, std::move(cmdBuf));

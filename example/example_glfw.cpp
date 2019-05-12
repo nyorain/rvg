@@ -18,11 +18,10 @@
 #include <katachi/svg.hpp>
 
 // vpp to allow more high-level vulkan usage.
-#include <vpp/instance.hpp>
-#include <vpp/debug.hpp>
+#include <vpp/handles.hpp>
+#include <vpp/debugReport.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/physicalDevice.hpp>
-#include <vkpp/error.hpp>
 
 // some matrix/vector utilities
 #include <nytl/vecOps.hpp>
@@ -775,10 +774,10 @@ int main() {
 	float priorities[1] = {0.0};
 
 	auto phdevs = vk::enumeratePhysicalDevices(instance);
-	auto phdev = vpp::choose(phdevs, instance, surface);
+	auto phdev = vpp::choose(phdevs, surface);
 
 	auto queueFlags = vk::QueueBits::compute | vk::QueueBits::graphics;
-	int queueFam = vpp::findQueueFamily(phdev, instance, surface, queueFlags);
+	int queueFam = vpp::findQueueFamily(phdev, surface, queueFlags);
 
 	vk::DeviceCreateInfo devInfo;
 	vk::DeviceQueueCreateInfo queueInfo({}, queueFam, 1, priorities);

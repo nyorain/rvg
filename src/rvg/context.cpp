@@ -1,4 +1,4 @@
-// Copyright (c) 2018 nyorain
+// Copyright (c) 2019 nyorain
 // Distributed under the Boost Software License, Version 1.0.
 // See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
 
@@ -17,7 +17,9 @@
 
 #include <vpp/vk.hpp>
 #include <vpp/queue.hpp>
-#include <vpp/pipelineInfo.hpp>
+#include <vpp/pipeline.hpp>
+#include <vpp/commandAllocator.hpp>
+#include <vpp/submit.hpp>
 #include <dlg/dlg.hpp>
 #include <nytl/matOps.hpp>
 #include <nytl/vecOps.hpp>
@@ -104,9 +106,9 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		layouts.push_back(dsLayoutStrokeAA_);
 	}
 
-	pipeLayout_ = {dev, layouts, {
+	pipeLayout_ = {dev, layouts, {{
 		{vk::ShaderStageBits::fragment, 0, 4}
-	}};
+	}}};
 
 	// pipeline
 	using ShaderData = nytl::Span<const std::uint32_t>;
@@ -129,11 +131,10 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	auto samples = settings.samples == vk::SampleCountBits {} ?
 		vk::SampleCountBits::e1 : settings.samples;
-	vpp::GraphicsPipelineInfo fanPipeInfo(settings.renderPass,
-		pipeLayout_, {{
-			{fillVertex, vk::ShaderStageBits::vertex},
-			{fillFragment, vk::ShaderStageBits::fragment}
-		}}, settings.subpass, samples);
+	vpp::GraphicsPipelineInfo fanPipeInfo(settings.renderPass, pipeLayout_, {{{
+		{fillVertex, vk::ShaderStageBits::vertex},
+		{fillFragment, vk::ShaderStageBits::fragment}
+	}}}, settings.subpass, samples);
 
 
 	fanPipeInfo.flags(vk::PipelineCreateBits::allowDerivatives);
@@ -180,7 +181,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	stripPipeInfo.assembly.topology = vk::PrimitiveTopology::triangleStrip;
 
 	auto pipes = vk::createGraphicsPipelines(dev, settings.pipelineCache,
-		{fanPipeInfo.info(), stripPipeInfo.info()});
+		{{fanPipeInfo.info(), stripPipeInfo.info()}});
 	fanPipe_ = {dev, pipes[0]};
 	stripPipe_ = {dev, pipes[1]};
 
@@ -192,9 +193,8 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 
 	// dummies
 	constexpr std::uint8_t bytes[] = {0xFF, 0xFF, 0xFF, 0xFF};
-	emptyImage_ = {*this, {1u, 1u},
-		{*reinterpret_cast<const std::byte*>(bytes), 4u},
-		TextureType::rgba32};
+	auto ptr = reinterpret_cast<const std::byte*>(bytes);
+	emptyImage_ = {*this, {1u, 1u}, {ptr, ptr + 4u}, TextureType::rgba32};
 
 	dummyTex_ = {dsAllocator(), dsLayoutFontAtlas_};
 	vpp::DescriptorSetUpdate update(dummyTex_);
@@ -207,10 +207,8 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	defaultAtlas_ = std::make_unique<FontAtlas>(*this);
 
 	if(settings.antiAliasing) {
-		auto align = std::max(vk::DeviceSize(16u),
-			device().properties().limits.minUniformBufferOffsetAlignment);
 		defaultStrokeAABuf_ = {bufferAllocator(), 12 * sizeof(float),
-			vk::BufferUsageBits::uniformBuffer, align, device().hostMemoryTypes()};
+			vk::BufferUsageBits::uniformBuffer, device().hostMemoryTypes()};
 		auto map = defaultStrokeAABuf_.memoryMap();
 		auto ptr = map.ptr();
 		write(ptr, 1.f);
@@ -235,11 +233,11 @@ void Context::bindDefaults(vk::CommandBuffer cmdb) {
 	defaultScissor_.bind(cmdb);
 
 	vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-		pipeLayout(), fontBindSet, {dummyTex_}, {});
+		pipeLayout(), fontBindSet, {{dummyTex_.vkHandle()}}, {});
 
 	if(settings().antiAliasing) {
 		vk::cmdBindDescriptorSets(cmdb, vk::PipelineBindPoint::graphics,
-			pipeLayout(), aaStrokeBindSet, {defaultStrokeAA_}, {});
+			pipeLayout(), aaStrokeBindSet, {{defaultStrokeAA_.vkHandle()}}, {});
 	}
 }
 
@@ -275,7 +273,7 @@ vk::Semaphore Context::stageUpload() {
 		// in a different way). Investigate/profile.
 		vk::beginCommandBuffer(uploadCmdBuf_, {});
 		for(auto& buf : currentFrame_.cmdBufs) {
-			vk::cmdExecuteCommands(uploadCmdBuf_, {buf.second});
+			vk::cmdExecuteCommands(uploadCmdBuf_, {{buf.second.vkHandle()}});
 		}
 		vk::endCommandBuffer(uploadCmdBuf_);
 

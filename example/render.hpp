@@ -1,4 +1,4 @@
-// Copyright (c) 2017 nyorain
+// Copyright (c) 2019 nyorain
 // Distributed under the Boost Software License, Version 1.0.
 // See accompanying file LICENSE or copy at http://www.boost.org/LICENSE_1_0.txt
 
@@ -8,9 +8,7 @@
 #include <vpp/queue.hpp> // vpp::Queue
 #include <vpp/buffer.hpp> // vpp::Buffer
 #include <vpp/renderer.hpp> // vpp::DefaultRenderer
-#include <vpp/commandBuffer.hpp>
-#include <vpp/renderPass.hpp>
-#include <vpp/framebuffer.hpp>
+#include <vpp/handles.hpp>
 #include <vpp/queue.hpp>
 #include <vpp/vk.hpp>
 #include <nytl/vec.hpp>

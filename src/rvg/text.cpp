@@ -187,17 +187,16 @@ bool Text::updateDevice() {
 	cmd.vertexCount = !disable_ * posCache_.size();
 	cmd.instanceCount = 1;
 
-	// upload140(*this, posBuf_, vpp::raw(cmd), vpp::raw(posCache_));
-	upload140(*this, posBuf_, vpp::raw(cmd), vpp::raw(*posCache_.data(),
-		posCache_.size()));
+	auto posData = nytl::span(posCache_.data(), posCache_.size());
+	writeBuffer(*this, posBuf_, cmd, posData);
 
 	if(!uvCache_.empty()) {
-		// upload140(*this, uvBuf_, vpp::raw(uvCache_));
-		upload140(*this, uvBuf_, vpp::raw(*uvCache_.data(),
-			uvCache_.size()));
+		auto uvData = nytl::span(uvCache_.data(), uvCache_.size());
+		writeBuffer(*this, uvBuf_, uvData);
 	} else {
 		// write something for validation layers
-		upload140(*this, uvBuf_, vpp::raw(cmd));
+		// TODO: seems to be a bug there, test if this is fixed
+		writeBuffer(*this, uvBuf_, cmd);
 	}
 
 	return rerecord;
@@ -210,7 +209,7 @@ void Text::draw(vk::CommandBuffer cb) const {
 		context().stripPipe());
 	vk::cmdBindDescriptorSets(cb, vk::PipelineBindPoint::graphics,
 		context().pipeLayout(), Context::fontBindSet,
-		{font().atlas().ds()}, {});
+		{{font().atlas().ds().vkHandle()}}, {});
 
 	static constexpr auto type = uint32_t(1);
 	vk::cmdPushConstants(cb, context().pipeLayout(),
@@ -222,8 +221,8 @@ void Text::draw(vk::CommandBuffer cb) const {
 	// use a dummy color buffer
 	auto pBuf = posBuf_.buffer().vkHandle();
 	auto uvBuf = uvBuf_.buffer().vkHandle();
-	vk::cmdBindVertexBuffers(cb, 0, {pBuf, uvBuf, pBuf},
-		{off, uvBuf_.offset(), off});
+	vk::cmdBindVertexBuffers(cb, 0, {{pBuf, uvBuf, pBuf}},
+		{{off, uvBuf_.offset(), off}});
 	vk::cmdDrawIndirect(cb, posBuf_.buffer(), posBuf_.offset(), 1, 0);
 }
 
@@ -298,8 +297,8 @@ void Text::deviceLocal(bool set) {
 			auto needed = deviceLocal_ ?
 				context().device().deviceMemoryTypes() :
 				context().device().hostMemoryTypes();
-			auto ptype = posBuf_.buffer().memoryEntry().memory()->type();
-			auto uvtype = uvBuf_.buffer().memoryEntry().memory()->type();
+			auto ptype = posBuf_.buffer().memory().type();
+			auto uvtype = uvBuf_.buffer().memory().type();
 			bool ud = false;
 			if(!(needed & ptype)) {
 				posBuf_ = {};

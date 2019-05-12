@@ -5,7 +5,10 @@
 #pragma once
 
 #include <rvg/context.hpp>
+#include <dlg/dlg.hpp>
+#include <vpp/sharedBuffer.hpp>
 #include <vpp/bufferOps.hpp>
+#include <vpp/vk.hpp>
 #include <dlg/dlg.hpp>
 
 #include <cstdlib>
@@ -19,17 +22,52 @@ void write(std::byte*& ptr, T&& data) {
 	ptr += sizeof(data);
 }
 
-template<typename O, typename... Args>
-void upload140(O& dobj, const vpp::BufferSpan& buf, const Args&... args) {
-	dlg_assert(buf.valid());
-	if(buf.buffer().mappable()) {
-		vpp::writeMap140(buf, args...);
-	} else {
-		auto cmdBuf = dobj.context().uploadCmdBuf();
-		dobj.context().addStage(vpp::writeStaging(cmdBuf, buf,
-			vpp::BufferLayout::std140, args...));
-		dobj.context().addCommandBuffer(&dobj, std::move(cmdBuf));
+struct Uploader {
+	template<typename T>
+	void write(nytl::Span<T> span) {
+		auto bytes = nytl::as_bytes(span);
+		dlg_assert(bytes.size() <= data.size());
+		std::memcpy(data.data(), bytes.data(), bytes.size());
+		data = data.last(data.size() - bytes.size());
 	}
+
+	template<typename T>
+	void write(const T& obj) {
+		write(nytl::Span<const T>(&obj, 1));
+	}
+
+	nytl::Span<std::byte> data;
+};
+
+template<typename O, typename... Args>
+std::size_t writeBuffer(O& dobj, vpp::BufferSpan buf, const Args&... args) {
+	dlg_assert(buf.valid());
+
+	if(!buf.buffer().mappable()) {
+		auto& ctx = dobj.context();
+		auto cb = ctx.uploadCmdBuf();
+		auto stage = vpp::SubBuffer(ctx.bufferAllocator(),
+			buf.size(), vk::BufferUsageBits::transferSrc, 4u);
+		auto size = writeBuffer(dobj, stage, args...);
+
+		vk::BufferCopy copy;
+		copy.srcOffset = stage.offset();
+		copy.dstOffset = stage.offset();
+		copy.size = size;
+		vk::cmdCopyBuffer(cb, stage.buffer(), buf.buffer(), {{copy}});
+
+		dobj.context().addStage(std::move(stage));
+		dobj.context().addCommandBuffer(&dobj, std::move(cb));
+		return size;
+	}
+
+	vpp::MemoryMapView map;
+	map = buf.memoryMap();
+	Uploader uploader;
+	uploader.data = map.span();
+
+	(uploader.write(args), ...);
+	return uploader.data.data() - map.ptr();
 }
 
 inline Vec2f multPos(const nytl::Mat3f& transform, nytl::Vec2f pos) {
