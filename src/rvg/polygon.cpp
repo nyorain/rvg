@@ -193,7 +193,7 @@ bool Polygon::checkResize(vpp::SubBuffer& buf, vk::DeviceSize needed,
 		auto memBits = flags_.deviceLocal ?
 			context().device().deviceMemoryTypes() :
 			context().device().hostMemoryTypes();
-		auto align = 8u;
+		auto align = 256u;
 		buf = {context().bufferAllocator(), needed * 2, usage, memBits, align};
 		return true;
 	}
@@ -241,7 +241,8 @@ bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
 		auto needed = stroke.aa.size() * sizeof(stroke.aa[0]);
 		vk::BufferUsageFlags usage = vk::BufferUsageBits::vertexBuffer;
 		if(mult) {
-			needed += 2 * sizeof(float);
+			// needed += 2 * sizeof(float);
+			needed += sizeof(float);
 			usage |= vk::BufferUsageBits::uniformBuffer;
 		}
 
@@ -251,7 +252,8 @@ bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
 		if(mult) {
 			// the 0.f is padding since data requires vec2f alignment
 			// and mult is only one float
-			writeBuffer(*this, stroke.aaBuf, *mult, 0.f, data);
+			// writeBuffer(*this, stroke.aaBuf, *mult, 0.f, data);
+			writeBuffer(*this, stroke.aaBuf, *mult, data);
 		} else {
 			writeBuffer(*this, stroke.aaBuf, data);
 		}
@@ -338,7 +340,8 @@ void Polygon::stroke(vk::CommandBuffer cb) const {
 
 	// 8 offset here: 4 by float and then 4 padding
 	// the following vertex data has needs vec2f alignment
-	stroke(cb, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 8u);
+	// stroke(cb, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 8u);
+	stroke(cb, stroke_, flags_.aaStroke, flags_.colorStroke, strokeDs_, 4u);
 }
 
 void Polygon::stroke(vk::CommandBuffer cb, const Stroke& stroke, bool aa,

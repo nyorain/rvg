@@ -49,7 +49,7 @@ void RectShape::update() {
 		return multPos(state_.transform, p);
 	};
 
-	if(state_.rounding == std::array<float, 4>{}) {
+	if(state_.rounding == std::array<float, 4>{0.f, 0.f, 0.f, 0.f}) {
 		auto points = {
 			tp(0, 0),
 			tp(state_.size.x, 0),

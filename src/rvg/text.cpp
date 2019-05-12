@@ -173,7 +173,8 @@ bool Text::updateDevice() {
 			auto memBits = deviceLocal_ ?
 				context().device().deviceMemoryTypes() :
 				context().device().hostMemoryTypes();
-			buf = {context().bufferAllocator(), needed, usage, 4u, memBits};
+			auto align = 256u;
+			buf = {context().bufferAllocator(), needed, usage, memBits, align};
 			rerecord = true;
 		}
 	};
