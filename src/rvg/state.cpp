@@ -28,7 +28,7 @@ Transform::Transform(Context& ctx, const Mat4f& m, bool deviceLocal) :
 		ctx.device().deviceMemoryTypes() :
 		ctx.device().hostMemoryTypes();
 
-	ubo_ = {ctx.bufferAllocator(), transformUboSize, usage, memBits, 256u};
+	ubo_ = {ctx.bufferAllocator(), transformUboSize, usage, memBits, 16u};
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutTransform()};
 
 	updateDevice();
@@ -68,7 +68,7 @@ Scissor::Scissor(Context& ctx, const Rect2f& r, bool deviceLocal)
 		ctx.device().deviceMemoryTypes() :
 		ctx.device().hostMemoryTypes();
 
-	ubo_ = {ctx.bufferAllocator(), scissorUboSize, usage, memBits, 256u};
+	ubo_ = {ctx.bufferAllocator(), scissorUboSize, usage, memBits, 8u};
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutScissor()};
 
 	updateDevice();
@@ -83,7 +83,8 @@ void Scissor::update() {
 
 bool Scissor::updateDevice() {
 	dlg_assert(ubo_.size() && ds_);
-	dlg_assert(writeBuffer(*this, ubo_, rect_.position, rect_.size) == 16u);
+	dlg_assert(writeBuffer(*this, ubo_, rect_.position, rect_.size) ==
+		scissorUboSize);
 	return false;
 }
 

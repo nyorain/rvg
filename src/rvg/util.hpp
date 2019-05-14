@@ -52,7 +52,7 @@ std::size_t writeBuffer(O& dobj, vpp::BufferSpan buf, const Args&... args) {
 
 		vk::BufferCopy copy;
 		copy.srcOffset = stage.offset();
-		copy.dstOffset = stage.offset();
+		copy.dstOffset = buf.offset();
 		copy.size = size;
 		vk::cmdCopyBuffer(cb, stage.buffer(), buf.buffer(), {{copy}});
 

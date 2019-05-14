@@ -329,7 +329,7 @@ Paint::Paint(Context& ctx, const PaintData& xpaint, bool deviceLocal) :
 	auto memBits = deviceLocal ?
 		context().device().deviceMemoryTypes() :
 		context().device().hostMemoryTypes();
-	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, memBits};
+	ubo_ = {ctx.bufferAllocator(), paintUboSize, usage, memBits, 16u};
 
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutPaint()};
 	upload();
