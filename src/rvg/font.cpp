@@ -26,6 +26,7 @@ FontAtlas::FontAtlas(Context& ctx) : DeviceObject(ctx) {
 	params.height = 512;
 
 	ctx_ = fonsCreateInternal(&params);
+	fonsSetAlign(ctx_, FONS_ALIGN_LEFT | FONS_ALIGN_TOP);
 	ds_ = {ctx.dsAllocator(), ctx.dsLayoutFontAtlas()};
 }
 
@@ -163,6 +164,14 @@ void Font::fallback(const Font& f) {
 	dlg_assert(id_ != FONS_INVALID && f.id() != FONS_INVALID);
 	dlg_assert(&atlas() == &f.atlas());
 	fonsAddFallbackFont(atlas().stash(), id_, f.id());
+}
+
+Font::Metrics Font::metrics() const {
+	Metrics metrics;
+	fonsSetFont(atlas().stash(), id_);
+	fonsVertMetrics(atlas().stash(), &metrics.ascender,
+		&metrics.descender, &metrics.lineHeight);
+	return metrics;
 }
 
 } // namespac rvg

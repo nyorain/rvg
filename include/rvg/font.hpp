@@ -67,6 +67,12 @@ public:
 		unsigned height {12};
 	};
 
+	struct Metrics {
+		float lineHeight;
+		float ascender;
+		float descender;
+	};
+
 public:
 	Font() = default;
 
@@ -93,6 +99,7 @@ public:
 
 	float width(std::string_view text, unsigned height) const;
 	nytl::Rect2f bounds(std::string_view text, unsigned height) const;
+	Metrics metrics() const;
 
 	bool valid() const { return atlas_ && id_ >= 0; }
 	auto& atlas() const { return *atlas_; }
