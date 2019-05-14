@@ -2,6 +2,8 @@
 
 ### v0.2
 
+- [ ] allow to specify font align, see the fons options
+      document how this effects quried bounds etc
 - [ ] allow float color in Paint? maybe add float color class?
 - [x] better font handling: automatic atlas rebaking, fallback fonts
 - [ ] text __scaling__
@@ -31,6 +33,7 @@ problem of __scaling__ should be solved in this release:
 	tesselation (-> katachi) is affected by the same problem (problem
 	of rvg?)
 	See scale.cpp. Currently has still problems with rotations for shapes
+	hard to fix, maybe only allow scale?
 Completely abolish transform state?
 	well, rotation and translation aren't a problem. Only scale.
 	Maybe allow to set pre-transform for each polygon? On change,
