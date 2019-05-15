@@ -1,7 +1,7 @@
 project('rvg', ['cpp', 'c'],
 	license: 'MIT',
 	version: '0.1.0',
-	meson_version: '>=0.43',
+	meson_version: '>=0.46',
 	default_options: [
 		'cpp_std=c++1z',
 		'c_std=c99',
@@ -86,9 +86,9 @@ endif
 pkg = import('pkgconfig')
 pkg_dirs = ['.']
 pkg.generate(
+	rvg_lib,
 	name: 'rvg',
 	requires: ['vulkan', 'katachi', 'vpp', 'nytl', 'dlg'],
-	libraries: rvg_lib,
 	filebase: 'rvg',
 	subdirs: pkg_dirs,
 	version: meson.project_version(),
