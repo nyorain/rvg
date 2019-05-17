@@ -162,10 +162,11 @@ bool Text::updateDevice() {
 
 	// now upload data to gpu
 	dlg_assert(posCache_.size() == uvCache_.size());
-	auto checkResize = [&](auto& buf, auto needed) {
+	auto checkResize = [&](auto& buf, auto needed,
+			vk::BufferUsageFlags usage = {}) {
 		if(buf.size() == 0u || buf.size() < needed) {
 			needed = std::max<vk::DeviceSize>(2u * needed, 32u);
-			auto usage = nytl::Flags{vk::BufferUsageBits::vertexBuffer};
+			usage |= nytl::Flags{vk::BufferUsageBits::vertexBuffer};
 			if(deviceLocal_) {
 				usage |= vk::BufferUsageBits::transferDst;
 			}
@@ -180,7 +181,8 @@ bool Text::updateDevice() {
 	};
 
 	auto posCacheSize = sizeof(Vec2f) * posCache_.size();
-	checkResize(posBuf_, sizeof(vk::DrawIndirectCommand) + posCacheSize);
+	checkResize(posBuf_, sizeof(vk::DrawIndirectCommand) + posCacheSize,
+		vk::BufferUsageBits::indirectBuffer);
 	checkResize(uvBuf_, sizeof(Vec2f) * uvCache_.size());
 
 	// positionBuf contains the indirect draw command

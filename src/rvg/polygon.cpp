@@ -206,7 +206,8 @@ bool Polygon::upload(Draw& draw, bool disable, bool color) {
 	auto pneeded = sizeof(vk::DrawIndirectCommand);
 	pneeded += !disable * (sizeof(draw.points[0]) * draw.points.size());
 	rerecord |= checkResize(draw.pBuf, pneeded,
-		vk::BufferUsageBits::vertexBuffer);
+		vk::BufferUsageBits::vertexBuffer |
+		vk::BufferUsageBits::indirectBuffer);
 
 	vk::DrawIndirectCommand cmd {};
 	cmd.vertexCount = !disable * draw.points.size();
@@ -239,7 +240,8 @@ bool Polygon::upload(Stroke& stroke, bool disable, bool color, bool aa,
 	bool rerecord = upload(static_cast<Draw&>(stroke), disable, color);
 	if(aa) {
 		auto needed = stroke.aa.size() * sizeof(stroke.aa[0]);
-		vk::BufferUsageFlags usage = vk::BufferUsageBits::vertexBuffer;
+		vk::BufferUsageFlags usage = vk::BufferUsageBits::vertexBuffer |
+			vk::BufferUsageBits::indirectBuffer;
 		if(mult) {
 			needed += 2 * sizeof(float);
 			// needed += sizeof(float);
