@@ -228,6 +228,10 @@ vpp::BufferAllocator& Context::bufferAllocator() const {
 	return device().bufferAllocator();
 }
 
+vpp::DeviceMemoryAllocator& Context::devMemAllocator() const {
+	return device().devMemAllocator();
+}
+
 void Context::bindDefaults(vk::CommandBuffer cmdb) {
 	identityTransform_.bind(cmdb);
 	defaultScissor_.bind(cmdb);

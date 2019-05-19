@@ -127,8 +127,10 @@ public:
 	const auto& dsLayoutFontAtlas() const { return dsLayoutFontAtlas_; }
 	const auto& dsLayoutStrokeAA() const { return dsLayoutStrokeAA_; }
 
+	// TODO: allow to assign custom allocators per settings
 	vpp::DescriptorAllocator& dsAllocator() const;
 	vpp::BufferAllocator& bufferAllocator() const;
+	vpp::DeviceMemoryAllocator& devMemAllocator() const;
 
 	const auto& emptyImage() const { return emptyImage_; };
 

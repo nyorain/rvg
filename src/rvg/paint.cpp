@@ -491,7 +491,7 @@ void Texture::create() {
 	auto& dev = context().device();
 	auto memBits = dev.memoryTypeBits(vk::MemoryPropertyBits::deviceLocal);
 
-	image_ = {dev, info, memBits};
+	image_ = {context().devMemAllocator(), info, memBits};
 }
 
 void Texture::upload(nytl::Span<const std::byte> data, vk::ImageLayout layout) {
