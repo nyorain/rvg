@@ -17,6 +17,7 @@
 #pragma GCC diagnostic ignored "-Wcast-align"
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_STATIC // needed, otherwise we mess with other usages
 #include "stb_image.h"
 #pragma GCC diagnostic pop
 
