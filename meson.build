@@ -3,20 +3,14 @@ project('rvg', ['cpp', 'c'],
 	version: '0.1.0',
 	meson_version: '>=0.46',
 	default_options: [
-		'cpp_std=c++1z',
+		'cpp_std=c++17',
 		'c_std=c99',
-  		'warning_level=3',
-  		'werror=true'])
+ 		'warning_level=3'])
 
-build_example_ny = get_option('example-ny')
 build_example_glfw = get_option('example-glfw')
 build_tests = get_option('tests')
 
 warnings = [
-	'-Wall',
-	'-Wextra',
-	'-Wpedantic',
-
 	# extra
 	'-Wduplicated-cond',
 	'-Wrestrict',
@@ -24,10 +18,6 @@ warnings = [
 	'-Wundef',
 	'-Wcast-align=strict',
 	'-Wlogical-op',
-
-	# TODO: currently only for ny
-	'-Wno-non-virtual-dtor',
-	'-Wno-unused-function',
 ]
 
 # default arrguments
@@ -74,7 +64,7 @@ rvg_dep = declare_dependency(
 	dependencies: rvg_deps,
 	include_directories: rvg_inc)
 
-if build_example_ny or build_example_glfw
+if build_example_glfw
   subdir('example')
 endif
 

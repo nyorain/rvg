@@ -45,6 +45,19 @@ float hue2rgb(float p, float q, float t) {
 	return p;
 }
 
+// https://www.w3.org/Graphics/Color/srgb
+float toLinear(float nonLinear) {
+	return (nonLinear > 0.04045) ?
+		std::pow((nonLinear + 0.055) / 1.055, 2.4) :
+		nonLinear / 12.92;
+}
+
+float toNonlinear(float linear) {
+	return (linear > 0.0031308)  ?
+		1.055 * std::pow(linear, 1.0 / 2.4) - 0.055 :
+		12.92 * linear;
+}
+
 } // anon namespace
 
 // Color
@@ -247,9 +260,9 @@ std::uint32_t u32rgba(const Color& c) {
 
 Color mix(const Color& a, const Color& b, float fac) {
 	// gamma-correct
-	auto la = linearize(a);
-	auto lb = linearize(b);
-	return srgb(fac * la + (1 - fac) * lb);
+	auto la = toLinear(a);
+	auto lb = toLinear(b);
+	return toNonlinear(fac * la + (1 - fac) * lb);
 
 	// gamma-incorrect
 	// return {norm, fac * a.rgbaNorm() + (1 - fac) * b.rgbaNorm()};
@@ -369,8 +382,8 @@ void Paint::upload() {
 	// It's also important that we get float values instead of
 	// u8 since with u8 we would lose the dark-color precision
 	// we need (and users expect; can actually see).
-	ubo.inner = linearize(paint_.data.frag.inner);
-	ubo.outer = linearize(paint_.data.frag.outer);
+	ubo.inner = toLinear(paint_.data.frag.inner);
+	ubo.outer = toLinear(paint_.data.frag.outer);
 
 	ubo.custom = paint_.data.frag.custom;
 	ubo.type = unsigned(paint_.data.frag.type);
@@ -405,16 +418,37 @@ bool Paint::updateDevice() {
 	return re;
 }
 
-Vec4f linearize(const Color& c, float gamma) {
-	auto r = Vec4f(nytl::vec::cw::pow(c.rgbNorm(), gamma));
-	r[3] = c.a / 255.f;
-	return r;
+Vec4f toLinear(const Color& c) {
+	// NOTE: fast approximations using a fixed gamma.
+	// Not the real srgb linear <-> nonlinear conversion
+	// const float gamma = 2.2;
+	// auto r = Vec4f(nytl::vec::cw::pow(c.rgbNorm(), gamma));
+	// r[3] = c.a / 255.f;
+	// return r;
+
+	auto cn = c.rgbaNorm();
+	return {
+		toLinear(cn[0]),
+		toLinear(cn[1]),
+		toLinear(cn[2]),
+		cn[3],
+	};
 }
 
-Color srgb(Vec4f rgbLinearNorm, float gamma) {
-	return {norm,
-		nytl::vec::cw::pow(Vec3f(rgbLinearNorm), 1 / gamma),
-		rgbLinearNorm[3]};
+Color toNonlinear(Vec4f linear) {
+	// NOTE: fast approximations using a fixed gamma.
+	// Not the real srgb linear <-> nonlinear conversion
+	// const float gamma = 2.2;
+	// return {norm,
+	// 	nytl::vec::cw::pow(Vec3f(rgbLinearNorm), 1 / gamma),
+	// 	rgbLinearNorm[3]};
+
+	return Color{norm,
+		toNonlinear(linear[0]),
+		toNonlinear(linear[1]),
+		toNonlinear(linear[2]),
+		linear[3],
+	};
 }
 
 // Texture

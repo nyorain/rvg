@@ -69,11 +69,11 @@ public:
 inline bool operator==(Color a, Color b) { return a.rgba() == b.rgba(); }
 inline bool operator!=(Color a, Color b) { return a.rgba() != b.rgba(); }
 
-// srgb rgb (gamma-based approximations, you might need real conversion!)
-// will not convert alpha range
-// returns Vec4f to not lose precision for dark colors.
-Vec4f linearize(const Color&, float gamma = 2.2);
-Color srgb(Vec4f rgbLinearNorm, float gamma = 2.2);
+// Converts between linear and nonlinear srgb.
+// Will not convert alpha range, leave that untouched.
+// Returns Vec4f to not lose precision for dark colors.
+Vec4f toLinear(const Color&);
+Color toNonlinear(Vec4f linearlinearRGB);
 
 // hsl
 Color hsl(u8 h, u8 s, u8 l, u8 a = 255);

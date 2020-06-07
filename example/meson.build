@@ -14,22 +14,6 @@ example_deps = [
 ]
 
 
-# ny
-if build_example_ny
-  dep_ny = dependency('ny', fallback: ['ny', 'ny_dep'])
-  example_src_ny = example_src + [
-	  'example_ny.cpp',
-	  'window.cpp',
-  ]
-  example_deps_ny = example_deps + [dep_ny]
-
-  executable('example_ny',
-	  cpp_args: example_args,
-	  sources: example_src_ny,
-	  dependencies: example_deps_ny)
-endif
-
-
 # glfw
 if build_example_glfw
   dep_glfw = dependency('glfw3')

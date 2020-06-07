@@ -15,7 +15,7 @@
 
 // vpp to allow more high-level vulkan usage.
 #include <vpp/handles.hpp>
-#include <vpp/debugReport.hpp>
+#include <vpp/debug.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/physicalDevice.hpp>
 
@@ -42,7 +42,7 @@ constexpr auto appName = "rvg-example";
 constexpr auto engineName = "vpp;rvg";
 constexpr auto useValidation = true;
 constexpr auto startMsaa = vk::SampleCountBits::e1;
-constexpr auto layerName = "VK_LAYER_LUNARG_standard_validation";
+constexpr auto layerName = "VK_LAYER_KHRONOS_validation";
 constexpr auto printFrames = true;
 constexpr auto vsync = true;
 constexpr auto clearColor = std::array<float, 4>{{0.f, 0.f, 0.f, 1.f}};
@@ -204,7 +204,7 @@ int main() {
 	const char** extensions = ::glfwGetRequiredInstanceExtensions(&count);
 
 	std::vector<const char*> iniExtensions {extensions, extensions + count};
-	iniExtensions.push_back(VK_EXT_DEBUG_REPORT_EXTENSION_NAME);
+	iniExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
 	vk::ApplicationInfo appInfo (appName, 1, engineName, 1, VK_API_VERSION_1_0);
 	vk::InstanceCreateInfo instanceInfo;
@@ -237,9 +237,9 @@ int main() {
 	}
 
 	// debug callback
-	std::unique_ptr<vpp::DebugCallback> debugCallback;
+	std::unique_ptr<vpp::DebugMessenger> debugMessenger;
 	if(useValidation) {
-		debugCallback = std::make_unique<vpp::DebugCallback>(instance);
+		debugMessenger = std::make_unique<vpp::DebugMessenger>(instance);
 	}
 
 	// init glfw window
@@ -393,7 +393,7 @@ int main() {
 			info.wait = wait;
 		}
 
-		renderer.renderSync(info);
+		renderer.renderStall(info);
 
 		if(printFrames) {
 			++fpsCounter;

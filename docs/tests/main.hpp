@@ -2,45 +2,42 @@
 #include <bugged.hpp>
 
 #include <rvg/context.hpp>
+#include <rvg/font.hpp>
 #include <vpp/vk.hpp>
 #include <vpp/memory.hpp>
 #include <vpp/device.hpp>
 #include <vpp/submit.hpp>
+#include <vpp/commandAllocator.hpp>
 #include <vpp/queue.hpp>
 #include <vpp/pipeline.hpp>
-#include <vpp/instance.hpp>
-#include <vpp/renderPass.hpp>
+#include <vpp/handles.hpp>
 #include <vpp/imageOps.hpp>
 #include <vpp/formats.hpp>
 #include <vpp/image.hpp>
-#include <vpp/framebuffer.hpp>
 #include <vpp/debug.hpp>
 #include <vpp/physicalDevice.hpp>
 #include <dlg/dlg.hpp>
 #include <memory>
 #include <optional>
 
-class CustomDebugCallback : public vpp::DebugCallback {
+class CustomDebugMessenger : public vpp::DebugMessenger {
 public:
-	using vpp::DebugCallback::DebugCallback;
+	using vpp::DebugMessenger::DebugMessenger;
 
-	bool call(const CallbackInfo& info) const noexcept override {
-		if(info.flags & vk::DebugReportBitsEXT::error) {
+	void call(MsgSeverity severity,
+			MsgTypeFlags type, const Data& data) noexcept override {
+
+		if(severity == vk::DebugUtilsMessageSeverityBitsEXT::error) {
 			++errors;
 		}
 
-		if(info.flags & vk::DebugReportBitsEXT::warning) {
+		if(severity == vk::DebugUtilsMessageSeverityBitsEXT::warning) {
 			++warnings;
 		}
 
-		if(info.flags & vk::DebugReportBitsEXT::performanceWarning) {
-			++performanceWarnings;
-		}
-
-		return vpp::DebugCallback::call(info);
+		vpp::DebugMessenger::call(severity, type, data);
 	}
 
-	mutable unsigned int performanceWarnings {};
 	mutable unsigned int warnings {};
 	mutable unsigned int errors {};
 };
@@ -49,7 +46,7 @@ constexpr auto pipeCacheFile = "testPipeCache.bin";
 
 struct Globals {
 	vpp::Instance instance;
-	std::optional<CustomDebugCallback> debugCallback;
+	std::optional<CustomDebugMessenger> debugMessenger;
 	std::optional<vpp::Device> device;
 
 	vpp::RenderPass rp;
@@ -65,10 +62,10 @@ constexpr vk::Extent3D fbExtent = {512, 512, 1};
 void initGlobals() {
 	constexpr const char* iniExtensions[] = {
 		VK_KHR_SURFACE_EXTENSION_NAME,
-		VK_EXT_DEBUG_REPORT_EXTENSION_NAME
+		VK_EXT_DEBUG_UTILS_EXTENSION_NAME
 	};
 
-	constexpr auto layer = "VK_LAYER_LUNARG_standard_validation";
+	constexpr auto layer = "VK_LAYER_KHRONOS_validation";
 
 	vk::InstanceCreateInfo instanceInfo;
 	instanceInfo.pApplicationInfo = nullptr;
@@ -78,7 +75,7 @@ void initGlobals() {
 	instanceInfo.ppEnabledExtensionNames = iniExtensions;
 
 	globals.instance = {instanceInfo};
-	globals.debugCallback.emplace(globals.instance);
+	globals.debugMessenger.emplace(globals.instance);
 	globals.device.emplace(globals.instance);
 	auto& dev = *globals.device;
 
@@ -87,8 +84,10 @@ void initGlobals() {
 
 	auto usage = vk::ImageUsageBits::colorAttachment |
 		vk::ImageUsageBits::transferSrc;
-	globals.attachment = {dev, *vpp::ViewableImageCreateInfo::color(dev,
-		fbExtent, usage)};
+	auto vci = vpp::ViewableImageCreateInfo(vk::Format::r8g8b8a8Unorm,
+		vk::ImageAspectBits::color, {fbExtent.width, fbExtent.height}, usage);
+	dlg_assert(vpp::supported(dev, vci.img));
+	globals.attachment = {dev.devMemAllocator(), vci};
 
 	vk::AttachmentDescription attachment;
 	attachment.format = vk::Format::r8g8b8a8Unorm;
@@ -145,13 +144,12 @@ int main() {
 	globals.cache = {};
 
 	globals.device.reset();
-	globals.debugCallback.reset();
+	globals.debugMessenger.reset();
 	globals.instance = {};
 
 	// add errors/warnings
-	ret += globals.debugCallback->performanceWarnings;
-	ret += globals.debugCallback->errors;
-	ret += globals.debugCallback->warnings;
+	ret += globals.debugMessenger->errors;
+	ret += globals.debugMessenger->warnings;
 
 	return ret;
 }

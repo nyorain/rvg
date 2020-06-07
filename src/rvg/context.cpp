@@ -24,6 +24,7 @@
 #include <nytl/matOps.hpp>
 #include <nytl/vecOps.hpp>
 #include <cstring>
+#include <array>
 
 #include <shaders/fill.vert.frag_scissor.h>
 #include <shaders/fill.frag.frag_scissor.h>
@@ -59,19 +60,19 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	auto& fontSampler = texSampler_;
 
 	// layouts
-	auto transformDSB = {
+	auto transformDSB = std::array {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
 			vk::ShaderStageBits::vertex),
 	};
 
-	auto paintDSB = {
+	auto paintDSB = std::array {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
 			vk::ShaderStageBits::vertex | vk::ShaderStageBits::fragment),
 		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
 			vk::ShaderStageBits::fragment, &texSampler_.vkHandle()),
 	};
 
-	auto fontAtlasDSB = {
+	auto fontAtlasDSB = std::array {
 		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
 			vk::ShaderStageBits::fragment, &fontSampler.vkHandle()),
 	};
@@ -81,7 +82,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		vk::ShaderStageBits::vertex :
 		vk::ShaderStageBits::fragment;
 
-	auto scissorDSB = {
+	auto scissorDSB = std::array {
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer, scissorStage),
 	};
 
@@ -97,7 +98,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 	};
 
 	if(settings.antiAliasing) {
-		auto aaStrokeDSB = {
+		auto aaStrokeDSB = std::array {
 			vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
 				vk::ShaderStageBits::fragment),
 		};

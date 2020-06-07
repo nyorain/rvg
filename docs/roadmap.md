@@ -2,7 +2,9 @@
 
 ### v0.2
 
-- [ ] fix this terrible srgb conversion
+- [x] fix this terrible srgb conversion
+      it's not even much more expensive
+- [ ] evaluate, fix and document pre-/post- multiplied alpha conventions
 - [ ] allow to specify font align, see the fons options
       document how this effects quried bounds etc
 - [ ] allow float color in Paint? maybe add float color class?
@@ -34,7 +36,8 @@ problem of __scaling__ should be solved in this release:
 	tesselation (-> katachi) is affected by the same problem (problem
 	of rvg?)
 	See scale.cpp. Currently has still problems with rotations for shapes
-	hard to fix, maybe only allow scale?
+	hard to fix, maybe only allow scale? But rotation and scale might
+	be intertwined.
 Completely abolish transform state?
 	well, rotation and translation aren't a problem. Only scale.
 	Maybe allow to set pre-transform for each polygon? On change,
