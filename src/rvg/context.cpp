@@ -68,12 +68,12 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer,
 			vk::ShaderStageBits::vertex | vk::ShaderStageBits::fragment),
 		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
-			vk::ShaderStageBits::fragment, -1, 1, &texSampler_.vkHandle()),
+			vk::ShaderStageBits::fragment, &texSampler_.vkHandle()),
 	};
 
 	auto fontAtlasDSB = {
 		vpp::descriptorBinding(vk::DescriptorType::combinedImageSampler,
-			vk::ShaderStageBits::fragment, -1, 1, &fontSampler.vkHandle()),
+			vk::ShaderStageBits::fragment, &fontSampler.vkHandle()),
 	};
 
 	auto clipDistance = settings.clipDistanceEnable;
@@ -85,10 +85,10 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		vpp::descriptorBinding(vk::DescriptorType::uniformBuffer, scissorStage),
 	};
 
-	dsLayoutTransform_ = {dev, transformDSB};
-	dsLayoutPaint_ = {dev, paintDSB};
-	dsLayoutFontAtlas_ = {dev, fontAtlasDSB};
-	dsLayoutScissor_ = {dev, scissorDSB};
+	dsLayoutTransform_.init(dev, transformDSB);
+	dsLayoutPaint_.init(dev, paintDSB);
+	dsLayoutFontAtlas_.init(dev, fontAtlasDSB);
+	dsLayoutScissor_.init(dev, scissorDSB);
 	std::vector<vk::DescriptorSetLayout> layouts = {
 		dsLayoutTransform_,
 		dsLayoutPaint_,
@@ -102,7 +102,7 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 				vk::ShaderStageBits::fragment),
 		};
 
-		dsLayoutStrokeAA_ = {dev, aaStrokeDSB};
+		dsLayoutStrokeAA_.init(dev, aaStrokeDSB);
 		layouts.push_back(dsLayoutStrokeAA_);
 	}
 

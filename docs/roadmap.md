@@ -2,6 +2,7 @@
 
 ### v0.2
 
+- [ ] fix this terrible srgb conversion
 - [ ] allow to specify font align, see the fons options
       document how this effects quried bounds etc
 - [ ] allow float color in Paint? maybe add float color class?
