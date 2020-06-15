@@ -74,7 +74,8 @@ struct DrawMode {
 	/// - Doing scaling via the post transform has serious problems:
 	///   anti aliasing might break and for shapes (that use this
 	///   pre transform as well) curves might not be correctly tesselated.
-	nytl::Mat3f transform = nytl::identity<3, float>();
+	/// TODO(v0.2)
+	// nytl::Mat3f transform = nytl::identity<3, float>();
 };
 
 enum class DrawType {

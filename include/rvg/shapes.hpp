@@ -79,6 +79,8 @@ protected:
 		Vec2f size {};
 		DrawMode drawMode {};
 		std::array<float, 4> rounding {};
+
+		/// TODO(v0.2): does not work correctly atm
 		nytl::Mat3f transform = nytl::identity<3, float>();
 	} state_;
 
@@ -124,6 +126,8 @@ protected:
 		DrawMode drawMode {};
 		unsigned pointCount {defaultPointCount};
 		float startAngle {0.f};
+
+		/// TODO(v0.2): does not work correctly atm
 		nytl::Mat3f transform = nytl::identity<3, float>();
 	} state_;
 
