@@ -98,6 +98,7 @@ public:
 
 	Vec2f pos() const { return pos_; }
 	Vec2f size() const { return size_; }
+	auto& shape() { return shape_; }
 
 protected:
 	bool first_ {true};
@@ -678,6 +679,11 @@ void App::key(unsigned key, bool pressed) {
 	} else if(key == GLFW_KEY_O) {
 		scale_ *= 1.f / 1.1;
 		t = true;
+	}
+
+	if(key == GLFW_KEY_H) {
+		auto d = !path_.shape().disabled();
+		path_.shape().disable(d);
 	}
 
 	if(t) {
