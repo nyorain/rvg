@@ -93,7 +93,8 @@ public:
 	/// Returns whether a rerecord is needed (from updateDevice) and
 	/// the semaphore (or a null handle) that rendering must
 	/// wait upon (with allGraphics stage bit).
-	std::pair<bool, vk::Semaphore> upload();
+	/// - submit: Will be passed to stageUpload.
+	std::pair<bool, vk::Semaphore> upload(bool submit = false);
 
 	/// Queues all pending upload operations and returns the semaphore to wait
 	/// upon for the next render call.
@@ -101,7 +102,12 @@ public:
 	/// Used to make sure that new data was uploaded to deviceLocal
 	/// vulkan resources.
 	/// Must not be called again until rendering this frame completes.
-	vk::Semaphore stageUpload();
+	/// - submit: Whether or not to already submit the work (if there is
+	///   any). It will be submitted to the device's default queueSubmitter.
+	///   If this is false, the submission must later on be done manually,
+	///   the work will only be queued (i.e. added) to the device's
+	///   queueSubmitter.
+	vk::Semaphore stageUpload(bool submit = false);
 
 	/// Must be called once per frame when there is no command buffer
 	/// executing that references objects associated with this context.

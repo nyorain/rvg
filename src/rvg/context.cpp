@@ -262,13 +262,13 @@ bool Context::updateDevice() {
 	return ret;
 }
 
-std::pair<bool, vk::Semaphore> Context::upload() {
+std::pair<bool, vk::Semaphore> Context::upload(bool submit) {
 	auto rerecord = updateDevice();
-	auto seph = stageUpload();
+	auto seph = stageUpload(submit);
 	return {rerecord, seph};
 }
 
-vk::Semaphore Context::stageUpload() {
+vk::Semaphore Context::stageUpload(bool submit) {
 	vk::Semaphore ret {};
 	if(!currentFrame_.cmdBufs.empty()) {
 		// we currently record secondary buffers and then unify
@@ -282,13 +282,18 @@ vk::Semaphore Context::stageUpload() {
 		}
 		vk::endCommandBuffer(uploadCmdBuf_);
 
+		auto& qs = device().queueSubmitter();
 		vk::SubmitInfo info;
 		info.commandBufferCount = 1;
 		info.pCommandBuffers = &uploadCmdBuf_.vkHandle();
 		info.pSignalSemaphores = &uploadSemaphore_.vkHandle();
 		info.signalSemaphoreCount = 1u;
-		device().queueSubmitter().add(info);
+		qs.add(info);
 		ret = uploadSemaphore_;
+
+		if(submit) {
+			qs.submit();
+		}
 	}
 
 	oldFrame_ = std::move(currentFrame_);
