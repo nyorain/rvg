@@ -67,6 +67,7 @@ struct DrawMode {
 	/// If this is false, hostVisible memory will be used.
 	bool deviceLocal {};
 
+	// TODO: use in implementation
 	/// Pre-transform that is applied while baking the primitive.
 	/// Comparison to the post-transform state via rvg::Transform:
 	/// - Every time the pre-transform changes the polygon has to be

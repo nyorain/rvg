@@ -153,7 +153,7 @@ nytl::Rect2f Font::bounds(std::string_view text, unsigned height) const {
 	fonsSetFont(atlas().stash(), id_);
 	fonsSetSize(atlas().stash(), height);
 	fonsTextBounds(atlas().stash(), 0, 0, text.begin(), text.end(), bounds);
-	return {bounds[0], bounds[1], bounds[2] - bounds[0], bounds[3] - bounds[1]};
+	return {{bounds[0], bounds[1]}, {bounds[2] - bounds[0], bounds[3] - bounds[1]}};
 }
 
 float Font::width(std::string_view text, unsigned height) const {

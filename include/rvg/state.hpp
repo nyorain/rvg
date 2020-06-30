@@ -57,7 +57,7 @@ protected:
 /// should be used for frequently updating transforms.
 class Scissor : public DeviceObject {
 public:
-	static constexpr Rect2f reset = {-1e6, -1e6, 2e6, 2e6};
+	static constexpr Rect2f reset = {{-1e6, -1e6}, {2e6, 2e6}};
 
 public:
 	Scissor() = default;

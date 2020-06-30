@@ -52,6 +52,15 @@ protected:
 	std::vector<std::vector<std::byte>> blobs_;
 };
 
+// TODO: we should probably rather have something like
+// struct FontRef {
+// 	FontAtlas* atlas;
+// 	int id;
+// };
+// And then various free functions for creating a font.
+// Currently, it looks like Font is the object that contains
+// everything about the font...
+
 /// Represents information about one font in a font atlas.
 /// Lightweight discription, all actual data is stored in the font
 /// atlas. Therefore can be copied without overhead.
