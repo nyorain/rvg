@@ -9,35 +9,52 @@
 #include <vpp/sharedBuffer.hpp>
 #include <vpp/bufferOps.hpp>
 #include <vpp/vk.hpp>
-#include <dlg/dlg.hpp>
+#include <nytl/bytes.hpp>
 
 #include <cstdlib>
 #include <cstring>
 
 namespace rvg {
 
-template<typename T>
-void write(std::byte*& ptr, T&& data) {
-	std::memcpy(ptr, &data, sizeof(data));
-	ptr += sizeof(data);
-}
-
-struct Uploader {
-	template<typename T>
-	void write(nytl::Span<T> span) {
-		auto bytes = nytl::as_bytes(span);
-		dlg_assert(bytes.size() <= data.size());
-		std::memcpy(data.data(), bytes.data(), bytes.size());
-		data = data.last(data.size() - bytes.size());
-	}
-
-	template<typename T>
-	void write(const T& obj) {
-		write(nytl::Span<const T>(&obj, 1));
-	}
-
-	nytl::Span<std::byte> data;
-};
+// template<typename T>
+// struct ProhibitByteConversion : public std::false_type {};
+//
+// template<typename T>
+// struct ProhibitByteConversion<std::initializer_list<T>> : public std::true_type {};
+//
+// template<typename T>
+// struct ProhibitByteConversion<nytl::Span<T>> : public std::true_type {};
+//
+// template<typename T> constexpr auto BytesConvertible =
+// 	std::is_trivially_copyable_v<T> &&
+// 	std::is_standard_layout_v<T> &&
+// 	!ProhibitByteConversion<T>::value;
+//
+// template<typename T>
+// std::enable_if_t<BytesConvertible<T>>
+// write(std::byte*& ptr, T&& data) {
+// 	std::memcpy(ptr, &data, sizeof(data));
+// 	ptr += sizeof(data);
+// }
+//
+// struct Uploader {
+// 	template<typename T>
+// 	std::enable_if_t<BytesConvertible<T>>
+// 	write(nytl::Span<T> span) {
+// 		auto bytes = nytl::as_bytes(span);
+// 		dlg_assert(bytes.size() <= data.size());
+// 		std::memcpy(data.data(), bytes.data(), bytes.size());
+// 		data = data.last(data.size() - bytes.size());
+// 	}
+//
+// 	template<typename T>
+// 	std::enable_if_t<BytesConvertible<T>>
+// 	write(const T& obj) {
+// 		write(nytl::Span<const T>(&obj, 1));
+// 	}
+//
+// 	nytl::Span<std::byte> data;
+// };
 
 template<typename O, typename... Args>
 std::size_t writeBuffer(O& dobj, vpp::BufferSpan buf, const Args&... args) {
@@ -47,7 +64,8 @@ std::size_t writeBuffer(O& dobj, vpp::BufferSpan buf, const Args&... args) {
 		auto& ctx = dobj.context();
 		auto cb = ctx.uploadCmdBuf();
 		auto stage = vpp::SubBuffer(ctx.bufferAllocator(),
-			buf.size(), vk::BufferUsageBits::transferSrc, 4u);
+			buf.size(), vk::BufferUsageBits::transferSrc,
+			ctx.device().hostMemoryTypes());
 		auto size = writeBuffer(dobj, stage, args...);
 
 		vk::BufferCopy copy;
@@ -63,11 +81,14 @@ std::size_t writeBuffer(O& dobj, vpp::BufferSpan buf, const Args&... args) {
 
 	vpp::MemoryMapView map;
 	map = buf.memoryMap();
-	Uploader uploader;
-	uploader.data = map.span();
+	// Uploader uploader;
+	// uploader.data = map.span();
+	auto data = map.span();
+	(nytl::write(data, args), ...);
+	return data.data() - map.ptr();
 
-	(uploader.write(args), ...);
-	return uploader.data.data() - map.ptr();
+	// (uploader.write(args), ...);
+	// return uploader.data.data() - map.ptr();
 }
 
 inline Vec2f multPos(const nytl::Mat3f& transform, nytl::Vec2f pos) {

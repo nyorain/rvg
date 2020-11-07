@@ -140,6 +140,7 @@ public:
 	const auto& defaultScissor() const { return defaultScissor_; }
 	const auto& defaultStrokeAA() const { return defaultStrokeAA_; }
 	const auto& defaultAtlas() const { return *defaultAtlas_; }
+	const auto& textureSampler() const { return texSampler_; }
 	auto& defaultAtlas() { return *defaultAtlas_; }
 
 	const auto& settings() const { return settings_; }
@@ -153,6 +154,9 @@ public:
 	void registerUpdateDevice(DevRes);
 	bool deviceObjectDestroyed(::rvg::DeviceObject&) noexcept;
 	void deviceObjectMoved(::rvg::DeviceObject&, ::rvg::DeviceObject&) noexcept;
+
+	// TODO: placeholders
+	bool multidrawIndirect() const { return true; }
 
 private:
 	// Per-frame objects mainly used to efficiently upload data

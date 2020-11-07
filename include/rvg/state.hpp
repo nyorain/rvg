@@ -49,7 +49,9 @@ protected:
 	vpp::TrDs ds_;
 };
 
-/// Limits the area in which can be drawn.
+/// Limits the area in which can be drawn. The difference to vkCmdSetScissor
+/// (which can still be used independently) is that this requires no
+/// re-record when changed.
 /// Scissor is applied before the transformation.
 /// You can specify in the constructor if the scissor should be
 /// stored on deviceLocal device memory - which is usually faster to use

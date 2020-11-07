@@ -53,7 +53,9 @@ void FontAtlas::expand() {
 
 	// TODO: instead of using reset and updating all texts we
 	// could use ExpandAtlas. Try it and see if the result is much worse
-	// (since rectpacking cannot be done again)
+	// (since rectpacking cannot be done again).
+	// But even then, we would have to update all Text uvs to match
+	// the new size.
 	fonsResetAtlas(ctx_, w, h);
 	for(auto& t : texts_) {
 		dlg_assert(t);

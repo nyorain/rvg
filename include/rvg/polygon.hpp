@@ -70,7 +70,7 @@ struct DrawMode {
 	/// Pre-transform that is applied while baking the primitive.
 	/// Comparison to the post-transform state via rvg::Transform:
 	/// - Every time the pre-transform changes the polygon has to be
-	///   rebaked/updated. More expensive
+	///   rebaked/updated. More expensive.
 	/// - Doing scaling via the post transform has serious problems:
 	///   anti aliasing might break and for shapes (that use this
 	///   pre transform as well) curves might not be correctly tesselated.

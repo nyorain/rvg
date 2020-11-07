@@ -210,8 +210,9 @@ Context::Context(vpp::Device& dev, const ContextSettings& settings) :
 		defaultStrokeAABuf_ = {bufferAllocator(), 12 * sizeof(float),
 			vk::BufferUsageBits::uniformBuffer, device().hostMemoryTypes()};
 		auto map = defaultStrokeAABuf_.memoryMap();
-		auto ptr = map.ptr();
-		write(ptr, 1.f);
+		auto span = map.span();
+		write(span, 1.f);
+		map.flush();
 
 		defaultStrokeAA_ = {dsAllocator(), dsLayoutStrokeAA_};
 		auto& b = defaultStrokeAABuf_;
