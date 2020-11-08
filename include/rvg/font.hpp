@@ -13,6 +13,7 @@
 #include <vpp/image.hpp>
 #include <nytl/stringParam.hpp>
 #include <nytl/rect.hpp>
+#include <nytl/nonCopyable.hpp>
 
 #include <string>
 #include <string_view>
