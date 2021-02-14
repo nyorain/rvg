@@ -1,5 +1,11 @@
 # Retained vulkan/vector graphics
 
+**NOTE: this isn't very actively maintained at the moment. It might still
+be useful as a proof of concept. Just for reference, you might prefer to look
+at an [experimental rework](https://github.com/nyorain/tokonoma/tree/master/src/guitest) 
+I worked on for a while, where rendering is a lot more optimized.
+Development here might be resumed in future**
+
 Vulkan library for high-level 2D vector-like rendering in modern C++17.
 Modeled loosely after svg, inspired by nanoVG.
 Uses an object-oriented, retained mode idiom for rendering which makes it

@@ -260,7 +260,7 @@ int main() {
 	VkResult err = ::glfwCreateWindowSurface(vkini, window, NULL, &vkSurf);
 	if(err) {
 		auto str = std::string("Failed to create vulkan surface: ");
-		str += vk::name(static_cast<vk::Result>(err));
+		str += vk::error::name(static_cast<vk::Result>(err));
 		throw std::runtime_error(str);
 	}
 
